@@ -1,0 +1,17 @@
+<form method="POST">
+    <input type="email" name="email" placeholder="Email" required>
+
+    <select name="tipo">
+        <option value="ATENDENTE">Atendente</option>
+        <option value="PCP">PCP</option>
+        <option value="SETOR">Setor</option>
+    </select>
+
+    <select name="setor">
+        {% for s in setores %}
+            <option value="{{ s.id }}">{{ s.nome }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit">Criar usuário</button>
+</form>

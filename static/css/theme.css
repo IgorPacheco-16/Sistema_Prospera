@@ -1,0 +1,269 @@
+/* BASE */
+
+:root {
+    --bg-light: #f5f6fa;
+    --text-light: #212529;
+
+    --bg-dark: #0f1115;
+    --card-dark: #1e1e1e;
+    --text-dark: #e4e4e4;
+    --border-dark: #333;
+}
+
+/* LIGHT */
+body {
+    background-color: var(--bg-light);
+    color: var(--text-light);
+    transition: all 0.3s ease;
+}
+
+/* DARK */
+html.dark-mode body {
+    background-color: var(--bg-dark) !important;
+    color: var(--text-dark) !important;
+}
+
+/*  NAVBAR */
+
+.navbar {
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+html.dark-mode .navbar {
+    background: rgba(20,20,20,0.95) !important;
+    border-bottom: 1px solid #222;
+}
+
+/*  CARDS */
+
+.card {
+    border-radius: 12px;
+    border: none;
+    transition: all 0.25s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+}
+
+/* DARK FIX */
+html.dark-mode .card {
+    background-color: var(--card-dark) !important;
+    border: 1px solid var(--border-dark);
+    color: var(--text-dark);
+}
+
+/* força contraste sem quebrar badges */
+html.dark-mode .card h1,
+html.dark-mode .card h2,
+html.dark-mode .card h3,
+html.dark-mode .card h4,
+html.dark-mode .card h5,
+html.dark-mode .card p {
+    color: var(--text-dark) !important;
+}
+
+/* 🏷 BADGES */
+
+
+.badge {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+/* PROGRESS */
+
+
+.progress {
+    height: 8px;
+    border-radius: 10px;
+}
+
+html.dark-mode .progress {
+    background-color: #2a2a2a;
+}
+
+/* INPUTS */
+
+html.dark-mode .form-control,
+html.dark-mode .form-select {
+    background-color: #1e1e1e !important;
+    color: #fff !important;
+    border: 1px solid #444;
+}
+
+html.dark-mode .form-control::placeholder {
+    color: #aaa;
+}
+
+/* LINKS */
+
+
+html.dark-mode a {
+    color: #4da3ff;
+}
+
+
+/* STATUS CARDS */
+
+
+/* LIGHT */
+.card.atrasada {
+    background: #ffe5e5;
+    border-left: 5px solid #dc3545;
+}
+
+.card.urgente {
+    background: #fff4e5;
+    border-left: 5px solid #ffc107;
+}
+
+.card.atencao {
+    background: #fffbe5;
+    border-left: 5px solid #ffeb3b;
+}
+
+.card.no-prazo {
+    background: #e6fff5;
+    border-left: 5px solid #28a745;
+}
+
+/* DARK */
+html.dark-mode .card.atrasada {
+    background: #2a0f0f !important;
+    border-left: 5px solid #ff4d4d;
+}
+
+html.dark-mode .card.urgente {
+    background: #2a1f00 !important;
+    border-left: 5px solid #ffc107;
+}
+
+html.dark-mode .card.atencao {
+    background: #2a2600 !important;
+    border-left: 5px solid #ffeb3b;
+}
+
+html.dark-mode .card.no-prazo {
+    background: #071f18 !important;
+    border-left: 5px solid #28a745;
+}
+
+/*  BOTÕES */
+
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745, #1e7e34);
+    border: none;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #34d058, #28a745);
+}
+
+html.dark-mode .btn-outline-secondary {
+    color: #aaa;
+    border-color: #555;
+}
+
+/* ALERT */
+
+
+.alert {
+    border-radius: 10px;
+}
+
+html.dark-mode .alert-danger {
+    background-color: #3a1a1a;
+    border: 1px solid #ff4d4d;
+    color: #ffb3b3;
+}
+
+/* UX */
+
+html {
+    scroll-behavior: smooth;
+}
+
+.card-hover {
+    cursor: pointer;
+}
+
+.card-hover:active {
+    transform: scale(0.97);
+}
+
+/* PRIORIDADE */
+
+.border-dark {
+    border: 2px solid #000 !important;
+}
+
+html.dark-mode .border-dark {
+    border: 2px solid #fff !important;
+}
+
+/* NOTIFICAÇÕES ACIMA DE TUDO */
+.dropdown-menu {
+    z-index: 9999 !important;
+}
+
+/* ALERTA CORREÇÃO CORRETA */
+.alert {
+    position: relative;
+    z-index: 1;
+}
+
+.navbar {
+    position: relative;
+    z-index: 1000;
+}
+
+.btn-success {
+    color: #fff !important;
+}
+
+.btn-success * {
+    color: #fff !important;
+}
+
+html.dark-mode .btn-success {
+    color: #fff !important;
+}
+
+/* BOTÕES NAVBAR */
+.navbar .btn,
+.navbar .nav-link {
+    border-radius: 8px;
+    padding: 6px 10px;
+    transition: all 0.2s ease;
+}
+
+/* LIGHT MODE */
+.navbar .btn,
+.navbar .nav-link {
+    background-color: rgba(0,0,0,0.05);
+    color: #333 !important;
+}
+
+.navbar .btn:hover,
+.navbar .nav-link:hover {
+    background-color: rgba(0,0,0,0.1);
+    color: #000 !important;
+}
+
+/* DARK MODE */
+html.dark-mode .navbar .btn,
+html.dark-mode .navbar .nav-link {
+    background-color: rgba(255,255,255,0.08);
+    color: #e4e4e4 !important;
+}
+
+html.dark-mode .navbar .btn:hover,
+html.dark-mode .navbar .nav-link:hover {
+    background-color: rgba(255,255,255,0.15);
+}

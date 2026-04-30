@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Editar OP</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+
+{% include "menu.html" %}
+
+<div class="container mt-4">
+
+    <h2>✏️ Editar OP</h2>
+
+    <form method="POST">
+
+        <!-- Nome -->
+        <div class="mb-3">
+            <label>Nome</label>
+            <input type="text" name="nome" class="form-control" value="{{ op.nome }}">
+        </div>
+
+        <!-- Prazo -->
+        <div class="mb-3">
+            <label>Prazo</label>
+            <input type="date" name="prazo" class="form-control"
+                   value="{{ op.prazo_final }}">
+        </div>
+
+        <!-- Setores -->
+        <div class="mb-3">
+            <label>Setores</label>
+
+            {% for s in setores %}
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="setores"
+                           value="{{ s.id }}"
+
+                           {% for t in tarefas %}
+                               {% if t.setor_id == s.id %}
+                                   checked
+                               {% endif %}
+                           {% endfor %}
+                    >
+
+                    <label class="form-check-label">
+                        {{ s.nome }}
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        <button class="btn btn-success">Salvar</button>
+
+    </form>
+
+    <hr>
+
+    <h4>📋 Tarefas</h4>
+
+    {% for t in tarefas %}
+        <div class="border p-2 mb-2">
+
+            <form method="POST" action="/editar_tarefa/{{ t.id }}" class="row g-2">
+
+                <div class="col-md-4">
+                    <input type="text" name="nome"
+                           class="form-control"
+                           value="{{ t.nome }}">
+                </div>
+
+                <div class="col-md-3">
+                    <input type="date" name="prazo"
+                           class="form-control"
+                           value="{{ t.prazo }}">
+                </div>
+
+                <div class="col-md-3">
+                    <button class="btn btn-primary btn-sm">
+                        Salvar
+                    </button>
+                </div>
+
+            </form>
+
+            <form method="POST" action="/excluir_tarefa/{{ t.id }}">
+                <button class="btn btn-danger btn-sm mt-1">
+                    Excluir
+                </button>
+            </form>
+
+        </div>
+    {% endfor %}
+
+</div>
+
+</body>
+</html>
