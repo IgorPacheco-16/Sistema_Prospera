@@ -18,3 +18,5 @@ Tecnologias:
 - Python (Flask)
 - SQLite
 - HTML + CSS (Bootstrap)
+
+<!-- Comentario adicionado pelo Codex para teste de commit. -->
