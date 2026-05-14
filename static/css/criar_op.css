@@ -1,0 +1,59 @@
+/* ESCONDE CHECKBOX */
+.setor-card input {
+    display: none;
+}
+
+/* CARD BASE */
+.setor-card {
+    display: block;
+    padding: 16px;
+    border-radius: 12px;
+
+    border: 1px solid #ddd;
+    background-color: #ffffff;
+
+    cursor: pointer;
+    transition: all 0.25s ease;
+
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+/* TEXTO */
+.setor-label {
+    font-size: 14px;
+}
+
+/* HOVER (efeito de card) */
+.setor-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    border-color: #0d6efd;
+}
+
+/* 🔥 QUANDO SELECIONADO */
+.setor-card:has(input:checked) {
+    border: 2px solid #0d6efd;
+    background-color: #eef5ff;
+    box-shadow: 0 8px 20px rgba(13, 110, 253, 0.2);
+}
+
+/* TEXTO SELECIONADO */
+.setor-card input:checked + .setor-label {
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+/* DARK MODE */
+html.dark-mode .setor-card {
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+}
+
+html.dark-mode .setor-card:hover {
+    border-color: #4da3ff;
+}
+
+html.dark-mode .setor-card:has(input:checked) {
+    background-color: #1a2a40;
+    border-color: #4da3ff;
+}

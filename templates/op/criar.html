@@ -1,0 +1,74 @@
+{% extends "base/base.html" %}
+
+{% block css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/op.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4 criar-op-page">
+
+    <h2 class="mb-4 text-center fw-bold">➕ Criar Nova OP</h2>
+
+    <div class="card shadow-sm form-card">
+        <div class="card-body">
+
+            <form method="POST">
+
+                <!-- NOME -->
+                <div class="mb-3">
+                    <label class="form-label">Nome do Projeto</label>
+                    <input type="text" name="nome" class="form-control" required>
+                </div>
+
+                <!-- PRAZO -->
+                <div class="mb-3">
+                    <label class="form-label">Prazo Final</label>
+                    <input type="date" name="prazo" class="form-control">
+                </div>
+
+                <!-- SETORES -->
+<div class="mb-3">
+    <label class="form-label">Selecione os setores</label>
+
+    <div class="row g-3">
+
+        {% for setor in setores %}
+        <div class="col-md-6">
+            <label class="setor-card">
+
+                <input type="checkbox"
+                       name="setores"
+                       value="{{ setor.id }}">
+
+                <span class="setor-label">
+                    {{ setor.nome }}
+                </span>
+
+            </label>
+        </div>
+        {% endfor %}
+
+    </div>
+</div>
+
+
+                <!-- BOTÕES -->
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        Cancelar
+                    </a>
+
+                    <button type="submit" class="btn btn-success">
+                        Criar OP
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

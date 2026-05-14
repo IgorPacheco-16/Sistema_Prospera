@@ -1,0 +1,48 @@
+<nav class="navbar navbar-expand-lg px-3">
+
+    <div class="container-fluid">
+
+        <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
+            Sistema OP
+        </a>
+
+        <div class="d-flex gap-2 align-items-center">
+
+            <!-- NOTIFICAÇÕES -->
+            <a href="{{ url_for('notificacoes') }}" class="btn btn-sm position-relative">
+                🔔
+                {% if total_notificacoes > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {{ total_notificacoes }}
+                </span>
+                {% endif %}
+            </a>
+
+            <!-- DARK MODE -->
+            <button class="btn btn-sm" onclick="toggleTheme()">
+                🌙
+            </button>
+
+            <!-- LOGOUT -->
+            <a href="{{ url_for('logout') }}" class="btn btn-sm">
+                Sair
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+<script>
+function toggleTheme() {
+    const html = document.documentElement;
+    html.classList.toggle("dark-mode");
+
+    if (html.classList.contains("dark-mode")) {
+        localStorage.setItem("theme", "dark");
+    } else {
+        localStorage.setItem("theme", "light");
+    }
+}
+</script>

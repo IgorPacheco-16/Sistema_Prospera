@@ -85,9 +85,9 @@ def login():
             session["setor_id"] = user.setor_id
             return redirect(url_for("dashboard"))
 
-        return render_template("login.html", erro="Email ou senha inválidos")
+        return render_template("auth/login.html", erro="Email ou senha inválidos")
 
-    return render_template("login.html")
+    return render_template("auth/login.html")
 
 #Função para o logout
 
@@ -146,7 +146,7 @@ def notificacoes():
         lida=False
     ).all()
 
-    return render_template("notificacoes.html", notificacoes=lista)
+    return render_template("notificacoes/index.html", notificacoes=lista)
 
 @app.route("/ler_notificacao/<int:id>", methods=["POST"])
 def ler_notificacao(id):
@@ -239,7 +239,7 @@ def dashboard():
     )
 
     return render_template(
-        "dashboard.html",
+        "dashboard/index.html",
         usuario=session.get("usuario"),
         tipo=session.get("tipo"),
         ops=lista_ops,
@@ -288,7 +288,7 @@ def criar_op():
 
         return redirect(url_for("ver_op", id=nova_op.id))
 
-    return render_template("criar_op.html", setores=Setor.query.all())
+    return render_template("op/criar.html", setores=Setor.query.all())
 
 #Rota para entrada da aba das OPs e tudo mais
 
@@ -316,7 +316,7 @@ def ver_op(id):
         })
 
     return render_template(
-        "op.html",
+        "op/detalhe.html",
         op=op,
         estrutura=estrutura,
         tipo=session.get("tipo"),
@@ -407,7 +407,7 @@ def excluir_op(id):
 @app.route("/arquivadas")
 def arquivadas():
     ops = OP.query.filter_by(status="ARQUIVADA").all()
-    return render_template("arquivadas.html", ops=ops)
+    return render_template("arquivadas/index.html", ops=ops)
 
 #Rota para entrarmos no calendário com a lógica por traás
 
@@ -439,7 +439,7 @@ def calendario():
                 mes_lista.append((t, op))
 
     return render_template(
-        "calendario.html",
+        "calendario/index.html",
         hoje_amanha=hoje_amanha,
         semana=semana_lista,
         mes=mes_lista,
@@ -473,7 +473,7 @@ def criar_usuario():
 
         return "Usuário criado! Ele precisa ativar a conta."
 
-    return render_template("criar_usuario.html", setores=setores)
+    return render_template("usuario/criar.html", setores=setores)
 
 
 #Rota para definir a senha do usuário na sua primeira vez logando (preciso mexer nisso)
@@ -497,7 +497,7 @@ def definir_senha():
 
         return redirect(url_for("login"))
 
-    return render_template("definir_senha.html")
+    return render_template("auth/definir_senha.html")
 
 
 #Rota para a edição de OPs já abertas (Preciso mexer nisso)
@@ -542,7 +542,7 @@ def editar_op(id):
         return redirect(url_for("ver_op", id=op.id))
 
     return render_template(
-        "editar_op.html",
+        "op/editar.html",
         op=op,
         tarefas=tarefas,
         setores=setores
