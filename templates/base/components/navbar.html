@@ -1,4 +1,4 @@
-<nav class="navbar navbar-expand-lg px-3">
+<nav class="navbar navbar-expand-lg app-navbar px-3">
 
     <div class="container-fluid">
 
@@ -6,7 +6,21 @@
             Sistema OP
         </a>
 
-        <div class="d-flex gap-2 align-items-center">
+        <div class="navbar-links d-flex gap-2 align-items-center flex-wrap">
+            <a href="{{ url_for('dashboard') }}" class="nav-link">
+                Dashboard
+            </a>
+
+            <a href="{{ url_for('arquivadas') }}" class="nav-link">
+                Arquivadas
+            </a>
+
+            <a href="{{ url_for('calendario') }}" class="nav-link">
+                Calendário
+            </a>
+        </div>
+
+        <div class="navbar-actions d-flex gap-2 align-items-center">
 
             <!-- NOTIFICAÇÕES -->
             <a href="{{ url_for('notificacoes') }}" class="btn btn-sm position-relative">
@@ -19,7 +33,7 @@
             </a>
 
             <!-- DARK MODE -->
-            <button class="btn btn-sm" onclick="toggleTheme()">
+            <button class="btn btn-sm" type="button" onclick="toggleTheme()">
                 🌙
             </button>
 

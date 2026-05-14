@@ -2,11 +2,21 @@
     animation: fadeIn 0.4s ease;
 }
 
+.dashboard-alert-link {
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-alert-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220, 53, 69, 0.18);
+}
+
 /* Cards resumo */
 .resumo-card {
     cursor: pointer;
     transition: all 0.2s ease;
-    border-radius: 14px;
+    border-radius: 8px;
 }
 
 .resumo-card:hover {
@@ -21,22 +31,32 @@ html.dark-mode .resumo-card:hover {
 
 /* Título */
 .dashboard-title {
-    letter-spacing: 0.5px;
+    letter-spacing: 0;
 }
 
 /* Filtros */
 .dashboard-filters {
     background: rgba(0,0,0,0.03);
     padding: 12px;
-    border-radius: 12px;
+    border-radius: 8px;
 }
 
 html.dark-mode .dashboard-filters {
     background: rgba(255,255,255,0.05);
 }
 
+.dashboard-focus-list {
+    animation: focusList 0.7s ease;
+    scroll-margin-top: 96px;
+}
+
 /* Animação */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes focusList {
+    0% { transform: translateY(10px); opacity: 0.55; }
+    100% { transform: translateY(0); opacity: 1; }
 }

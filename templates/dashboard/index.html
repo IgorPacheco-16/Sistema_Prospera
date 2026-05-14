@@ -9,9 +9,10 @@
 <div class="container dashboard-page">
 
     {% if atrasadas > 0 %}
-    <div class="alert alert-danger text-center">
+    <a href="{{ url_for('dashboard', atrasadas=1) }}#ops-list"
+       class="alert alert-danger text-center dashboard-alert-link d-block">
         ⚠️ Você tem <strong>{{ atrasadas }}</strong> OP(s) atrasada(s)
-    </div>
+    </a>
     {% endif %}
 
     <h2 class="mb-4 fw-bold text-center dashboard-title">
@@ -124,14 +125,14 @@
     </form>
 
     <!-- LISTA DE OPS -->
-    <div class="row justify-content-center">
+    <div id="ops-list" class="row justify-content-center {% if atrasadas_filtro %}dashboard-focus-list{% endif %}">
 
         {% for item in ops %}
         <div class="col-md-4 mb-4">
 
             <div class="card h-100 shadow-sm card-hover
-                {% if item.op.alta_prioridade %}prioridade{% endif %}
-                {% if item.cor == 'vermelho' %}atrasada
+                {% if item.cor == 'finalizada' %}finalizada
+                {% elif item.cor == 'vermelho' %}atrasada
                 {% elif item.cor == 'laranja' %}urgente
                 {% elif item.cor == 'amarelo' %}atencao
                 {% elif item.cor == 'verde' %}no-prazo
@@ -154,11 +155,9 @@
 
                         <div class="mb-2 d-flex gap-2 flex-wrap">
 
-                            {% if item.op.alta_prioridade %}
-                                <span class="badge bg-dark">🔥 PRIORIDADE</span>
-                            {% endif %}
-
-                            {% if item.cor == "vermelho" %}
+                            {% if item.cor == "finalizada" %}
+                                <span class="badge bg-success">FINALIZADA</span>
+                            {% elif item.cor == "vermelho" %}
                                 <span class="badge bg-danger">ATRASADA</span>
                             {% elif item.cor == "laranja" %}
                                 <span class="badge bg-warning text-dark">URGENTE</span>
@@ -203,7 +202,9 @@
                               method="POST"
                               class="w-50">
 
-                            <button class="btn btn-warning btn-sm w-100">
+                            <button class="btn btn-warning btn-sm w-100"
+                                    type="submit"
+                                    onclick="return confirm('Deseja arquivar esta OP?')">
                                 Arquivar
                             </button>
 

@@ -5,11 +5,19 @@
 :root {
     --bg-light: #f5f6fa;
     --text-light: #212529;
+    --muted-light: #6c757d;
+    --card-light: #ffffff;
+    --border-light: #d9dee7;
 
     --bg-dark: #0f1115;
-    --card-dark: #1e1e1e;
+    --card-dark: #1b1f27;
     --text-dark: #e4e4e4;
-    --border-dark: #333;
+    --muted-dark: #b8c0cc;
+    --border-dark: #343a46;
+    --primary: #0d6efd;
+    --success: #198754;
+    --warning: #ffc107;
+    --danger: #dc3545;
 }
 
 /* ========================================= */
@@ -20,6 +28,7 @@ body {
     background-color: var(--bg-light);
     color: var(--text-light);
     transition: background 0.3s ease, color 0.3s ease;
+    min-width: 320px;
 }
 
 html.dark-mode body {
@@ -31,12 +40,25 @@ html {
     scroll-behavior: smooth;
 }
 
+.text-muted {
+    color: var(--muted-light) !important;
+}
+
+html.dark-mode .text-muted {
+    color: var(--muted-dark) !important;
+}
+
+main,
+.container {
+    max-width: 1180px;
+}
+
 /* ========================================= */
 /* 🧭 NAVBAR */
 /* ========================================= */
 
 .navbar {
-    background: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.92);
     backdrop-filter: blur(10px);
     box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     position: relative;
@@ -44,8 +66,29 @@ html {
 }
 
 html.dark-mode .navbar {
-    background: rgba(20,20,20,0.95);
-    border-bottom: 1px solid #222;
+    background: rgba(19,22,29,0.96);
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.app-navbar .container-fluid {
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.navbar-brand {
+    color: var(--text-light);
+}
+
+html.dark-mode .navbar-brand {
+    color: var(--text-dark);
+}
+
+.navbar-links {
+    margin-left: auto;
+}
+
+.navbar-actions {
+    margin-left: 8px;
 }
 
 /* BOTÕES NAVBAR */
@@ -87,8 +130,9 @@ html.dark-mode .navbar .nav-link:hover {
 /* ========================================= */
 
 .card {
-    border-radius: 12px;
-    border: none;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    background-color: var(--card-light);
     transition: all 0.25s ease;
 }
 
@@ -110,6 +154,7 @@ html.dark-mode .navbar .nav-link:hover {
 html.dark-mode .card {
     background-color: var(--card-dark);
     border: 1px solid var(--border-dark);
+    color: var(--text-dark);
 }
 
 /* TEXTO */
@@ -121,6 +166,29 @@ html.dark-mode .card h4,
 html.dark-mode .card h5,
 html.dark-mode .card p {
     color: var(--text-dark);
+}
+
+html.dark-mode .list-group-item {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .list-group-item-light {
+    background-color: #202631;
+    color: var(--text-dark);
+}
+
+html.dark-mode .list-group-item-warning {
+    background-color: #3a300f;
+    border-color: #6f5a12;
+    color: #ffe8a3;
+}
+
+html.dark-mode .list-group-item-danger {
+    background-color: #3a171b;
+    border-color: #74323a;
+    color: #ffc2c8;
 }
 
 /* ========================================= */
@@ -139,7 +207,7 @@ html.dark-mode .card p {
 
 .progress {
     height: 8px;
-    border-radius: 10px;
+    border-radius: 8px;
 }
 
 html.dark-mode .progress {
@@ -152,9 +220,17 @@ html.dark-mode .progress {
 
 html.dark-mode .form-control,
 html.dark-mode .form-select {
-    background-color: #1e1e1e;
+    background-color: #151922;
     color: #fff;
-    border: 1px solid #444;
+    border: 1px solid var(--border-dark);
+}
+
+html.dark-mode .form-control:focus,
+html.dark-mode .form-select:focus {
+    background-color: #171d27;
+    color: #fff;
+    border-color: #6aa8ff;
+    box-shadow: 0 0 0 0.2rem rgba(106, 168, 255, 0.18);
 }
 
 html.dark-mode .form-control::placeholder {
@@ -167,6 +243,10 @@ html.dark-mode .form-control::placeholder {
 
 html.dark-mode a {
     color: #4da3ff;
+}
+
+html.dark-mode .text-decoration-none {
+    color: inherit;
 }
 
 /* ========================================= */
@@ -195,6 +275,11 @@ html.dark-mode a {
     border-left: 5px solid #28a745;
 }
 
+.card.finalizada {
+    background: #e6fff5;
+    border-left: 5px solid #198754;
+}
+
 /* DARK */
 
 html.dark-mode .card.atrasada {
@@ -217,6 +302,11 @@ html.dark-mode .card.no-prazo {
     border-left: 5px solid #28a745;
 }
 
+html.dark-mode .card.finalizada {
+    background: #071f18;
+    border-left: 5px solid #2fb36d;
+}
+
 /* ========================================= */
 /* 🎯 BOTÕES */
 /* ========================================= */
@@ -227,13 +317,83 @@ html.dark-mode .card.no-prazo {
     color: #fff;
 }
 
+.btn-primary,
+.btn-success {
+    color: #fff !important;
+}
+
+html.dark-mode .btn-primary {
+    background-color: #2f7df6;
+    border-color: #2f7df6;
+    color: #fff !important;
+}
+
+html.dark-mode .btn-success {
+    background: #23834f;
+    color: #fff !important;
+}
+
 .btn-success:hover {
     background: linear-gradient(135deg, #34d058, #28a745);
 }
 
 html.dark-mode .btn-outline-secondary {
-    color: #aaa;
-    border-color: #555;
+    color: var(--muted-dark);
+    border-color: #667085;
+}
+
+html.dark-mode .btn-outline-secondary:hover {
+    background-color: #2b3340;
+    color: #fff;
+}
+
+html.dark-mode .btn-outline-primary {
+    color: #8ec5ff;
+    border-color: #2f75d6;
+}
+
+html.dark-mode .btn-outline-primary:hover {
+    background-color: #1d4f91;
+    color: #fff;
+}
+
+.btn-primary-custom,
+.btn-entregar,
+.btn-validar,
+.btn-finalizar {
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 12px;
+}
+
+.btn-primary-custom {
+    background-color: var(--primary);
+}
+
+.btn-entregar {
+    background-color: var(--primary);
+}
+
+.btn-validar {
+    background-color: var(--success);
+}
+
+.btn-finalizar {
+    background-color: var(--success);
+    width: 100%;
+    max-width: 280px;
+}
+
+.btn-primary-custom:hover,
+.btn-entregar:hover {
+    background-color: #0b5ed7;
+}
+
+.btn-validar:hover,
+.btn-finalizar:hover {
+    background-color: #146c43;
 }
 
 /* ========================================= */
@@ -241,7 +401,7 @@ html.dark-mode .btn-outline-secondary {
 /* ========================================= */
 
 .alert {
-    border-radius: 10px;
+    border-radius: 8px;
     position: relative;
     z-index: 1;
 }
@@ -270,4 +430,177 @@ html.dark-mode .prioridade {
 
 .dropdown-menu {
     z-index: 2000;
+}
+
+html.dark-mode .dropdown-menu {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .dropdown-header,
+html.dark-mode .dropdown-menu .text-muted {
+    color: var(--muted-dark) !important;
+}
+
+/* ========================================= */
+/* OP E FORMULARIOS */
+/* ========================================= */
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    align-items: stretch;
+}
+
+.op-detail-page h1 {
+    margin-bottom: 6px;
+}
+
+.sector-card-op {
+    min-height: 280px;
+}
+
+.sector-card-op .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sector-card-op h3 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.status-op {
+    color: var(--muted-light);
+}
+
+html.dark-mode .status-op {
+    color: var(--muted-dark);
+}
+
+.progresso-topo,
+.tarefa-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.barra-bg {
+    width: 100%;
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 999px;
+    margin: 8px 0 14px;
+    overflow: hidden;
+}
+
+.barra {
+    height: 100%;
+    background-color: var(--primary);
+}
+
+html.dark-mode .barra-bg {
+    background-color: #2b3340;
+}
+
+.form-tarefa {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px auto;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.tarefa,
+.task-edit-item {
+    background-color: rgba(13, 110, 253, 0.04);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+}
+
+.tarefa .btn,
+.form-tarefa .btn {
+    width: 100%;
+}
+
+html.dark-mode .tarefa,
+html.dark-mode .task-edit-item {
+    background-color: #151922;
+    border-color: var(--border-dark);
+}
+
+.status.validado {
+    color: var(--success);
+}
+
+.status.entregue {
+    color: #a77000;
+}
+
+.status.pendente,
+.prazo.atrasado {
+    color: var(--danger);
+}
+
+.prazo.urgente {
+    color: #9a6a00;
+}
+
+html.dark-mode .status.entregue,
+html.dark-mode .prazo.urgente {
+    color: #ffd166;
+}
+
+html.dark-mode .status.pendente,
+html.dark-mode .prazo.atrasado {
+    color: #ff9aa6;
+}
+
+.card-atrasado {
+    border-left: 5px solid var(--danger);
+}
+
+.card-andamento {
+    border-left: 5px solid var(--warning);
+}
+
+.card-finalizado {
+    border-left: 5px solid var(--success);
+}
+
+@media (max-width: 768px) {
+    .app-navbar .container-fluid,
+    .navbar-links,
+    .navbar-actions {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .navbar-brand {
+        width: 100%;
+        text-align: center;
+    }
+
+    .form-tarefa {
+        grid-template-columns: 1fr;
+    }
+
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .btn-finalizar {
+        max-width: none;
+    }
+
+    .dashboard-filters .btn,
+    .dashboard-filters .form-control,
+    .dashboard-filters .form-select {
+        min-height: 40px;
+    }
 }

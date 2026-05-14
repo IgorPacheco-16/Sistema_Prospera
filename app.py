@@ -176,18 +176,20 @@ def dashboard():
     if busca:
         query = query.filter(OP.nome.ilike(f"%{busca}%"))
 
-    if status == "EM_ANDAMENTO":
-        query = query.filter(OP.status == "EM ANDAMENTO")
+    ops_base = query.all()
 
-    if not status:
-        query = query.filter(OP.status != "FINALIZADA")
+    total = len(ops_base)
+    atrasadas = sum(
+        1 for op in ops_base
+        if op.prazo_final and op.prazo_final < hoje and op.status != "FINALIZADA"
+    )
+    em_andamento = sum(1 for op in ops_base if op.status == "EM ANDAMENTO")
+    finalizadas = sum(1 for op in ops_base if op.status == "FINALIZADA")
 
-    ops = query.all()
-
-    total = len(ops)
-    atrasadas = 0
-    em_andamento = 0
-    finalizadas = 0
+    if status:
+        ops = [op for op in ops_base if op.status == status]
+    else:
+        ops = [op for op in ops_base if op.status != "FINALIZADA"]
 
     lista_ops = []
 
@@ -197,15 +199,10 @@ def dashboard():
         total_tarefas = len(tarefas)
         validadas = sum(1 for t in tarefas if t.validado)
 
-        #Status geral
-        if op.status == "FINALIZADA":
-            finalizadas += 1
-        elif op.status == "EM ANDAMENTO":
-            em_andamento += 1
-
         #Se tiver algum tipo de atraso, aqui aplicamos as cores
-        if op.prazo_final and op.prazo_final < hoje and op.status != "FINALIZADA":
-            atrasadas += 1
+        if op.status == "FINALIZADA":
+            cor = "finalizada"
+        elif op.prazo_final and op.prazo_final < hoje:
             cor = "vermelho"
         elif op.prazo_final and (op.prazo_final - hoje).days <= 2:
             cor = "laranja"
@@ -225,7 +222,9 @@ def dashboard():
     if atrasadas_filtro:
         lista_ops = [
             item for item in lista_ops
-            if item["op"].prazo_final and item["op"].prazo_final < hoje
+            if item["op"].prazo_final
+            and item["op"].prazo_final < hoje
+            and item["op"].status != "FINALIZADA"
         ]
 
     #Ordem para aparecer no dash: prioridade > atraso > prazo
@@ -249,7 +248,8 @@ def dashboard():
         finalizadas=finalizadas,
         busca=busca,
         status=status,
-        filtro_ativo=filtro_ativo
+        filtro_ativo=filtro_ativo,
+        atrasadas_filtro=bool(atrasadas_filtro)
     )
 
 #Rota e função para a criação das novas OPs
@@ -409,6 +409,16 @@ def arquivadas():
     ops = OP.query.filter_by(status="ARQUIVADA").all()
     return render_template("arquivadas/index.html", ops=ops)
 
+@app.route("/desarquivar_op/<int:id>", methods=["POST"])
+def desarquivar_op(id):
+    op = db.session.get(OP, id)
+    if not op:
+        abort(404)
+
+    op.status = "EM ANDAMENTO"
+    db.session.commit()
+    return redirect(url_for("arquivadas"))
+
 #Rota para entrarmos no calendário com a lógica por traás
 
 @app.route("/calendario")
@@ -473,7 +483,7 @@ def criar_usuario():
 
         return "Usuário criado! Ele precisa ativar a conta."
 
-    return render_template("usuario/criar.html", setores=setores)
+    return render_template("usuario/criar_usuario.html", setores=setores)
 
 
 #Rota para definir a senha do usuário na sua primeira vez logando (preciso mexer nisso)
@@ -579,6 +589,24 @@ def excluir_tarefa(id):
     db.session.commit()
 
     return redirect(request.referrer)
+
+
+@app.route("/finalizar_op/<int:id>", methods=["POST"])
+def finalizar_op(id):
+    if not (is_atendente() or is_admin()):
+        return "Acesso negado"
+
+    op = db.session.get(OP, id)
+    if not op:
+        abort(404)
+
+    tarefas = Tarefa.query.filter_by(op_id=id).all()
+    if tarefas and not all(t.validado for t in tarefas):
+        return "Ainda existem tarefas pendentes de validação"
+
+    op.status = "FINALIZADA"
+    db.session.commit()
+    return redirect(url_for("ver_op", id=op.id))
 
 
 #Core para a criação de notificações (Ainda está com a lógica antiga, preciso mexer nisso)
