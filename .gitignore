@@ -1,2 +1,4 @@
 instance/
 *.db
+.env
+*.env

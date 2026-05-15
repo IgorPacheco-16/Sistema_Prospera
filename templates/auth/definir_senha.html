@@ -1,4 +1,33 @@
-<form method="POST">
-    <input type="password" name="senha" placeholder="Crie sua senha" required>
-    <button type="submit">Salvar</button>
-</form>
+{% extends "base/base.html" %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4 fw-bold mb-4">Definir senha</h2>
+
+                {% if erro %}
+                    <div class="alert alert-danger">{{ erro }}</div>
+                {% endif %}
+
+                <form method="POST" class="d-grid gap-3">
+                    <div>
+                        <label class="form-label" for="senha">Senha</label>
+                        <input type="password" id="senha" name="senha" class="form-control" required>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="confirmar_senha">Confirmar senha</label>
+                        <input type="password" id="confirmar_senha" name="confirmar_senha" class="form-control" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

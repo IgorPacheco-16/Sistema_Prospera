@@ -1,17 +1,78 @@
-<form method="POST">
-    <input type="email" name="email" placeholder="Email" required>
+{% extends "base/base.html" %}
 
-    <select name="tipo">
-        <option value="ATENDENTE">Atendente</option>
-        <option value="PCP">PCP</option>
-        <option value="SETOR">Setor</option>
-    </select>
+{% block content %}
 
-    <select name="setor">
-        {% for s in setores %}
-            <option value="{{ s.id }}">{{ s.nome }}</option>
-        {% endfor %}
-    </select>
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4 fw-bold mb-4">Cadastrar usuario</h2>
 
-    <button type="submit">Criar usuário</button>
-</form>
+                {% if erro %}
+                    <div class="alert alert-danger">{{ erro }}</div>
+                {% endif %}
+
+                {% if mensagem %}
+                    <div class="alert alert-success">{{ mensagem }}</div>
+                {% endif %}
+
+                <form method="POST" class="d-grid gap-3">
+                    <div>
+                        <label class="form-label" for="email">Email</label>
+                        <input type="email" id="email" name="email" class="form-control" required>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="tipo">Tipo/permissao</label>
+                        <select id="tipo" name="tipo" class="form-select" required>
+                            {% for tipo in tipos %}
+                                <option value="{{ tipo }}">{{ tipo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="setor-field">
+                        <label class="form-label" for="setor">Setor</label>
+                        <select id="setor" name="setor" class="form-select">
+                            <option value="">Selecione</option>
+                            {% for s in setores %}
+                                <option value="{{ s.id }}">{{ s.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="senha">Senha inicial</label>
+                        <input type="password" id="senha" name="senha" class="form-control" required>
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-end flex-wrap">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary">Criar usuario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function atualizarCampoSetor() {
+    const tipo = document.getElementById("tipo");
+    const setorField = document.getElementById("setor-field");
+    const setor = document.getElementById("setor");
+
+    const mostrarSetor = tipo.value === "SETOR";
+    setorField.classList.toggle("d-none", !mostrarSetor);
+    setor.required = mostrarSetor;
+
+    if (!mostrarSetor) {
+        setor.value = "";
+    }
+}
+
+document.getElementById("tipo").addEventListener("change", atualizarCampoSetor);
+atualizarCampoSetor();
+</script>
+
+{% endblock %}

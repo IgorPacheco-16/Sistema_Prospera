@@ -1,171 +1,125 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
-from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor, HistoricoOP
+from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor, HistoricoOP, PasswordResetToken
 from datetime import datetime, timedelta, date
-from functools import wraps
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash, check_password_hash
+import importlib.util
+import os
+from pathlib import Path
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'segredo123'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-db.init_app(app)
+BASE_DIR = Path(__file__).resolve().parent
 
-#Permissões internas para cada setor (Permite que apenas alguns setores possam acessar algumas opções e sejam barrados)
 
-def is_admin(): return session.get("tipo") == "ADMIN"
-def is_atendente(): return session.get("tipo") == "ATENDENTE"
-def is_pcp(): return session.get("tipo") == "PCP"
-def is_setor(): return session.get("tipo") == "SETOR"
+def carregar_variaveis_ambiente():
+    env_path = BASE_DIR / ".env"
+    fallback_env_path = BASE_DIR / "shounen.env"
+    caminho_env = None
 
-def login_required(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if "usuario" not in session:
-            return redirect(url_for("login"))
-        return func(*args, **kwargs)
-    return wrapper
+    if env_path.exists():
+        caminho_env = env_path
+    elif fallback_env_path.exists():
+        caminho_env = fallback_env_path
 
-def tipos_permitidos(*tipos):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if "usuario" not in session:
-                return redirect(url_for("login"))
-
-            if session.get("tipo") not in tipos:
-                return "Acesso negado", 403
-
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def usuario_atual():
-    return session.get("usuario") or "Sistema"
-
-def registrar_historico(op_id, acao, descricao):
-    db.session.add(HistoricoOP(
-        op_id=op_id,
-        acao=acao,
-        usuario=usuario_atual(),
-        descricao=descricao
-    ))
-
-#Init do banco de dados
-
-def garantir_coluna_alta_prioridade():
-    colunas = db.session.execute(text("PRAGMA table_info(ops)")).fetchall()
-    nomes_colunas = [coluna[1] for coluna in colunas]
-
-    if "alta_prioridade" not in nomes_colunas:
-        try:
-            db.session.execute(text(
-                "ALTER TABLE ops "
-                "ADD COLUMN alta_prioridade BOOLEAN NOT NULL DEFAULT 0"
-            ))
-            db.session.commit()
-        except OperationalError as erro:
-            db.session.rollback()
-            if "duplicate column name" not in str(erro).lower():
-                raise
-
-def adicionar_coluna_se_nao_existir(tabela, coluna, definicao):
-    colunas = db.session.execute(text(f"PRAGMA table_info({tabela})")).fetchall()
-    nomes_colunas = [item[1] for item in colunas]
-
-    if coluna in nomes_colunas:
+    if not caminho_env:
         return
 
-    try:
-        db.session.execute(text(
-            f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}"
-        ))
-        db.session.commit()
-    except OperationalError as erro:
-        db.session.rollback()
-        if "duplicate column name" not in str(erro).lower():
-            raise
+    if load_dotenv:
+        load_dotenv(dotenv_path=caminho_env)
+        return
 
-def garantir_colunas_notificacao():
-    adicionar_coluna_se_nao_existir("notificacoes", "link", "VARCHAR(255)")
-    adicionar_coluna_se_nao_existir("notificacoes", "op_id", "INTEGER")
-    adicionar_coluna_se_nao_existir("notificacoes", "tarefa_id", "INTEGER")
-    adicionar_coluna_se_nao_existir("notificacoes", "setor_id", "INTEGER")
-    adicionar_coluna_se_nao_existir("notificacoes", "tipo_evento", "VARCHAR(80)")
+    for linha in caminho_env.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
 
-with app.app_context():
-    db.create_all()
-    garantir_coluna_alta_prioridade()
-    garantir_colunas_notificacao()
+        chave, valor = linha.split("=", 1)
+        chave = chave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        if chave and chave not in os.environ:
+            os.environ[chave] = valor
 
-    setores_nomes = [
-        "Atendimento","Criação","Projeto","Compras/Estoque","PCP",
-        "Arte Final","Pré-impressão","Impressão","Marcenaria",
-        "Acabamento","Terceirização","Expedição","Operacional"
-    ]
 
-    if not Setor.query.first():
-        for nome in setores_nomes:
-            db.session.add(Setor(nome=nome))
-        db.session.commit()
+def carregar_modulo(nome, caminho_relativo):
+    caminho = BASE_DIR / caminho_relativo
+    spec = importlib.util.spec_from_file_location(nome, caminho)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
 
-    if not User.query.filter_by(email="admin@teste.com").first():
-        db.session.add(User(
-            email="admin@teste.com",
-            senha=generate_password_hash("123"),
-            tipo="ADMIN",
-            ativo=True
-        ))
 
-    if not User.query.filter_by(email="atendente@teste.com").first():
-        db.session.add(User(
-            email="atendente@teste.com",
-            senha=generate_password_hash("123"),
-            tipo="ATENDENTE",
-            ativo=True
-        ))
+carregar_variaveis_ambiente()
 
-    if not User.query.filter_by(email="pcp@teste.com").first():
-        db.session.add(User(
-            email="pcp1@teste.com",
-            senha=generate_password_hash("123"),
-            tipo="PCP",
-            ativo=True
-        ))
+config_module = carregar_modulo("pacheco_config", "app/config.py")
+security_module = carregar_modulo("pacheco_security", "app/security.py")
+historico_module = carregar_modulo("pacheco_historico_services", "app/historico/services.py")
+notificacoes_module = carregar_modulo("pacheco_notificacoes_services", "app/notificacoes/services.py")
 
-    for setor in Setor.query.all():
-        email = f"{setor.nome.lower().replace(' ', '').replace('/', '').replace('-', '')}@teste.com"
-        if not User.query.filter_by(email=email).first():
-            db.session.add(User(
-                email=email,
-                senha=generate_password_hash("123"),
-                tipo="SETOR",
-                setor_id=setor.id,
-                ativo=True
-            ))
+configure_app = config_module.configure_app
+initialize_database = config_module.initialize_database
 
-    db.session.commit()
+is_admin = security_module.is_admin
+is_atendente = security_module.is_atendente
+is_pcp = security_module.is_pcp
+is_setor = security_module.is_setor
+login_required = security_module.login_required
+tipos_permitidos = security_module.tipos_permitidos
+normalizar_email = security_module.normalizar_email
+gerar_codigo_recuperacao = security_module.gerar_codigo_recuperacao
+enviar_email_recuperacao = security_module.enviar_email_recuperacao
+
+registrar_historico = historico_module.registrar_historico
+
+link_op = notificacoes_module.link_op
+link_tarefa = notificacoes_module.link_tarefa
+query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
+criar_notificacao = notificacoes_module.criar_notificacao
+gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
+
+app = Flask(__name__)
+configure_app(app)
+db.init_app(app)
+
+initialize_database(app)
 
 #Função para os logins
 
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email")
+        email = normalizar_email(request.form.get("email"))
         senha = request.form.get("senha")
 
         user = User.query.filter_by(email=email).first()
 
-        if user and check_password_hash(user.senha, senha):
+        if not user:
+            return render_template("auth/login.html", erro="Email ou senha invalidos")
+
+        if not user.ativo:
+            return render_template(
+                "auth/login.html",
+                erro="Usuario inativo. Procure um administrador."
+            )
+
+        if not user.senha:
+            return render_template(
+                "auth/login.html",
+                erro="Usuario sem senha cadastrada. Procure um administrador."
+            )
+
+        if check_password_hash(user.senha, senha or ""):
             session["usuario"] = user.email
             session["tipo"] = user.tipo
             session["setor_id"] = user.setor_id
             return redirect(url_for("dashboard"))
 
-        return render_template("auth/login.html", erro="Email ou senha inválidos")
+        return render_template("auth/login.html", erro="Email ou senha invalidos")
 
-    return render_template("auth/login.html")
+    mensagem = session.pop("mensagem_login", None)
+    return render_template("auth/login.html", mensagem=mensagem)
 
 #Função para o logout
 
@@ -175,176 +129,108 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-#Função para as notificações (ainda em desenvolvimento)
 
-def link_op(op_id):
-    return f"/op/{op_id}"
-
-def link_tarefa(op_id, setor_id, tarefa_id):
-    return f"/op/{op_id}?setor={setor_id}&tarefa={tarefa_id}"
-
-def query_notificacoes_usuario():
-    query = Notificacao.query.filter_by(usuario=session.get("tipo"))
-
-    if is_setor():
-        query = query.filter_by(setor_id=session.get("setor_id"))
-
-    return query
-
-def setores_da_op(op_id):
-    return OPSetor.query.filter_by(op_id=op_id).all()
-
-def criar_notificacao(
-    usuario,
-    mensagem,
-    link=None,
-    op_id=None,
-    tarefa_id=None,
-    setor_id=None,
-    tipo_evento=None
-):
-    if tipo_evento:
-        existe = Notificacao.query.filter_by(
-            usuario=usuario,
-            op_id=op_id,
-            tarefa_id=tarefa_id,
-            setor_id=setor_id,
-            tipo_evento=tipo_evento
-        ).first()
-    else:
-        existe = Notificacao.query.filter_by(
-            usuario=usuario,
-            mensagem=mensagem
-        ).first()
-
-    if existe:
-        return existe
-
-    notificacao = Notificacao(
-        usuario=usuario,
-        mensagem=mensagem,
-        link=link,
-        op_id=op_id,
-        tarefa_id=tarefa_id,
-        setor_id=setor_id,
-        tipo_evento=tipo_evento
+@app.route("/esqueci_senha", methods=["GET", "POST"])
+def esqueci_senha():
+    mensagem_generica = (
+        "Se o email estiver cadastrado, enviaremos instrucoes para redefinir sua senha."
     )
 
-    db.session.add(notificacao)
-    return notificacao
+    if request.method == "POST":
+        email = normalizar_email(request.form.get("email"))
+        user = User.query.filter_by(email=email).first()
+        pode_redefinir = bool(user and user.ativo)
+        session["reset_email"] = email
 
-def notificar_op_para_gestao(op, tipo_evento, mensagem):
-    criar_notificacao(
-        "ATENDENTE",
-        mensagem,
-        link=link_op(op.id),
-        op_id=op.id,
-        tipo_evento=tipo_evento
-    )
-    criar_notificacao(
-        "PCP",
-        mensagem,
-        link=link_op(op.id),
-        op_id=op.id,
-        tipo_evento=tipo_evento
-    )
+        if pode_redefinir:
+            PasswordResetToken.query.filter_by(
+                user_id=user.id,
+                usado=False
+            ).update({"usado": True})
 
-def notificar_op_para_setores(op, tipo_evento, mensagem):
-    for op_setor in setores_da_op(op.id):
-        criar_notificacao(
-            "SETOR",
-            mensagem,
-            link=f"/op/{op.id}?setor={op_setor.setor_id}",
-            op_id=op.id,
-            setor_id=op_setor.setor_id,
-            tipo_evento=tipo_evento
+            codigo = gerar_codigo_recuperacao()
+            token = PasswordResetToken(
+                user_id=user.id,
+                codigo_hash=generate_password_hash(codigo),
+                expira_em=datetime.utcnow() + timedelta(minutes=10),
+                usado=False
+            )
+            db.session.add(token)
+            db.session.commit()
+            enviar_email_recuperacao(user.email, codigo)
+        else:
+            db.session.commit()
+
+        return render_template(
+            "auth/esqueci_senha.html",
+            mensagem=mensagem_generica,
+            mostrar_redefinir=True
         )
 
-def verificar_atrasos():
-    hoje = date.today()
-    tarefas = Tarefa.query.filter(
-        Tarefa.prazo < hoje,
-        Tarefa.validado == False
-    ).all()
+    return render_template("auth/esqueci_senha.html")
 
-    for t in tarefas:
-        op = db.session.get(OP, t.op_id)
-        if not op:
-            continue
 
-        mensagem = f"Tarefa atrasada: {t.setor.nome} na OP #{op.id} - {op.nome}"
-        link = link_tarefa(op.id, t.setor_id, t.id)
+@app.route("/redefinir_senha", methods=["GET", "POST"])
+def redefinir_senha():
+    email = session.get("reset_email")
+    if not email:
+        return redirect(url_for("esqueci_senha"))
 
-        for usuario in ["ATENDENTE", "PCP"]:
-            criar_notificacao(
-                usuario,
-                mensagem,
-                link=link,
-                op_id=op.id,
-                tarefa_id=t.id,
-                setor_id=t.setor_id,
-                tipo_evento="tarefa_atrasada"
+    user = User.query.filter_by(email=email).first()
+
+    if request.method == "POST":
+        codigo = (request.form.get("codigo") or "").strip()
+        nova_senha = request.form.get("nova_senha")
+        confirmar_senha = request.form.get("confirmar_senha")
+
+        if not codigo or not (nova_senha or "").strip() or not (confirmar_senha or "").strip():
+            return render_template(
+                "auth/redefinir_senha.html",
+                erro="Preencha todos os campos."
             )
 
-        criar_notificacao(
-            "SETOR",
-            mensagem,
-            link=link,
-            op_id=op.id,
-            tarefa_id=t.id,
-            setor_id=t.setor_id,
-            tipo_evento="tarefa_atrasada"
-        )
-
-    ops_atrasadas = OP.query.filter(
-        OP.prazo_final < hoje,
-        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
-    ).all()
-
-    for op in ops_atrasadas:
-        mensagem = f"OP atrasada: OP #{op.id} - {op.nome}"
-        notificar_op_para_gestao(op, "op_atrasada", mensagem)
-        notificar_op_para_setores(op, "op_atrasada", mensagem)
-
-    ops_urgentes = OP.query.filter(
-        OP.prazo_final >= hoje,
-        OP.prazo_final <= hoje + timedelta(days=2),
-        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
-    ).all()
-
-    for op in ops_urgentes:
-        mensagem = f"OP urgente: OP #{op.id} - {op.nome}"
-        notificar_op_para_gestao(op, "op_urgente", mensagem)
-        notificar_op_para_setores(op, "op_urgente", mensagem)
-
-def gerar_notificacoes_pendentes():
-    verificar_atrasos()
-
-    tarefas_entregues = Tarefa.query.filter_by(
-        entregue=True,
-        validado=False
-    ).all()
-
-    for tarefa in tarefas_entregues:
-        op = db.session.get(OP, tarefa.op_id)
-        if not op:
-            continue
-
-        mensagem = f"Tarefa aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
-        link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-
-        for usuario in ["ATENDENTE", "PCP"]:
-            criar_notificacao(
-                usuario,
-                mensagem,
-                link=link,
-                op_id=op.id,
-                tarefa_id=tarefa.id,
-                setor_id=tarefa.setor_id,
-                tipo_evento="tarefa_aguardando_validacao"
+        if nova_senha != confirmar_senha:
+            return render_template(
+                "auth/redefinir_senha.html",
+                erro="A nova senha e a confirmacao nao conferem."
             )
 
-    db.session.commit()
+        token = None
+        if user and user.ativo:
+            token = PasswordResetToken.query.filter_by(
+                user_id=user.id,
+                usado=False
+            ).order_by(PasswordResetToken.criado_em.desc()).first()
+
+        if not token:
+            return render_template(
+                "auth/redefinir_senha.html",
+                erro="Codigo invalido ou expirado."
+            )
+
+        if token.expira_em < datetime.utcnow():
+            token.usado = True
+            db.session.commit()
+            return render_template(
+                "auth/redefinir_senha.html",
+                erro="Codigo invalido ou expirado."
+            )
+
+        if not check_password_hash(token.codigo_hash, codigo):
+            return render_template(
+                "auth/redefinir_senha.html",
+                erro="Codigo invalido ou expirado."
+            )
+
+        user.senha = generate_password_hash(nova_senha)
+        token.usado = True
+        db.session.commit()
+        session.pop("reset_email", None)
+        session["mensagem_login"] = "Senha redefinida com sucesso. Faca login novamente."
+
+        return redirect(url_for("login"))
+
+    return render_template("auth/redefinir_senha.html")
 
 @app.before_request
 def before():
@@ -402,8 +288,6 @@ def ler_notificacao(id):
     return redirect(request.referrer or url_for("dashboard"))
 
 #Rota para a importação do Dashboard (pág inicial do sistema) e também o core do projeto
-
-from datetime import date, datetime
 
 @app.route("/dashboard")
 @login_required
@@ -812,29 +696,97 @@ def calendario():
 #Rota para criar um novo usuário (preciso atualizar isso)
 
 @app.route("/criar_usuario", methods=["GET", "POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
+@tipos_permitidos("ADMIN")
 def criar_usuario():
     setores = Setor.query.all()
+    tipos = ["ADMIN", "ATENDENTE", "PCP", "SETOR"]
 
     if request.method == "POST":
-        email = request.form.get("email")
+        email = normalizar_email(request.form.get("email"))
         tipo = request.form.get("tipo")
         setor_id = request.form.get("setor")
+        senha = request.form.get("senha")
+
+        if not email:
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Informe o email."
+            )
+
+        if tipo not in tipos:
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Tipo de usuario invalido."
+            )
+
+        if User.query.filter_by(email=email).first():
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Ja existe um usuario com este email."
+            )
+
+        if not (senha or "").strip():
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Informe a senha inicial."
+            )
+
+        if tipo == "SETOR" and not setor_id:
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Informe o setor para usuarios do tipo SETOR."
+            )
+
+        try:
+            setor_id_convertido = int(setor_id) if tipo == "SETOR" and setor_id else None
+        except ValueError:
+            setor_id_convertido = None
+
+        if tipo == "SETOR" and not setor_id_convertido:
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Setor invalido."
+            )
+
+        if setor_id_convertido and not db.session.get(Setor, setor_id_convertido):
+            return render_template(
+                "usuario/criar_usuario.html",
+                setores=setores,
+                tipos=tipos,
+                erro="Setor invalido."
+            )
 
         novo_usuario = User(
             email=email,
             tipo=tipo,
-            setor_id=int(setor_id) if setor_id else None,
-            senha=None,
-            ativo=False
+            setor_id=setor_id_convertido,
+            senha=generate_password_hash(senha),
+            ativo=True
         )
 
         db.session.add(novo_usuario)
         db.session.commit()
 
-        return "Usuário criado! Ele precisa ativar a conta."
+        return render_template(
+            "usuario/criar_usuario.html",
+            setores=setores,
+            tipos=tipos,
+            mensagem="Usuario criado com sucesso."
+        )
 
-    return render_template("usuario/criar_usuario.html", setores=setores)
+    return render_template("usuario/criar_usuario.html", setores=setores, tipos=tipos)
 
 
 #Rota para definir a senha do usuário na sua primeira vez logando (preciso mexer nisso)
@@ -844,10 +796,26 @@ def definir_senha():
     if "tmp_user" not in session:
         return redirect(url_for("login"))
 
-    user = User.query.get(session["tmp_user"])
+    user = db.session.get(User, session["tmp_user"])
+    if not user:
+        session.pop("tmp_user", None)
+        return redirect(url_for("login"))
 
     if request.method == "POST":
         senha = request.form.get("senha")
+        confirmar_senha = request.form.get("confirmar_senha")
+
+        if not (senha or "").strip():
+            return render_template(
+                "auth/definir_senha.html",
+                erro="Informe uma senha."
+            )
+
+        if confirmar_senha is not None and senha != confirmar_senha:
+            return render_template(
+                "auth/definir_senha.html",
+                erro="As senhas nao conferem."
+            )
 
         user.senha = generate_password_hash(senha)
         user.ativo = True
@@ -859,6 +827,52 @@ def definir_senha():
         return redirect(url_for("login"))
 
     return render_template("auth/definir_senha.html")
+
+
+@app.route("/minha_conta", methods=["GET", "POST"])
+@login_required
+def minha_conta():
+    user = User.query.filter_by(email=session.get("usuario")).first()
+    if not user:
+        session.clear()
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        senha_atual = request.form.get("senha_atual")
+        nova_senha = request.form.get("nova_senha")
+        confirmar_senha = request.form.get("confirmar_senha")
+
+        if (
+            not (senha_atual or "").strip()
+            or not (nova_senha or "").strip()
+            or not (confirmar_senha or "").strip()
+        ):
+            return render_template(
+                "usuario/minha_conta.html",
+                erro="Preencha todos os campos."
+            )
+
+        if not user.senha or not check_password_hash(user.senha, senha_atual):
+            return render_template(
+                "usuario/minha_conta.html",
+                erro="Senha atual incorreta."
+            )
+
+        if nova_senha != confirmar_senha:
+            return render_template(
+                "usuario/minha_conta.html",
+                erro="A nova senha e a confirmacao nao conferem."
+            )
+
+        user.senha = generate_password_hash(nova_senha)
+        db.session.commit()
+
+        return render_template(
+            "usuario/minha_conta.html",
+            mensagem="Senha alterada com sucesso."
+        )
+
+    return render_template("usuario/minha_conta.html")
 
 
 #Rota para a edição de OPs já abertas (Preciso mexer nisso)
@@ -1102,4 +1116,4 @@ def teste_notificacao():
     return "OK"
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_ENV") == "development")
