@@ -33,12 +33,26 @@
             </p>
         </div>
 
-        {% if tipo == "ATENDENTE" %}
-        <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}">
-            <button class="btn-finalizar" type="submit">OP finalizada</button>
-        </form>
-        {% endif %}
+        <div class="op-detail-actions">
+            {% if tipo in ["ATENDENTE", "ADMIN"] %}
+            <a href="{{ url_for('editar_op', id=op.id) }}" class="btn btn-outline-primary">
+                Editar OP
+            </a>
+            {% endif %}
+
+            {% if tipo == "ATENDENTE" %}
+            <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}">
+                <button class="btn-finalizar" type="submit">OP finalizada</button>
+            </form>
+            {% endif %}
+        </div>
     </div>
+
+    {% for mensagem in get_flashed_messages() %}
+        <div class="alert alert-warning">
+            {{ mensagem }}
+        </div>
+    {% endfor %}
 
     <div class="grid sector-summary-grid">
     {% for item in estrutura %}
@@ -185,16 +199,15 @@
                                            class="form-control"
                                            value="{{ t.prazo.strftime('%Y-%m-%d') if t.prazo else '' }}">
 
-                                    <select name="setor_id" class="form-select">
-                                        {% for setor_op in op.op_setores %}
-                                            <option value="{{ setor_op.setor.id }}"
-                                                    {{ 'selected' if setor_op.setor.id == t.setor_id else '' }}>
-                                                {{ setor_op.setor.nome }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-
                                     <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+                                </form>
+
+                                <form method="POST" action="{{ url_for('excluir_tarefa', id=t.id) }}" class="task-delete-form">
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            type="submit"
+                                            onclick="return confirm('Tem certeza que deseja excluir esta tarefa? Essa ação não pode ser desfeita.')">
+                                        Excluir tarefa
+                                    </button>
                                 </form>
                             </div>
                             {% endif %}

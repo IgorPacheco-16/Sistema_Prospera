@@ -29,6 +29,7 @@ class OP(db.Model):
     prazo_final = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(50), nullable=False, default="ABERTA")
     atendente = db.Column(db.String(100), nullable=False)
+    alta_prioridade = db.Column(db.Boolean, nullable=False, default=False)
 
     tarefas = db.relationship(
         "Tarefa",

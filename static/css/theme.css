@@ -280,6 +280,13 @@ html.dark-mode .text-decoration-none {
     border-left: 5px solid #198754;
 }
 
+.card.prioridade-alta {
+    background: #fff1f1;
+    border: 2px solid #dc3545;
+    border-left: 8px solid #dc3545;
+    box-shadow: 0 12px 28px rgba(220, 53, 69, 0.18);
+}
+
 /* DARK */
 
 html.dark-mode .card.atrasada {
@@ -305,6 +312,13 @@ html.dark-mode .card.no-prazo {
 html.dark-mode .card.finalizada {
     background: #071f18;
     border-left: 5px solid #2fb36d;
+}
+
+html.dark-mode .card.prioridade-alta {
+    background: #2b1115;
+    border-color: #ff6b78;
+    border-left: 8px solid #ff6b78;
+    box-shadow: 0 12px 28px rgba(255, 107, 120, 0.14);
 }
 
 /* ========================================= */
@@ -466,6 +480,23 @@ html.dark-mode .dropdown-menu .text-muted {
     margin-bottom: 18px;
 }
 
+.op-detail-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.op-detail-actions form {
+    margin: 0;
+}
+
+.op-detail-actions .btn-finalizar {
+    width: auto;
+    max-width: none;
+}
+
 .sector-summary-grid {
     margin-bottom: 24px;
 }
@@ -615,7 +646,7 @@ html.dark-mode .barra-bg {
 
 .form-editar-tarefa {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 145px 150px auto;
+    grid-template-columns: minmax(0, 1fr) 145px auto;
     gap: 8px;
     margin-top: 10px;
 }
@@ -701,6 +732,10 @@ html.dark-mode .btn-close {
     margin: 0;
 }
 
+.task-delete-form {
+    margin-top: 8px;
+}
+
 .task-actions .btn {
     width: auto;
 }
@@ -776,6 +811,15 @@ html.dark-mode .prazo.atrasado {
 
     .op-detail-header {
         flex-direction: column;
+    }
+
+    .op-detail-actions {
+        width: 100%;
+    }
+
+    .op-detail-actions .btn,
+    .op-detail-actions form {
+        width: 100%;
     }
 
     .op-detail-header form,

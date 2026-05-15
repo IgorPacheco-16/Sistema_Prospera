@@ -1,6 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
 from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor
 from datetime import datetime, timedelta, date
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -18,8 +20,25 @@ def is_setor(): return session.get("tipo") == "SETOR"
 
 #Init do banco de dados
 
+def garantir_coluna_alta_prioridade():
+    colunas = db.session.execute(text("PRAGMA table_info(ops)")).fetchall()
+    nomes_colunas = [coluna[1] for coluna in colunas]
+
+    if "alta_prioridade" not in nomes_colunas:
+        try:
+            db.session.execute(text(
+                "ALTER TABLE ops "
+                "ADD COLUMN alta_prioridade BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            db.session.commit()
+        except OperationalError as erro:
+            db.session.rollback()
+            if "duplicate column name" not in str(erro).lower():
+                raise
+
 with app.app_context():
     db.create_all()
+    garantir_coluna_alta_prioridade()
 
     setores_nomes = [
         "Atendimento","Criação","Projeto","Compras/Estoque","PCP",
@@ -262,6 +281,7 @@ def criar_op():
     if request.method == "POST":
         nome = request.form.get("nome")
         prazo = request.form.get("prazo")
+        alta_prioridade = request.form.get("alta_prioridade") == "on"
         setores = request.form.getlist("setores")
 
         prazo_convertido = None
@@ -272,7 +292,8 @@ def criar_op():
             nome=nome,
             prazo_final=prazo_convertido,
             status="EM ANDAMENTO",
-            atendente=session.get("usuario")
+            atendente=session.get("usuario"),
+            alta_prioridade=alta_prioridade
         )
 
         db.session.add(nova_op)
@@ -515,39 +536,51 @@ def definir_senha():
 
 @app.route("/editar_op/<int:id>", methods=["GET", "POST"])
 def editar_op(id):
-    if not (is_atendente() or is_pcp() or is_admin()):
+    pode_editar_op = is_atendente() or is_admin()
+
+    if not pode_editar_op:
         return "Acesso negado"
 
     op = db.session.get(OP, id)
     if not op:
         abort(404)
 
-    tarefas = Tarefa.query.filter_by(op_id=id).all()
     setores = Setor.query.all()
 
     if request.method == "POST":
         op.nome = request.form.get("nome")
+        op.alta_prioridade = request.form.get("alta_prioridade") == "on"
 
         prazo = request.form.get("prazo")
         if prazo:
             op.prazo_final = datetime.strptime(prazo, "%Y-%m-%d").date()
+        else:
+            op.prazo_final = None
 
-        setores_selecionados = request.form.getlist("setores")
+        setores_selecionados = {int(setor_id) for setor_id in request.form.getlist("setores")}
+        setores_atuais = {op_setor.setor_id for op_setor in op.op_setores}
 
-        # remover tarefas de setores desmarcados
-        for t in tarefas:
-            if str(t.setor_id) not in setores_selecionados:
-                db.session.delete(t)
+        for setor_id in setores_selecionados - setores_atuais:
+            db.session.add(OPSetor(
+                op_id=op.id,
+                setor_id=setor_id
+            ))
 
-        existentes = [str(t.setor_id) for t in tarefas]
+        for op_setor in list(op.op_setores):
+            if op_setor.setor_id in setores_selecionados:
+                continue
 
-        for setor_id in setores_selecionados:
-            if setor_id not in existentes:
-                db.session.add(Tarefa(
-                    op_id=op.id,
-                    setor_id=int(setor_id),
-                    liberada=False
-                ))
+            tem_tarefas = Tarefa.query.filter_by(
+                op_id=op.id,
+                setor_id=op_setor.setor_id
+            ).first()
+
+            if tem_tarefas:
+                flash(
+                    "Um ou mais setores com tarefas foram mantidos para proteger os dados da OP."
+                )
+            else:
+                db.session.delete(op_setor)
 
         db.session.commit()
         return redirect(url_for("ver_op", id=op.id))
@@ -555,8 +588,9 @@ def editar_op(id):
     return render_template(
         "op/editar.html",
         op=op,
-        tarefas=tarefas,
-        setores=setores
+        setores=setores,
+        tipo=session.get("tipo"),
+        pode_editar_op=pode_editar_op
     )
 
 
@@ -577,33 +611,22 @@ def editar_tarefa(id):
     else:
         tarefa.prazo = None
 
-    setor_id = request.form.get("setor_id")
-    if setor_id:
-        setor_vinculado = OPSetor.query.filter_by(
-            op_id=tarefa.op_id,
-            setor_id=int(setor_id)
-        ).first()
-
-        if not setor_vinculado:
-            return "Setor não vinculado a esta OP"
-
-        tarefa.setor_id = int(setor_id)
-
     db.session.commit()
     return redirect(request.referrer)
 
 
 @app.route("/excluir_tarefa/<int:id>", methods=["POST"])
 def excluir_tarefa(id):
-    if not (is_pcp() or is_admin()):
+    if not (is_pcp() or is_atendente() or is_admin()):
         return "Acesso negado"
 
     tarefa = Tarefa.query.get_or_404(id)
+    op_id = tarefa.op_id
 
     db.session.delete(tarefa)
     db.session.commit()
 
-    return redirect(request.referrer)
+    return redirect(url_for("ver_op", id=op_id))
 
 @app.route("/recusar_tarefa/<int:id>", methods=["POST"])
 def recusar_tarefa(id):

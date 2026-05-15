@@ -131,6 +131,7 @@
         <div class="col-md-4 mb-4">
 
             <div class="card h-100 shadow-sm card-hover
+                {% if item.op.alta_prioridade %}prioridade-alta{% endif %}
                 {% if item.cor == 'finalizada' %}finalizada
                 {% elif item.cor == 'vermelho' %}atrasada
                 {% elif item.cor == 'laranja' %}urgente
@@ -154,6 +155,10 @@
                         </p>
 
                         <div class="mb-2 d-flex gap-2 flex-wrap">
+
+                            {% if item.op.alta_prioridade %}
+                                <span class="badge bg-dark">ALTA PRIORIDADE</span>
+                            {% endif %}
 
                             {% if item.cor == "finalizada" %}
                                 <span class="badge bg-success">FINALIZADA</span>
