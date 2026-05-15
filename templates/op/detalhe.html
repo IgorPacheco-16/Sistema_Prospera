@@ -38,6 +38,13 @@
             <a href="{{ url_for('editar_op', id=op.id) }}" class="btn btn-outline-primary">
                 Editar OP
             </a>
+
+            <button class="btn btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="modal"
+                    data-bs-target="#historicoOPModal">
+                Ver histórico
+            </button>
             {% endif %}
 
             {% if tipo == "ATENDENTE" %}
@@ -149,7 +156,7 @@
                                     {% if t.validado %}
                                         <span class="sector-status-badge status-success">Finalizada</span>
                                     {% elif t.entregue %}
-                                        <span class="sector-status-badge status-warning">Entregue</span>
+                                        <span class="sector-status-badge status-warning">Aguardando validação</span>
                                     {% elif t.prazo and t.prazo < today %}
                                         <span class="sector-status-badge status-danger">Atrasada</span>
                                     {% else %}
@@ -223,6 +230,43 @@
         </div>
     </div>
     {% endfor %}
+
+    {% if tipo in ["ATENDENTE", "ADMIN"] %}
+    <div class="modal fade task-modal" id="historicoOPModal" tabindex="-1" aria-labelledby="historicoOPModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title fs-5" id="historicoOPModalLabel">Histórico da OP</h2>
+                        <p class="modal-subtitle">{{ historico|length }} registro(s) recente(s)</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="op-history-list">
+                        {% for h in historico %}
+                        <div class="op-history-item">
+                            <div>
+                                <strong>{{ h.acao }}</strong>
+                                <p>{{ h.descricao }}</p>
+                            </div>
+                            <div class="op-history-meta">
+                                <span>{{ h.usuario }}</span>
+                                <span>{{ h.data.strftime('%d/%m/%Y %H:%M') }}</span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="op-history-empty">
+                            Nenhum registro de histórico para esta OP.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
 </div>
 

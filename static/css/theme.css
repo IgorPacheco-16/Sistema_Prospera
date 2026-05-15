@@ -785,6 +785,48 @@ html.dark-mode .btn-close {
     box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
 }
 
+.op-history-list {
+    display: grid;
+    gap: 8px;
+}
+
+.op-history-item,
+.op-history-empty {
+    background-color: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.op-history-item {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.op-history-item p {
+    margin: 4px 0 0;
+}
+
+.op-history-meta {
+    color: var(--muted-light);
+    display: grid;
+    font-size: 0.82rem;
+    gap: 2px;
+    justify-items: end;
+    white-space: nowrap;
+}
+
+html.dark-mode .op-history-item,
+html.dark-mode .op-history-empty {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .op-history-meta {
+    color: var(--muted-dark);
+}
+
 .task-modal-item .nome {
     display: block;
     font-weight: 700;
@@ -933,6 +975,15 @@ html.dark-mode .prazo.atrasado {
     .task-actions .btn,
     .task-actions form {
         width: 100%;
+    }
+
+    .op-history-item {
+        grid-template-columns: 1fr;
+    }
+
+    .op-history-meta {
+        justify-items: start;
+        white-space: normal;
     }
 
     .dashboard-filters .btn,

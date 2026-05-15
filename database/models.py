@@ -110,3 +110,20 @@ class Notificacao(db.Model):
         nullable=False
     )
 
+
+#HISTORICO DE ACOES DA OP
+class HistoricoOP(db.Model):
+    __tablename__ = "historico_op"
+
+    id = db.Column(db.Integer, primary_key=True)
+    op_id = db.Column(db.Integer, db.ForeignKey("ops.id"), nullable=False)
+    acao = db.Column(db.String(80), nullable=False)
+    usuario = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(255), nullable=False)
+    data = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    op = db.relationship("OP")
