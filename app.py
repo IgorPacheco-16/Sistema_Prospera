@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
 from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor, HistoricoOP
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 import importlib.util
 import os
 from pathlib import Path
@@ -59,6 +59,9 @@ notificacoes_module = carregar_modulo("pacheco_notificacoes_services", "app/noti
 notificacoes_routes_module = carregar_modulo("pacheco_notificacoes_routes", "app/notificacoes/routes.py")
 auth_routes_module = carregar_modulo("pacheco_auth_routes", "app/auth/routes.py")
 usuarios_routes_module = carregar_modulo("pacheco_usuarios_routes", "app/usuarios/routes.py")
+dashboard_routes_module = carregar_modulo("pacheco_dashboard_routes", "app/dashboard/routes.py")
+calendario_routes_module = carregar_modulo("pacheco_calendario_routes", "app/calendario/routes.py")
+ops_routes_module = carregar_modulo("pacheco_ops_routes", "app/ops/routes.py")
 
 configure_app = config_module.configure_app
 initialize_database = config_module.initialize_database
@@ -83,6 +86,9 @@ gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
 create_notificacoes_blueprint = notificacoes_routes_module.create_notificacoes_blueprint
 create_auth_blueprint = auth_routes_module.create_auth_blueprint
 create_usuarios_blueprint = usuarios_routes_module.create_usuarios_blueprint
+create_dashboard_blueprint = dashboard_routes_module.create_dashboard_blueprint
+create_calendario_blueprint = calendario_routes_module.create_calendario_blueprint
+create_ops_blueprint = ops_routes_module.create_ops_blueprint
 
 app = Flask(__name__)
 configure_app(app)
@@ -128,6 +134,22 @@ app.add_url_rule("/ler_notificacao/<int:id>", endpoint="ler_notificacao", build_
 app.add_url_rule("/api/notificacoes", endpoint="api_notificacoes", build_only=True)
 app.add_url_rule("/teste_notificacao", endpoint="teste_notificacao", build_only=True)
 
+dashboard_bp = create_dashboard_blueprint(
+    login_required=login_required,
+    gerar_notificacoes_pendentes=gerar_notificacoes_pendentes
+)
+app.register_blueprint(dashboard_bp)
+
+calendario_bp = create_calendario_blueprint(login_required=login_required)
+app.register_blueprint(calendario_bp)
+
+ops_bp = create_ops_blueprint(login_required=login_required)
+app.register_blueprint(ops_bp)
+
+app.add_url_rule("/dashboard", endpoint="dashboard", build_only=True)
+app.add_url_rule("/calendario", endpoint="calendario", build_only=True)
+app.add_url_rule("/arquivadas", endpoint="arquivadas", build_only=True)
+
 @app.before_request
 def before():
     pass
@@ -145,99 +167,6 @@ def inject_notificacoes():
             total_notificacoes=notificacoes_nao_lidas,
             notificacoes_recentes=notificacoes_recentes
         )
-
-@app.route("/dashboard")
-@login_required
-def dashboard():
-    gerar_notificacoes_pendentes()
-
-    hoje = date.today()
-
-    busca = request.args.get("busca", "")
-    status = request.args.get("status", "")
-    atrasadas_filtro = request.args.get("atrasadas", "")
-    filtro_ativo = bool(busca or status or atrasadas_filtro)
-
-    query = OP.query.filter(OP.status != "ARQUIVADA")
-
-    if busca:
-        query = query.filter(OP.nome.ilike(f"%{busca}%"))
-
-    ops_base = query.all()
-
-    total = len(ops_base)
-    atrasadas = sum(
-        1 for op in ops_base
-        if op.prazo_final and op.prazo_final < hoje and op.status != "FINALIZADA"
-    )
-    em_andamento = sum(1 for op in ops_base if op.status == "EM ANDAMENTO")
-    finalizadas = sum(1 for op in ops_base if op.status == "FINALIZADA")
-
-    if status:
-        ops = [op for op in ops_base if op.status == status]
-    else:
-        ops = [op for op in ops_base if op.status != "FINALIZADA"]
-
-    lista_ops = []
-
-    for op in ops:
-        tarefas = Tarefa.query.filter_by(op_id=op.id).all()
-
-        total_tarefas = len(tarefas)
-        validadas = sum(1 for t in tarefas if t.validado)
-
-        #Se tiver algum tipo de atraso, aqui aplicamos as cores
-        if op.status == "FINALIZADA":
-            cor = "finalizada"
-        elif op.prazo_final and op.prazo_final < hoje:
-            cor = "vermelho"
-        elif op.prazo_final and (op.prazo_final - hoje).days <= 2:
-            cor = "laranja"
-        elif op.prazo_final and (op.prazo_final - hoje).days <= 5:
-            cor = "amarelo"
-        else:
-            cor = "verde"
-
-        lista_ops.append({
-            "op": op,
-            "cor": cor,
-            "total_tarefas": total_tarefas,
-            "validadas": validadas
-        })
-
-    #Filtro para só atrasadas
-    if atrasadas_filtro:
-        lista_ops = [
-            item for item in lista_ops
-            if item["op"].prazo_final
-            and item["op"].prazo_final < hoje
-            and item["op"].status != "FINALIZADA"
-        ]
-
-    #Ordem para aparecer no dash: prioridade > atraso > prazo
-    lista_ops.sort(
-        key=lambda x: (
-            not getattr(x["op"], "alta_prioridade", False),
-            x["op"].status == "FINALIZADA",
-            x["op"].prazo_final is None,
-            x["op"].prazo_final or datetime.max.date()
-        )
-    )
-
-    return render_template(
-        "dashboard/index.html",
-        usuario=session.get("usuario"),
-        tipo=session.get("tipo"),
-        ops=lista_ops,
-        total=total,
-        atrasadas=atrasadas,
-        em_andamento=em_andamento,
-        finalizadas=finalizadas,
-        busca=busca,
-        status=status,
-        filtro_ativo=filtro_ativo,
-        atrasadas_filtro=bool(atrasadas_filtro)
-    )
 
 #Rota e função para a criação das novas OPs
 
@@ -486,18 +415,13 @@ def excluir_op(id):
         abort(404)
 
     Tarefa.query.filter_by(op_id=id).delete()
+    OPSetor.query.filter_by(op_id=id).delete()
+    HistoricoOP.query.filter_by(op_id=id).delete()
+    Notificacao.query.filter_by(op_id=id).delete()
     db.session.delete(op)
     db.session.commit()
 
-    return redirect(url_for("dashboard"))
-
-#Ops que forem arquivadas recebem o status de arquivadas
-
-@app.route("/arquivadas")
-@login_required
-def arquivadas():
-    ops = OP.query.filter_by(status="ARQUIVADA").all()
-    return render_template("arquivadas/index.html", ops=ops)
+    return redirect(url_for("arquivadas"))
 
 @app.route("/desarquivar_op/<int:id>", methods=["POST"])
 @tipos_permitidos("ATENDENTE", "ADMIN")
@@ -514,41 +438,6 @@ def desarquivar_op(id):
     )
     db.session.commit()
     return redirect(url_for("arquivadas"))
-
-#Rota para entrarmos no calendário com a lógica por traás
-
-@app.route("/calendario")
-@login_required
-def calendario():
-    hoje = date.today()
-    amanha = hoje + timedelta(days=1)
-    semana = hoje + timedelta(days=7)
-    mes = hoje + timedelta(days=30)
-
-    tarefas = Tarefa.query.all()
-
-    hoje_amanha = []
-    semana_lista = []
-    mes_lista = []
-
-    for t in tarefas:
-        if t.prazo and not t.validado:
-            op = db.session.get(OP, t.op_id)
-
-            if t.prazo <= amanha:
-                hoje_amanha.append((t, op))
-            elif t.prazo <= semana:
-                semana_lista.append((t, op))
-            elif t.prazo <= mes:
-                mes_lista.append((t, op))
-
-    return render_template(
-        "calendario/index.html",
-        hoje_amanha=hoje_amanha,
-        semana=semana_lista,
-        mes=mes_lista,
-        today=hoje
-    )
 
 #Rota para a edição de OPs já abertas (Preciso mexer nisso)
 
