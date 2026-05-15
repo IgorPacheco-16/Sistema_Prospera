@@ -59,9 +59,34 @@ def garantir_coluna_alta_prioridade():
             if "duplicate column name" not in str(erro).lower():
                 raise
 
+def adicionar_coluna_se_nao_existir(tabela, coluna, definicao):
+    colunas = db.session.execute(text(f"PRAGMA table_info({tabela})")).fetchall()
+    nomes_colunas = [item[1] for item in colunas]
+
+    if coluna in nomes_colunas:
+        return
+
+    try:
+        db.session.execute(text(
+            f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}"
+        ))
+        db.session.commit()
+    except OperationalError as erro:
+        db.session.rollback()
+        if "duplicate column name" not in str(erro).lower():
+            raise
+
+def garantir_colunas_notificacao():
+    adicionar_coluna_se_nao_existir("notificacoes", "link", "VARCHAR(255)")
+    adicionar_coluna_se_nao_existir("notificacoes", "op_id", "INTEGER")
+    adicionar_coluna_se_nao_existir("notificacoes", "tarefa_id", "INTEGER")
+    adicionar_coluna_se_nao_existir("notificacoes", "setor_id", "INTEGER")
+    adicionar_coluna_se_nao_existir("notificacoes", "tipo_evento", "VARCHAR(80)")
+
 with app.app_context():
     db.create_all()
     garantir_coluna_alta_prioridade()
+    garantir_colunas_notificacao()
 
     setores_nomes = [
         "Atendimento","Criação","Projeto","Compras/Estoque","PCP",
@@ -141,54 +166,203 @@ def logout():
 
 #Função para as notificações (ainda em desenvolvimento)
 
+def link_op(op_id):
+    return f"/op/{op_id}"
+
+def link_tarefa(op_id, setor_id, tarefa_id):
+    return f"/op/{op_id}?setor={setor_id}&tarefa={tarefa_id}"
+
+def query_notificacoes_usuario():
+    query = Notificacao.query.filter_by(usuario=session.get("tipo"))
+
+    if is_setor():
+        query = query.filter_by(setor_id=session.get("setor_id"))
+
+    return query
+
+def setores_da_op(op_id):
+    return OPSetor.query.filter_by(op_id=op_id).all()
+
+def criar_notificacao(
+    usuario,
+    mensagem,
+    link=None,
+    op_id=None,
+    tarefa_id=None,
+    setor_id=None,
+    tipo_evento=None
+):
+    if tipo_evento:
+        existe = Notificacao.query.filter_by(
+            usuario=usuario,
+            op_id=op_id,
+            tarefa_id=tarefa_id,
+            setor_id=setor_id,
+            tipo_evento=tipo_evento
+        ).first()
+    else:
+        existe = Notificacao.query.filter_by(
+            usuario=usuario,
+            mensagem=mensagem
+        ).first()
+
+    if existe:
+        return existe
+
+    notificacao = Notificacao(
+        usuario=usuario,
+        mensagem=mensagem,
+        link=link,
+        op_id=op_id,
+        tarefa_id=tarefa_id,
+        setor_id=setor_id,
+        tipo_evento=tipo_evento
+    )
+
+    db.session.add(notificacao)
+    return notificacao
+
+def notificar_op_para_gestao(op, tipo_evento, mensagem):
+    criar_notificacao(
+        "ATENDENTE",
+        mensagem,
+        link=link_op(op.id),
+        op_id=op.id,
+        tipo_evento=tipo_evento
+    )
+    criar_notificacao(
+        "PCP",
+        mensagem,
+        link=link_op(op.id),
+        op_id=op.id,
+        tipo_evento=tipo_evento
+    )
+
+def notificar_op_para_setores(op, tipo_evento, mensagem):
+    for op_setor in setores_da_op(op.id):
+        criar_notificacao(
+            "SETOR",
+            mensagem,
+            link=f"/op/{op.id}?setor={op_setor.setor_id}",
+            op_id=op.id,
+            setor_id=op_setor.setor_id,
+            tipo_evento=tipo_evento
+        )
+
 def verificar_atrasos():
     hoje = date.today()
-    tarefas = Tarefa.query.all()
+    tarefas = Tarefa.query.filter(
+        Tarefa.prazo < hoje,
+        Tarefa.validado == False
+    ).all()
 
     for t in tarefas:
-        if t.prazo and t.prazo < hoje and not t.validado:
-            op = db.session.get(OP, t.op_id)
-            mensagem = f"{t.setor.nome} atrasado na OP '{op.nome}'"
+        op = db.session.get(OP, t.op_id)
+        if not op:
+            continue
 
-            existe = Notificacao.query.filter_by(
-                usuario="ATENDENTE",
-                mensagem=mensagem
-            ).first()
+        mensagem = f"Tarefa atrasada: {t.setor.nome} na OP #{op.id} - {op.nome}"
+        link = link_tarefa(op.id, t.setor_id, t.id)
 
-            if not existe:
-                db.session.add(Notificacao(
-                    usuario="ATENDENTE",
-                    mensagem=mensagem
-                ))
+        for usuario in ["ATENDENTE", "PCP"]:
+            criar_notificacao(
+                usuario,
+                mensagem,
+                link=link,
+                op_id=op.id,
+                tarefa_id=t.id,
+                setor_id=t.setor_id,
+                tipo_evento="tarefa_atrasada"
+            )
+
+        criar_notificacao(
+            "SETOR",
+            mensagem,
+            link=link,
+            op_id=op.id,
+            tarefa_id=t.id,
+            setor_id=t.setor_id,
+            tipo_evento="tarefa_atrasada"
+        )
+
+    ops_atrasadas = OP.query.filter(
+        OP.prazo_final < hoje,
+        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
+    ).all()
+
+    for op in ops_atrasadas:
+        mensagem = f"OP atrasada: OP #{op.id} - {op.nome}"
+        notificar_op_para_gestao(op, "op_atrasada", mensagem)
+        notificar_op_para_setores(op, "op_atrasada", mensagem)
+
+    ops_urgentes = OP.query.filter(
+        OP.prazo_final >= hoje,
+        OP.prazo_final <= hoje + timedelta(days=2),
+        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
+    ).all()
+
+    for op in ops_urgentes:
+        mensagem = f"OP urgente: OP #{op.id} - {op.nome}"
+        notificar_op_para_gestao(op, "op_urgente", mensagem)
+        notificar_op_para_setores(op, "op_urgente", mensagem)
+
+def gerar_notificacoes_pendentes():
+    verificar_atrasos()
+
+    tarefas_entregues = Tarefa.query.filter_by(
+        entregue=True,
+        validado=False
+    ).all()
+
+    for tarefa in tarefas_entregues:
+        op = db.session.get(OP, tarefa.op_id)
+        if not op:
+            continue
+
+        mensagem = f"Tarefa aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
+        link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
+
+        for usuario in ["ATENDENTE", "PCP"]:
+            criar_notificacao(
+                usuario,
+                mensagem,
+                link=link,
+                op_id=op.id,
+                tarefa_id=tarefa.id,
+                setor_id=tarefa.setor_id,
+                tipo_evento="tarefa_aguardando_validacao"
+            )
 
     db.session.commit()
 
 @app.before_request
 def before():
-    if "usuario" in session:
-        verificar_atrasos()
+    pass
 
 @app.context_processor
 def inject_notificacoes():
     if "tipo" in session:
-        notificacoes = Notificacao.query.filter_by(
-            usuario=session.get("tipo"),
-            lida=False
-        ).all()
+        notificacoes_nao_lidas = query_notificacoes_usuario().filter_by(lida=False).count()
+
+        notificacoes_recentes = query_notificacoes_usuario().order_by(
+            Notificacao.data.desc()
+        ).limit(8).all()
 
         return dict(
-            total_notificacoes=len(notificacoes)
+            total_notificacoes=notificacoes_nao_lidas,
+            notificacoes_recentes=notificacoes_recentes
         )
 
-    return dict(total_notificacoes=0)
+    return dict(total_notificacoes=0, notificacoes_recentes=[])
 
 @app.route("/notificacoes")
 @login_required
 def notificacoes():
-    lista = Notificacao.query.filter_by(
-        usuario=session.get("tipo"),
-        lida=False
-    ).all()
+    gerar_notificacoes_pendentes()
+
+    lista = query_notificacoes_usuario().order_by(
+        Notificacao.data.desc()
+    ).limit(30).all()
 
     return render_template("notificacoes/index.html", notificacoes=lista)
 
@@ -200,9 +374,21 @@ def ler_notificacao(id):
     if notif.usuario != session.get("tipo"):
         return "Acesso negado", 403
 
+    if is_setor() and notif.setor_id != session.get("setor_id"):
+        return "Acesso negado", 403
+
     notif.lida = True
     db.session.commit()
-    return redirect(url_for("notificacoes"))
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        total = query_notificacoes_usuario().filter_by(lida=False).count()
+        return jsonify({
+            "ok": True,
+            "total": total,
+            "id": notif.id
+        })
+
+    return redirect(request.referrer or url_for("dashboard"))
 
 #Rota para a importação do Dashboard (pág inicial do sistema) e também o core do projeto
 
@@ -211,6 +397,8 @@ from datetime import date, datetime
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    gerar_notificacoes_pendentes()
+
     hoje = date.today()
 
     busca = request.args.get("busca", "")
@@ -331,6 +519,14 @@ def criar_op():
                 setor_id=int(setor_id)
             ))
 
+        criar_notificacao(
+            "PCP",
+            f"Nova OP criada: OP #{nova_op.id} - {nova_op.nome}",
+            link=link_op(nova_op.id),
+            op_id=nova_op.id,
+            tipo_evento="op_criada"
+        )
+
         db.session.commit()
 
         return redirect(url_for("ver_op", id=nova_op.id))
@@ -369,7 +565,9 @@ def ver_op(id):
         estrutura=estrutura,
         setores=Setor.query.all(),
         tipo=session.get("tipo"),
-        today=date.today()
+        today=date.today(),
+        focus_setor_id=request.args.get("setor", type=int),
+        focus_tarefa_id=request.args.get("tarefa", type=int)
     )
 
 #Rota feita para a parte de criação de novas tarefas
@@ -397,6 +595,20 @@ def criar_tarefa(op_id, setor_id):
     )
 
     db.session.add(nova)
+    db.session.flush()
+
+    op = db.session.get(OP, op_id)
+    if op:
+        criar_notificacao(
+            "SETOR",
+            f"Nova tarefa criada: {nova.nome} na OP #{op.id} - {op.nome}",
+            link=link_tarefa(op.id, setor_id, nova.id),
+            op_id=op.id,
+            tarefa_id=nova.id,
+            setor_id=setor_id,
+            tipo_evento="tarefa_criada"
+        )
+
     db.session.commit()
 
     return redirect(request.referrer)
@@ -412,6 +624,31 @@ def entregar_tarefa(id):
         return "Setor incorreto", 403
 
     tarefa.entregue = True
+    tarefa.validado = False
+
+    op = db.session.get(OP, tarefa.op_id)
+    if op:
+        mensagem = f"Tarefa entregue aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
+        link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
+        criar_notificacao(
+            "ATENDENTE",
+            mensagem,
+            link=link,
+            op_id=op.id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="tarefa_aguardando_validacao"
+        )
+        criar_notificacao(
+            "PCP",
+            mensagem,
+            link=link,
+            op_id=op.id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="tarefa_aguardando_validacao"
+        )
+
     db.session.commit()
 
     return redirect(request.referrer)
@@ -427,6 +664,19 @@ def validar_tarefa(id):
         return "Precisa entregar antes"
 
     tarefa.validado = True
+
+    op = db.session.get(OP, tarefa.op_id)
+    if op:
+        criar_notificacao(
+            "SETOR",
+            f"Entrega validada: {tarefa.nome} na OP #{op.id} - {op.nome}",
+            link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
+            op_id=op.id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="entrega_validada"
+        )
+
     db.session.commit()
 
     return redirect(request.referrer)
@@ -661,6 +911,19 @@ def recusar_tarefa(id):
     tarefa = Tarefa.query.get_or_404(id)
     tarefa.entregue = False
     tarefa.validado = False
+
+    op = db.session.get(OP, tarefa.op_id)
+    if op:
+        criar_notificacao(
+            "SETOR",
+            f"Entrega recusada: {tarefa.nome} na OP #{op.id} - {op.nome}",
+            link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
+            op_id=op.id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="entrega_recusada"
+        )
+
     db.session.commit()
 
     return redirect(request.referrer)
@@ -687,12 +950,31 @@ def finalizar_op(id):
 @app.route("/api/notificacoes")
 @login_required
 def api_notificacoes():
-    total = Notificacao.query.filter_by(
-        usuario=session.get("tipo"),
-        lida=False
-    ).count()
+    gerar_notificacoes_pendentes()
 
-    return jsonify({"total": total})
+    total = query_notificacoes_usuario().filter_by(lida=False).count()
+
+    recentes = query_notificacoes_usuario().order_by(
+        Notificacao.data.desc()
+    ).limit(8).all()
+
+    return jsonify({
+        "total": total,
+        "notificacoes": [
+            {
+                "id": n.id,
+                "mensagem": n.mensagem,
+                "link": n.link,
+                "op_id": n.op_id,
+                "tarefa_id": n.tarefa_id,
+                "setor_id": n.setor_id,
+                "tipo_evento": n.tipo_evento,
+                "lida": n.lida,
+                "data": n.data.strftime("%d/%m/%Y %H:%M")
+            }
+            for n in recentes
+        ]
+    })
 
 
 #Teste para ver se a notificação está funcionando...
@@ -700,12 +982,12 @@ def api_notificacoes():
 @app.route("/teste_notificacao")
 @login_required
 def teste_notificacao():
-    notif = Notificacao(
-        usuario=session.get("tipo"),
-        mensagem="🚨 Teste funcionando!"
+    criar_notificacao(
+        session.get("tipo"),
+        "Teste de notificação no dashboard",
+        link=url_for("dashboard"),
+        tipo_evento="teste_notificacao"
     )
-
-    db.session.add(notif)
     db.session.commit()
 
     return "OK"

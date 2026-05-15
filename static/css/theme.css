@@ -457,6 +457,77 @@ html.dark-mode .dropdown-menu .text-muted {
     color: var(--muted-dark) !important;
 }
 
+.notifications-menu {
+    width: min(380px, calc(100vw - 24px));
+    max-height: 520px;
+    overflow: hidden;
+}
+
+.notifications-header {
+    align-items: center;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+}
+
+.notifications-list {
+    max-height: 390px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border-light);
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 12px;
+}
+
+.notification-item.is-unread {
+    background-color: rgba(13, 110, 253, 0.07);
+}
+
+.notification-message {
+    font-size: 0.9rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.notification-date {
+    color: var(--muted-light);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+.notification-empty {
+    color: var(--muted-light);
+    padding: 14px 12px;
+    text-align: center;
+}
+
+.notifications-all-link {
+    border-top: 1px solid var(--border-light);
+    padding: 9px 12px;
+}
+
+html.dark-mode .notifications-header,
+html.dark-mode .notification-item,
+html.dark-mode .notifications-all-link {
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .notification-item.is-unread {
+    background-color: rgba(77, 163, 255, 0.12);
+}
+
+html.dark-mode .notification-date,
+html.dark-mode .notification-empty {
+    color: var(--muted-dark);
+}
+
 /* ========================================= */
 /* OP E FORMULARIOS */
 /* ========================================= */
@@ -707,6 +778,11 @@ html.dark-mode .btn-close {
 
 .task-modal-item {
     margin-top: 0;
+}
+
+.task-highlight {
+    border-color: var(--warning);
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
 }
 
 .task-modal-item .nome {

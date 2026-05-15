@@ -23,14 +23,61 @@
         <div class="navbar-actions d-flex gap-2 align-items-center">
 
             <!-- NOTIFICAÇÕES -->
-            <a href="{{ url_for('notificacoes') }}" class="btn btn-sm position-relative">
-                🔔
-                {% if total_notificacoes > 0 %}
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                    {{ total_notificacoes }}
-                </span>
-                {% endif %}
-            </a>
+            <div class="dropdown notifications-dropdown">
+                <button class="btn btn-sm position-relative"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        data-bs-auto-close="outside"
+                        aria-expanded="false">
+                    🔔
+                    <span class="notification-count position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger {% if total_notificacoes == 0 %}d-none{% endif %}">
+                        {{ total_notificacoes }}
+                    </span>
+                </button>
+
+                <div class="dropdown-menu dropdown-menu-end notifications-menu p-0">
+                    <div class="dropdown-header notifications-header">
+                        <strong>Notificações</strong>
+                        <span class="notification-count-label text-muted small">{{ total_notificacoes }} não lida(s)</span>
+                    </div>
+
+                    <div class="notifications-list">
+                        {% for n in notificacoes_recentes %}
+                        <div class="notification-item {% if not n.lida %}is-unread{% endif %}" data-notification-id="{{ n.id }}">
+                            <div class="notification-message">
+                                {% if n.link %}
+                                    <a href="{{ n.link }}">
+                                        {{ n.mensagem }}
+                                    </a>
+                                {% else %}
+                                    {{ n.mensagem }}
+                                {% endif %}
+                                <div class="notification-date">
+                                    {{ n.data.strftime('%d/%m/%Y %H:%M') }}
+                                </div>
+                            </div>
+
+                            {% if not n.lida %}
+                            <form method="POST"
+                                  action="{{ url_for('ler_notificacao', id=n.id) }}"
+                                  class="notification-read-form">
+                                <button class="btn btn-sm btn-outline-success" type="submit">OK</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="notification-empty">
+                            Sem notificações recentes
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <a class="dropdown-item text-center small notifications-all-link"
+                       href="{{ url_for('notificacoes') }}">
+                        Ver histórico
+                    </a>
+                </div>
+            </div>
 
             <!-- DARK MODE -->
             <button class="btn btn-sm" type="button" onclick="toggleTheme()">
@@ -59,4 +106,56 @@ function toggleTheme() {
         localStorage.setItem("theme", "light");
     }
 }
+
+document.addEventListener("submit", function(event) {
+    const form = event.target.closest(".notification-read-form");
+    if (!form) {
+        return;
+    }
+
+    event.preventDefault();
+
+    fetch(form.action, {
+        method: "POST",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest"
+        }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Falha ao marcar notificação");
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        const item = form.closest(".notification-item");
+        if (item) {
+            item.remove();
+        }
+
+        const total = Number(data.total || 0);
+        const countBadge = document.querySelector(".notification-count");
+        const countLabel = document.querySelector(".notification-count-label");
+
+        if (countBadge) {
+            countBadge.textContent = total;
+            countBadge.classList.toggle("d-none", total === 0);
+        }
+
+        if (countLabel) {
+            countLabel.textContent = total + " não lida(s)";
+        }
+
+        const list = document.querySelector(".notifications-list");
+        if (list && !list.querySelector(".notification-item")) {
+            const empty = document.createElement("div");
+            empty.className = "notification-empty";
+            empty.textContent = "Sem notificações recentes";
+            list.appendChild(empty);
+        }
+    })
+    .catch(function() {
+        form.submit();
+    });
+});
 </script>

@@ -1,17 +1,41 @@
-<h2>🔔 Notificações</h2>
+{% extends "base/base.html" %}
 
-<ul class="list-group">
-    {% for n in notificacoes %}
-        <li class="list-group-item d-flex justify-content-between">
+{% block content %}
 
-            {{ n.mensagem }}
+<div class="container mt-4">
+    <h2 class="mb-3">Histórico de notificações</h2>
 
-            <form method="POST" action="/ler_notificacao/{{ n.id }}">
-                <button class="btn btn-sm btn-success">OK</button>
-            </form>
+    <div class="list-group">
+        {% for n in notificacoes %}
+            <div class="list-group-item d-flex justify-content-between gap-3 {% if not n.lida %}list-group-item-light{% endif %}">
+                <div>
+                    {% if n.link %}
+                    <a class="{% if not n.lida %}fw-semibold{% endif %}"
+                       href="{{ n.link }}">
+                        {{ n.mensagem }}
+                    </a>
+                    {% else %}
+                    <div class="{% if not n.lida %}fw-semibold{% endif %}">
+                        {{ n.mensagem }}
+                    </div>
+                    {% endif %}
+                    <div class="text-muted small">
+                        {{ n.data.strftime('%d/%m/%Y %H:%M') }}
+                    </div>
+                </div>
 
-        </li>
-    {% else %}
-        <li class="list-group-item">Sem notificações</li>
-    {% endfor %}
-</ul>
+                {% if not n.lida %}
+                <form method="POST"
+                      action="{{ url_for('ler_notificacao', id=n.id) }}"
+                      class="notification-read-form">
+                    <button class="btn btn-sm btn-outline-success" type="submit">OK</button>
+                </form>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="list-group-item">Sem notificações.</div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

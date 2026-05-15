@@ -96,6 +96,11 @@ class Notificacao(db.Model):
 
     usuario = db.Column(db.String(100), nullable=False)
     mensagem = db.Column(db.String(255), nullable=False)
+    link = db.Column(db.String(255), nullable=True)
+    op_id = db.Column(db.Integer, nullable=True)
+    tarefa_id = db.Column(db.Integer, nullable=True)
+    setor_id = db.Column(db.Integer, nullable=True)
+    tipo_evento = db.Column(db.String(80), nullable=True)
 
     lida = db.Column(db.Boolean, default=False)
 
