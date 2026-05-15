@@ -90,6 +90,43 @@ create_calendario_blueprint = calendario_routes_module.create_calendario_bluepri
 create_ops_blueprint = ops_routes_module.create_ops_blueprint
 create_tarefas_blueprint = tarefas_routes_module.create_tarefas_blueprint
 
+
+BUILD_ONLY_ALIASES = [
+    ("/", "login"),
+    ("/logout", "logout"),
+    ("/esqueci_senha", "esqueci_senha"),
+    ("/redefinir_senha", "redefinir_senha"),
+    ("/definir_senha", "definir_senha"),
+    ("/criar_usuario", "criar_usuario"),
+    ("/minha_conta", "minha_conta"),
+    ("/notificacoes", "notificacoes"),
+    ("/ler_notificacao/<int:id>", "ler_notificacao"),
+    ("/api/notificacoes", "api_notificacoes"),
+    ("/teste_notificacao", "teste_notificacao"),
+    ("/dashboard", "dashboard"),
+    ("/calendario", "calendario"),
+    ("/arquivadas", "arquivadas"),
+    ("/criar_op", "criar_op"),
+    ("/op/<int:id>", "ver_op"),
+    ("/editar_op/<int:id>", "editar_op"),
+    ("/arquivar_op/<int:id>", "arquivar_op"),
+    ("/desarquivar_op/<int:id>", "desarquivar_op"),
+    ("/excluir_op/<int:id>", "excluir_op"),
+    ("/finalizar_op/<int:id>", "finalizar_op"),
+    ("/criar_tarefa/<int:op_id>/<int:setor_id>", "criar_tarefa"),
+    ("/entregar_tarefa/<int:id>", "entregar_tarefa"),
+    ("/validar_tarefa/<int:id>", "validar_tarefa"),
+    ("/recusar_tarefa/<int:id>", "recusar_tarefa"),
+    ("/editar_tarefa/<int:id>", "editar_tarefa"),
+    ("/excluir_tarefa/<int:id>", "excluir_tarefa"),
+]
+
+
+def registrar_aliases_build_only(app):
+    for rule, endpoint in BUILD_ONLY_ALIASES:
+        app.add_url_rule(rule, endpoint=endpoint, build_only=True)
+
+
 app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
@@ -104,21 +141,12 @@ auth_bp = create_auth_blueprint(
 )
 app.register_blueprint(auth_bp)
 
-app.add_url_rule("/", endpoint="login", build_only=True)
-app.add_url_rule("/logout", endpoint="logout", build_only=True)
-app.add_url_rule("/esqueci_senha", endpoint="esqueci_senha", build_only=True)
-app.add_url_rule("/redefinir_senha", endpoint="redefinir_senha", build_only=True)
-app.add_url_rule("/definir_senha", endpoint="definir_senha", build_only=True)
-
 usuarios_bp = create_usuarios_blueprint(
     login_required=login_required,
     tipos_permitidos=tipos_permitidos,
     normalizar_email=normalizar_email
 )
 app.register_blueprint(usuarios_bp)
-
-app.add_url_rule("/criar_usuario", endpoint="criar_usuario", build_only=True)
-app.add_url_rule("/minha_conta", endpoint="minha_conta", build_only=True)
 
 notificacoes_bp = create_notificacoes_blueprint(
     login_required=login_required,
@@ -128,11 +156,6 @@ notificacoes_bp = create_notificacoes_blueprint(
     criar_notificacao=criar_notificacao
 )
 app.register_blueprint(notificacoes_bp)
-
-app.add_url_rule("/notificacoes", endpoint="notificacoes", build_only=True)
-app.add_url_rule("/ler_notificacao/<int:id>", endpoint="ler_notificacao", build_only=True)
-app.add_url_rule("/api/notificacoes", endpoint="api_notificacoes", build_only=True)
-app.add_url_rule("/teste_notificacao", endpoint="teste_notificacao", build_only=True)
 
 dashboard_bp = create_dashboard_blueprint(
     login_required=login_required,
@@ -163,31 +186,7 @@ tarefas_bp = create_tarefas_blueprint(
 )
 app.register_blueprint(tarefas_bp)
 
-app.add_url_rule("/dashboard", endpoint="dashboard", build_only=True)
-app.add_url_rule("/calendario", endpoint="calendario", build_only=True)
-app.add_url_rule("/arquivadas", endpoint="arquivadas", build_only=True)
-app.add_url_rule("/criar_op", endpoint="criar_op", build_only=True)
-app.add_url_rule("/op/<int:id>", endpoint="ver_op", build_only=True)
-app.add_url_rule("/editar_op/<int:id>", endpoint="editar_op", build_only=True)
-app.add_url_rule("/arquivar_op/<int:id>", endpoint="arquivar_op", build_only=True)
-app.add_url_rule("/desarquivar_op/<int:id>", endpoint="desarquivar_op", build_only=True)
-app.add_url_rule("/excluir_op/<int:id>", endpoint="excluir_op", build_only=True)
-app.add_url_rule("/finalizar_op/<int:id>", endpoint="finalizar_op", build_only=True)
-app.add_url_rule(
-    "/criar_tarefa/<int:op_id>/<int:setor_id>",
-    endpoint="criar_tarefa",
-    build_only=True
-)
-app.add_url_rule("/entregar_tarefa/<int:id>", endpoint="entregar_tarefa", build_only=True)
-app.add_url_rule("/validar_tarefa/<int:id>", endpoint="validar_tarefa", build_only=True)
-app.add_url_rule("/recusar_tarefa/<int:id>", endpoint="recusar_tarefa", build_only=True)
-app.add_url_rule("/editar_tarefa/<int:id>", endpoint="editar_tarefa", build_only=True)
-app.add_url_rule("/excluir_tarefa/<int:id>", endpoint="excluir_tarefa", build_only=True)
-
-
-@app.before_request
-def before():
-    pass
+registrar_aliases_build_only(app)
 
 
 @app.context_processor
