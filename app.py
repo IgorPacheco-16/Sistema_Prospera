@@ -1,6 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
-from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor, HistoricoOP
-from datetime import datetime, date
+from flask import Flask, session
+from database.models import db, Notificacao
 import importlib.util
 import os
 from pathlib import Path
@@ -62,13 +61,13 @@ usuarios_routes_module = carregar_modulo("pacheco_usuarios_routes", "app/usuario
 dashboard_routes_module = carregar_modulo("pacheco_dashboard_routes", "app/dashboard/routes.py")
 calendario_routes_module = carregar_modulo("pacheco_calendario_routes", "app/calendario/routes.py")
 ops_routes_module = carregar_modulo("pacheco_ops_routes", "app/ops/routes.py")
+tarefas_routes_module = carregar_modulo("pacheco_tarefas_routes", "app/tarefas/routes.py")
 
 configure_app = config_module.configure_app
 initialize_database = config_module.initialize_database
 
 is_admin = security_module.is_admin
 is_atendente = security_module.is_atendente
-is_pcp = security_module.is_pcp
 is_setor = security_module.is_setor
 login_required = security_module.login_required
 tipos_permitidos = security_module.tipos_permitidos
@@ -89,6 +88,7 @@ create_usuarios_blueprint = usuarios_routes_module.create_usuarios_blueprint
 create_dashboard_blueprint = dashboard_routes_module.create_dashboard_blueprint
 create_calendario_blueprint = calendario_routes_module.create_calendario_blueprint
 create_ops_blueprint = ops_routes_module.create_ops_blueprint
+create_tarefas_blueprint = tarefas_routes_module.create_tarefas_blueprint
 
 app = Flask(__name__)
 configure_app(app)
@@ -143,16 +143,52 @@ app.register_blueprint(dashboard_bp)
 calendario_bp = create_calendario_blueprint(login_required=login_required)
 app.register_blueprint(calendario_bp)
 
-ops_bp = create_ops_blueprint(login_required=login_required)
+ops_bp = create_ops_blueprint(
+    login_required=login_required,
+    tipos_permitidos=tipos_permitidos,
+    is_admin=is_admin,
+    is_atendente=is_atendente,
+    criar_notificacao=criar_notificacao,
+    link_op=link_op,
+    registrar_historico=registrar_historico
+)
 app.register_blueprint(ops_bp)
+
+tarefas_bp = create_tarefas_blueprint(
+    tipos_permitidos=tipos_permitidos,
+    is_setor=is_setor,
+    criar_notificacao=criar_notificacao,
+    link_tarefa=link_tarefa,
+    registrar_historico=registrar_historico
+)
+app.register_blueprint(tarefas_bp)
 
 app.add_url_rule("/dashboard", endpoint="dashboard", build_only=True)
 app.add_url_rule("/calendario", endpoint="calendario", build_only=True)
 app.add_url_rule("/arquivadas", endpoint="arquivadas", build_only=True)
+app.add_url_rule("/criar_op", endpoint="criar_op", build_only=True)
+app.add_url_rule("/op/<int:id>", endpoint="ver_op", build_only=True)
+app.add_url_rule("/editar_op/<int:id>", endpoint="editar_op", build_only=True)
+app.add_url_rule("/arquivar_op/<int:id>", endpoint="arquivar_op", build_only=True)
+app.add_url_rule("/desarquivar_op/<int:id>", endpoint="desarquivar_op", build_only=True)
+app.add_url_rule("/excluir_op/<int:id>", endpoint="excluir_op", build_only=True)
+app.add_url_rule("/finalizar_op/<int:id>", endpoint="finalizar_op", build_only=True)
+app.add_url_rule(
+    "/criar_tarefa/<int:op_id>/<int:setor_id>",
+    endpoint="criar_tarefa",
+    build_only=True
+)
+app.add_url_rule("/entregar_tarefa/<int:id>", endpoint="entregar_tarefa", build_only=True)
+app.add_url_rule("/validar_tarefa/<int:id>", endpoint="validar_tarefa", build_only=True)
+app.add_url_rule("/recusar_tarefa/<int:id>", endpoint="recusar_tarefa", build_only=True)
+app.add_url_rule("/editar_tarefa/<int:id>", endpoint="editar_tarefa", build_only=True)
+app.add_url_rule("/excluir_tarefa/<int:id>", endpoint="excluir_tarefa", build_only=True)
+
 
 @app.before_request
 def before():
     pass
+
 
 @app.context_processor
 def inject_notificacoes():
@@ -168,468 +204,7 @@ def inject_notificacoes():
             notificacoes_recentes=notificacoes_recentes
         )
 
-#Rota e função para a criação das novas OPs
-
-@app.route("/criar_op", methods=["GET", "POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def criar_op():
-    if request.method == "POST":
-        nome = request.form.get("nome")
-        prazo = request.form.get("prazo")
-        alta_prioridade = request.form.get("alta_prioridade") == "on"
-        setores = request.form.getlist("setores")
-
-        prazo_convertido = None
-        if prazo:
-            prazo_convertido = datetime.strptime(prazo, "%Y-%m-%d").date()
-
-        nova_op = OP(
-            nome=nome,
-            prazo_final=prazo_convertido,
-            status="EM ANDAMENTO",
-            atendente=session.get("usuario"),
-            alta_prioridade=alta_prioridade
-        )
-
-        db.session.add(nova_op)
-        db.session.commit()
-
-        for setor_id in setores:
-            db.session.add(OPSetor(
-                op_id=nova_op.id,
-                setor_id=int(setor_id)
-            ))
-
-        criar_notificacao(
-            "PCP",
-            f"Nova OP criada: OP #{nova_op.id} - {nova_op.nome}",
-            link=link_op(nova_op.id),
-            op_id=nova_op.id,
-            tipo_evento="op_criada"
-        )
-        registrar_historico(
-            nova_op.id,
-            "OP criada",
-            f"OP criada com {len(setores)} setor(es) participante(s)."
-        )
-
-        db.session.commit()
-
-        return redirect(url_for("ver_op", id=nova_op.id))
-
-    return render_template("op/criar.html", setores=Setor.query.all())
-
-#Rota para entrada da aba das OPs e tudo mais
-
-@app.route("/op/<int:id>")
-@login_required
-def ver_op(id):
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    estrutura = []
-
-    for op_setor in op.op_setores:
-        setor = op_setor.setor
-
-        tarefas = Tarefa.query.filter_by(
-            op_id=op.id,
-            setor_id=setor.id
-        ).all()
-
-        estrutura.append({
-            "setor": setor,
-            "tarefas": tarefas,
-            "total": len(tarefas),
-            "validadas": sum(1 for t in tarefas if t.validado)
-        })
-
-    historico = HistoricoOP.query.filter_by(
-        op_id=op.id
-    ).order_by(HistoricoOP.data.desc()).limit(30).all()
-
-    return render_template(
-        "op/detalhe.html",
-        op=op,
-        estrutura=estrutura,
-        historico=historico,
-        setores=Setor.query.all(),
-        tipo=session.get("tipo"),
-        today=date.today(),
-        focus_setor_id=request.args.get("setor", type=int),
-        focus_tarefa_id=request.args.get("tarefa", type=int)
-    )
-
-#Rota feita para a parte de criação de novas tarefas
-
-@app.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
-@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
-def criar_tarefa(op_id, setor_id):
-    setor_vinculado = OPSetor.query.filter_by(
-        op_id=op_id,
-        setor_id=setor_id
-    ).first()
-
-    if not setor_vinculado:
-        return "Setor não vinculado a esta OP", 400
-
-    nome = request.form.get("nome")
-    prazo = request.form.get("prazo")
-
-    nova = Tarefa(
-        op_id=op_id,
-        setor_id=setor_id,
-        nome=nome,
-        prazo=datetime.strptime(prazo, "%Y-%m-%d").date() if prazo else None,
-        liberada=True
-    )
-
-    db.session.add(nova)
-    db.session.flush()
-
-    op = db.session.get(OP, op_id)
-    if op:
-        criar_notificacao(
-            "SETOR",
-            f"Nova tarefa criada: {nova.nome} na OP #{op.id} - {op.nome}",
-            link=link_tarefa(op.id, setor_id, nova.id),
-            op_id=op.id,
-            tarefa_id=nova.id,
-            setor_id=setor_id,
-            tipo_evento="tarefa_criada"
-        )
-        registrar_historico(
-            op.id,
-            "Tarefa criada",
-            f"Tarefa '{nova.nome}' criada para o setor {setor_vinculado.setor.nome}."
-        )
-
-    db.session.commit()
-
-    return redirect(request.referrer)
-
-#Rota para a entrega de tarefas
-
-@app.route("/entregar_tarefa/<int:id>", methods=["POST"])
-@tipos_permitidos("SETOR", "ADMIN")
-def entregar_tarefa(id):
-    tarefa = Tarefa.query.get_or_404(id)
-
-    if is_setor() and session.get("setor_id") != tarefa.setor_id:
-        return "Setor incorreto", 403
-
-    tarefa.entregue = True
-    tarefa.validado = False
-
-    op = db.session.get(OP, tarefa.op_id)
-    if op:
-        mensagem = f"Tarefa entregue aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
-        link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-        criar_notificacao(
-            "ATENDENTE",
-            mensagem,
-            link=link,
-            op_id=op.id,
-            tarefa_id=tarefa.id,
-            setor_id=tarefa.setor_id,
-            tipo_evento="tarefa_aguardando_validacao"
-        )
-        criar_notificacao(
-            "PCP",
-            mensagem,
-            link=link,
-            op_id=op.id,
-            tarefa_id=tarefa.id,
-            setor_id=tarefa.setor_id,
-            tipo_evento="tarefa_aguardando_validacao"
-        )
-        registrar_historico(
-            op.id,
-            "Tarefa aguardando validação",
-            f"Tarefa '{tarefa.nome}' enviada para validação pelo setor {tarefa.setor.nome}."
-        )
-
-    db.session.commit()
-
-    return redirect(request.referrer)
-
-#Rota para quem tiver permissão de atendente validar as tarefas entregues
-
-@app.route("/validar_tarefa/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def validar_tarefa(id):
-    tarefa = Tarefa.query.get_or_404(id)
-
-    if not tarefa.entregue:
-        return "Precisa entregar antes"
-
-    tarefa.validado = True
-
-    op = db.session.get(OP, tarefa.op_id)
-    if op:
-        criar_notificacao(
-            "SETOR",
-            f"Entrega validada: {tarefa.nome} na OP #{op.id} - {op.nome}",
-            link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
-            op_id=op.id,
-            tarefa_id=tarefa.id,
-            setor_id=tarefa.setor_id,
-            tipo_evento="entrega_validada"
-        )
-        registrar_historico(
-            op.id,
-            "Entrega validada",
-            f"Entrega da tarefa '{tarefa.nome}' validada."
-        )
-
-    db.session.commit()
-
-    return redirect(request.referrer)
-
-#Rota para as Ops que estão arquivadas
-
-@app.route("/arquivar_op/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def arquivar_op(id):
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    op.status = "ARQUIVADA"
-    registrar_historico(
-        op.id,
-        "OP arquivada",
-        "OP arquivada."
-    )
-    db.session.commit()
-    return redirect(url_for("dashboard"))
-
-#Rota para a exclusão das ops que estão arquivadas
-
-@app.route("/excluir_op/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def excluir_op(id):
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    Tarefa.query.filter_by(op_id=id).delete()
-    OPSetor.query.filter_by(op_id=id).delete()
-    HistoricoOP.query.filter_by(op_id=id).delete()
-    Notificacao.query.filter_by(op_id=id).delete()
-    db.session.delete(op)
-    db.session.commit()
-
-    return redirect(url_for("arquivadas"))
-
-@app.route("/desarquivar_op/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def desarquivar_op(id):
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    op.status = "EM ANDAMENTO"
-    registrar_historico(
-        op.id,
-        "OP desarquivada",
-        "OP desarquivada e devolvida para em andamento."
-    )
-    db.session.commit()
-    return redirect(url_for("arquivadas"))
-
-#Rota para a edição de OPs já abertas (Preciso mexer nisso)
-
-@app.route("/editar_op/<int:id>", methods=["GET", "POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def editar_op(id):
-    pode_editar_op = is_atendente() or is_admin()
-
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    setores = Setor.query.all()
-
-    if request.method == "POST":
-        nome_anterior = op.nome
-        prazo_anterior = op.prazo_final
-        prioridade_anterior = op.alta_prioridade
-
-        op.nome = request.form.get("nome")
-        op.alta_prioridade = request.form.get("alta_prioridade") == "on"
-
-        prazo = request.form.get("prazo")
-        if prazo:
-            op.prazo_final = datetime.strptime(prazo, "%Y-%m-%d").date()
-        else:
-            op.prazo_final = None
-
-        setores_selecionados = {int(setor_id) for setor_id in request.form.getlist("setores")}
-        setores_atuais = {op_setor.setor_id for op_setor in op.op_setores}
-
-        for setor_id in setores_selecionados - setores_atuais:
-            setor = db.session.get(Setor, setor_id)
-            db.session.add(OPSetor(
-                op_id=op.id,
-                setor_id=setor_id
-            ))
-            registrar_historico(
-                op.id,
-                "Setor adicionado",
-                f"Setor {setor.nome if setor else setor_id} adicionado à OP."
-            )
-
-        for op_setor in list(op.op_setores):
-            if op_setor.setor_id in setores_selecionados:
-                continue
-
-            tem_tarefas = Tarefa.query.filter_by(
-                op_id=op.id,
-                setor_id=op_setor.setor_id
-            ).first()
-
-            if tem_tarefas:
-                flash(
-                    "Um ou mais setores com tarefas foram mantidos para proteger os dados da OP."
-                )
-            else:
-                nome_setor = op_setor.setor.nome if op_setor.setor else op_setor.setor_id
-                db.session.delete(op_setor)
-                registrar_historico(
-                    op.id,
-                    "Setor removido",
-                    f"Setor {nome_setor} removido da OP."
-                )
-
-        mudancas = []
-        if nome_anterior != op.nome:
-            mudancas.append("nome")
-        if prazo_anterior != op.prazo_final:
-            mudancas.append("prazo final")
-        if prioridade_anterior != op.alta_prioridade:
-            mudancas.append("alta prioridade")
-
-        if mudancas:
-            registrar_historico(
-                op.id,
-                "OP editada",
-                "Dados da OP editados: " + ", ".join(mudancas) + "."
-            )
-
-        db.session.commit()
-        return redirect(url_for("ver_op", id=op.id))
-
-    return render_template(
-        "op/editar.html",
-        op=op,
-        setores=setores,
-        tipo=session.get("tipo"),
-        pode_editar_op=pode_editar_op
-    )
-
-
-#Rota para edição de tarefas (diferente de editar uma OP, tbm preciso mexer nisso)
-
-@app.route("/editar_tarefa/<int:id>", methods=["POST"])
-@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
-def editar_tarefa(id):
-    tarefa = Tarefa.query.get_or_404(id)
-    nome_anterior = tarefa.nome
-    prazo_anterior = tarefa.prazo
-
-    tarefa.nome = request.form.get("nome")
-
-    prazo = request.form.get("prazo")
-    if prazo:
-        tarefa.prazo = datetime.strptime(prazo, "%Y-%m-%d").date()
-    else:
-        tarefa.prazo = None
-
-    mudancas = []
-    if nome_anterior != tarefa.nome:
-        mudancas.append("nome")
-    if prazo_anterior != tarefa.prazo:
-        mudancas.append("prazo")
-
-    if mudancas:
-        registrar_historico(
-            tarefa.op_id,
-            "Tarefa editada",
-            f"Tarefa '{tarefa.nome}' editada: {', '.join(mudancas)}."
-        )
-
-    db.session.commit()
-    return redirect(request.referrer)
-
-
-@app.route("/excluir_tarefa/<int:id>", methods=["POST"])
-@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
-def excluir_tarefa(id):
-    tarefa = Tarefa.query.get_or_404(id)
-    op_id = tarefa.op_id
-    nome_tarefa = tarefa.nome
-    nome_setor = tarefa.setor.nome if tarefa.setor else tarefa.setor_id
-
-    db.session.delete(tarefa)
-    registrar_historico(
-        op_id,
-        "Tarefa excluída",
-        f"Tarefa '{nome_tarefa}' do setor {nome_setor} excluída."
-    )
-    db.session.commit()
-
-    return redirect(url_for("ver_op", id=op_id))
-
-@app.route("/recusar_tarefa/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def recusar_tarefa(id):
-    tarefa = Tarefa.query.get_or_404(id)
-    tarefa.entregue = False
-    tarefa.validado = False
-
-    op = db.session.get(OP, tarefa.op_id)
-    if op:
-        criar_notificacao(
-            "SETOR",
-            f"Entrega recusada: {tarefa.nome} na OP #{op.id} - {op.nome}",
-            link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
-            op_id=op.id,
-            tarefa_id=tarefa.id,
-            setor_id=tarefa.setor_id,
-            tipo_evento="entrega_recusada"
-        )
-        registrar_historico(
-            op.id,
-            "Entrega recusada",
-            f"Entrega da tarefa '{tarefa.nome}' recusada."
-        )
-
-    db.session.commit()
-
-    return redirect(request.referrer)
-
-
-@app.route("/finalizar_op/<int:id>", methods=["POST"])
-@tipos_permitidos("ATENDENTE", "ADMIN")
-def finalizar_op(id):
-    op = db.session.get(OP, id)
-    if not op:
-        abort(404)
-
-    tarefas = Tarefa.query.filter_by(op_id=id).all()
-    if tarefas and not all(t.validado for t in tarefas):
-        return "Ainda existem tarefas pendentes de validação"
-
-    op.status = "FINALIZADA"
-    registrar_historico(
-        op.id,
-        "OP finalizada",
-        "OP finalizada."
-    )
-    db.session.commit()
-    return redirect(url_for("ver_op", id=op.id))
+    return {}
 
 
 if __name__ == "__main__":
