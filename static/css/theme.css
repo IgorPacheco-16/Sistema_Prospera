@@ -458,8 +458,20 @@ html.dark-mode .dropdown-menu .text-muted {
     margin-bottom: 6px;
 }
 
+.op-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.sector-summary-grid {
+    margin-bottom: 24px;
+}
+
 .sector-card-op {
-    min-height: 280px;
+    min-height: 150px;
 }
 
 .sector-card-op .card-body {
@@ -471,6 +483,92 @@ html.dark-mode .dropdown-menu .text-muted {
 .sector-card-op h3 {
     font-size: 1.1rem;
     margin: 0;
+}
+
+.sector-summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+}
+
+.sector-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+}
+
+.sector-summary-card:focus-visible {
+    outline: 3px solid rgba(13, 110, 253, 0.3);
+    outline-offset: 2px;
+}
+
+.sector-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.sector-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sector-task-count,
+.modal-subtitle,
+.empty-task-list {
+    color: var(--muted-light);
+}
+
+html.dark-mode .sector-task-count,
+html.dark-mode .modal-subtitle,
+html.dark-mode .empty-task-list {
+    color: var(--muted-dark);
+}
+
+.sector-status-badge {
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.status-success {
+    background-color: rgba(25, 135, 84, 0.12);
+    color: var(--success);
+}
+
+.status-warning {
+    background-color: rgba(255, 193, 7, 0.18);
+    color: #856404;
+}
+
+.status-danger {
+    background-color: rgba(220, 53, 69, 0.12);
+    color: var(--danger);
+}
+
+.status-muted {
+    background-color: rgba(108, 117, 125, 0.12);
+    color: var(--muted-light);
+}
+
+html.dark-mode .status-warning {
+    color: #ffd166;
+}
+
+html.dark-mode .status-muted {
+    color: var(--muted-dark);
 }
 
 .status-op {
@@ -499,6 +597,7 @@ html.dark-mode .status-op {
 }
 
 .barra {
+    display: block;
     height: 100%;
     background-color: var(--primary);
 }
@@ -514,6 +613,58 @@ html.dark-mode .barra-bg {
     margin-bottom: 14px;
 }
 
+.form-editar-tarefa {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 145px 150px auto;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.task-review-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.task-modal .modal-content {
+    background-color: var(--card-light);
+    color: var(--text-light);
+    border-color: var(--border-light);
+}
+
+.task-modal .modal-header {
+    align-items: flex-start;
+}
+
+.task-modal .modal-title {
+    margin-bottom: 2px;
+}
+
+.modal-subtitle {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+html.dark-mode .task-modal .modal-content {
+    background-color: var(--card-dark);
+    color: var(--text-dark);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .btn-close {
+    filter: invert(1) grayscale(100%);
+}
+
+.modal-add-task {
+    margin-bottom: 16px;
+}
+
+.task-list {
+    display: grid;
+    gap: 10px;
+}
+
 .tarefa,
 .task-edit-item {
     background-color: rgba(13, 110, 253, 0.04);
@@ -523,9 +674,46 @@ html.dark-mode .barra-bg {
     margin-top: 10px;
 }
 
+.task-modal-item {
+    margin-top: 0;
+}
+
+.task-modal-item .nome {
+    display: block;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.task-status-area {
+    flex: 0 0 auto;
+}
+
+.task-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.task-actions form {
+    margin: 0;
+}
+
+.task-actions .btn {
+    width: auto;
+}
+
 .tarefa .btn,
-.form-tarefa .btn {
+.form-tarefa .btn,
+.form-editar-tarefa .btn,
+.task-review-actions .btn {
     width: 100%;
+}
+
+.task-actions .btn {
+    width: auto;
 }
 
 html.dark-mode .tarefa,
@@ -586,7 +774,22 @@ html.dark-mode .prazo.atrasado {
         text-align: center;
     }
 
+    .op-detail-header {
+        flex-direction: column;
+    }
+
+    .op-detail-header form,
+    .op-detail-header .btn-finalizar {
+        width: 100%;
+        max-width: none;
+    }
+
     .form-tarefa {
+        grid-template-columns: 1fr;
+    }
+
+    .form-editar-tarefa,
+    .task-review-actions {
         grid-template-columns: 1fr;
     }
 
@@ -596,6 +799,20 @@ html.dark-mode .prazo.atrasado {
 
     .btn-finalizar {
         max-width: none;
+    }
+
+    .tarefa-topo {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .task-actions {
+        justify-content: stretch;
+    }
+
+    .task-actions .btn,
+    .task-actions form {
+        width: 100%;
     }
 
     .dashboard-filters .btn,

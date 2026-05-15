@@ -319,6 +319,7 @@ def ver_op(id):
         "op/detalhe.html",
         op=op,
         estrutura=estrutura,
+        setores=Setor.query.all(),
         tipo=session.get("tipo"),
         today=date.today()
     )
@@ -563,7 +564,7 @@ def editar_op(id):
 
 @app.route("/editar_tarefa/<int:id>", methods=["POST"])
 def editar_tarefa(id):
-    if not (is_pcp() or is_admin()):
+    if not (is_pcp() or is_atendente() or is_admin()):
         return "Acesso negado"
 
     tarefa = Tarefa.query.get_or_404(id)
@@ -573,6 +574,20 @@ def editar_tarefa(id):
     prazo = request.form.get("prazo")
     if prazo:
         tarefa.prazo = datetime.strptime(prazo, "%Y-%m-%d").date()
+    else:
+        tarefa.prazo = None
+
+    setor_id = request.form.get("setor_id")
+    if setor_id:
+        setor_vinculado = OPSetor.query.filter_by(
+            op_id=tarefa.op_id,
+            setor_id=int(setor_id)
+        ).first()
+
+        if not setor_vinculado:
+            return "Setor não vinculado a esta OP"
+
+        tarefa.setor_id = int(setor_id)
 
     db.session.commit()
     return redirect(request.referrer)
@@ -586,6 +601,18 @@ def excluir_tarefa(id):
     tarefa = Tarefa.query.get_or_404(id)
 
     db.session.delete(tarefa)
+    db.session.commit()
+
+    return redirect(request.referrer)
+
+@app.route("/recusar_tarefa/<int:id>", methods=["POST"])
+def recusar_tarefa(id):
+    if not (is_atendente() or is_admin()):
+        return "Acesso negado"
+
+    tarefa = Tarefa.query.get_or_404(id)
+    tarefa.entregue = False
+    tarefa.validado = False
     db.session.commit()
 
     return redirect(request.referrer)

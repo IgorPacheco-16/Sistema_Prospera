@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OP - {{ op.nome }}</title>
 
-    <!-- para evitar flash do darkmode -->
     <script>
     (function() {
         const theme = localStorage.getItem("theme");
@@ -15,10 +14,7 @@
     })();
     </script>
 
-    <!-- bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- tema -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 </head>
 
@@ -28,130 +24,193 @@
 
 <div class="container mt-4 op-detail-page">
 
-    <!-- Header -->
-    <h1>{{ op.nome }}</h1>
-    <p class="status-op">
-        Status: <b>{{ op.status }}</b> |
-        Prazo: {{ op.prazo_final or "Não definido" }}
-    </p>
+    <div class="op-detail-header">
+        <div>
+            <h1>{{ op.nome }}</h1>
+            <p class="status-op">
+                Status: <b>{{ op.status }}</b> |
+                Prazo: {{ op.prazo_final.strftime('%d/%m/%Y') if op.prazo_final else "Não definido" }}
+            </p>
+        </div>
 
-    <!-- Grid -->
-    <div class="grid">
+        {% if tipo == "ATENDENTE" %}
+        <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}">
+            <button class="btn-finalizar" type="submit">OP finalizada</button>
+        </form>
+        {% endif %}
+    </div>
 
+    <div class="grid sector-summary-grid">
     {% for item in estrutura %}
-
-        {% set total = item.tarefas | length %}
-        {% set entregues = item.tarefas | selectattr("entregue") | list | length %}
+        {% set total = item.total %}
+        {% set validadas = item.validadas %}
+        {% set pendentes = total - validadas %}
         {% set atrasadas = item.tarefas
             | selectattr("prazo")
             | selectattr("validado", "equalto", False)
             | selectattr("prazo", "lt", today)
             | list | length %}
+        {% set progresso = (validadas / total * 100) if total > 0 else 0 %}
 
-        <!-- Status -->
         {% if atrasadas > 0 %}
             {% set status_card = "card-atrasado" %}
-        {% elif entregues == total and total > 0 %}
+            {% set status_label = "Atrasada" %}
+            {% set status_badge = "status-danger" %}
+        {% elif total > 0 and pendentes == 0 %}
             {% set status_card = "card-finalizado" %}
-        {% elif entregues > 0 %}
-            {% set status_card = "card-andamento" %}
+            {% set status_label = "Finalizada" %}
+            {% set status_badge = "status-success" %}
         {% else %}
-            {% set status_card = "" %}
+            {% set status_card = "card-andamento" %}
+            {% set status_label = "Pendente" %}
+            {% set status_badge = "status-warning" %}
         {% endif %}
 
-        <div class="card sector-card-op {{ status_card }}">
+        <button class="card sector-card-op sector-summary-card {{ status_card }}"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#tarefasSetor{{ item.setor.id }}">
+            <span class="sector-card-title">{{ item.setor.nome }}</span>
 
-            <div class="card-body">
-
-            <h3>{{ item.setor.nome }}</h3>
-
-            <!-- Progresso -->
-            {% set progresso = (item.validadas / item.total * 100) if item.total > 0 else 0 %}
-
-            <div class="progresso-topo">
+            <span class="progresso-topo">
                 <span>Progresso</span>
-                <span>{{ item.validadas }}/{{ item.total }}</span>
-            </div>
+                <span>{{ validadas }}/{{ total }}</span>
+            </span>
 
-            <div class="barra-bg">
-                <div class="barra" style="width: {{ progresso }}%"></div>
-            </div>
+            <span class="barra-bg" aria-hidden="true">
+                <span class="barra" style="width: {{ progresso }}%"></span>
+            </span>
 
-            <!-- Adicionar tarefas -->
-            {% if tipo == "PCP" %}
-            <form method="POST" action="/criar_tarefa/{{ op.id }}/{{ item.setor.id }}" class="form-tarefa">
-                <input type="text" name="nome" class="form-control" placeholder="Nome da tarefa" required>
-                <input type="date" name="prazo" class="form-control">
-                <button type="submit" class="btn btn-primary-custom">Adicionar</button>
-            </form>
-            {% endif %}
-
-            <!-- Tarefas -->
-            {% for t in item.tarefas %}
-            <div class="tarefa">
-
-                <div class="tarefa-topo">
-                    <span class="nome">{{ t.nome }}</span>
-
-                    {% if t.validado %}
-                        <span class="status validado">✔</span>
-                    {% elif t.entregue %}
-                        <span class="status entregue">⏳</span>
-                    {% else %}
-                        <span class="status pendente">⚠</span>
-                    {% endif %}
-                </div>
-
-                <!-- Prazo -->
-                {% if t.prazo %}
-                    {% if t.prazo < today and not t.validado %}
-                        <div class="prazo atrasado">
-                            📅 {{ t.prazo.strftime('%d/%m/%Y') }}
-                        </div>
-                    {% elif (t.prazo - today).days <= 2 %}
-                        <div class="prazo urgente">
-                            📅 {{ t.prazo.strftime('%d/%m/%Y') }}
-                        </div>
-                    {% else %}
-                        <div class="prazo">
-                            📅 {{ t.prazo.strftime('%d/%m/%Y') }}
-                        </div>
-                    {% endif %}
-                {% endif %}
-
-                <!-- Entregar -->
-                {% if tipo == "SETOR" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
-                <form method="POST" action="/entregar_tarefa/{{ t.id }}">
-                    <button class="btn btn-entregar">Entregar</button>
-                </form>
-                {% endif %}
-
-                <!-- Validar -->
-                {% if tipo == "ATENDENTE" and t.entregue and not t.validado %}
-                <form method="POST" action="/validar_tarefa/{{ t.id }}">
-                    <button class="btn btn-validar">Validar</button>
-                </form>
-                {% endif %}
-
-            </div>
-            {% endfor %}
-
-            </div>
-
-        </div>
-
+            <span class="sector-card-footer">
+                <span class="sector-task-count">{{ validadas }} concluídas de {{ total }}</span>
+                <span class="sector-status-badge {{ status_badge }}">{{ status_label }}</span>
+            </span>
+        </button>
     {% endfor %}
-
     </div>
 
-    <!-- Finalizar a OP -->
-    {% if tipo == "ATENDENTE" %}
-    <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}" class="mt-4">
-        <button class="btn-finalizar">Finalizar OP</button>
-    </form>
-    {% endif %}
+    {% for item in estrutura %}
+    <div class="modal fade task-modal" id="tarefasSetor{{ item.setor.id }}" tabindex="-1" aria-labelledby="tarefasSetorLabel{{ item.setor.id }}" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title fs-5" id="tarefasSetorLabel{{ item.setor.id }}">{{ item.setor.nome }}</h2>
+                        <p class="modal-subtitle">{{ item.validadas }}/{{ item.total }} tarefas concluídas</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+
+                <div class="modal-body">
+                    {% if tipo in ["PCP", "ADMIN"] %}
+                    <form method="POST" action="{{ url_for('criar_tarefa', op_id=op.id, setor_id=item.setor.id) }}" class="form-tarefa modal-add-task">
+                        <input type="text" name="nome" class="form-control" placeholder="Nome da tarefa" required>
+                        <input type="date" name="prazo" class="form-control">
+                        <button type="submit" class="btn btn-primary-custom">Adicionar</button>
+                    </form>
+                    {% endif %}
+
+                    <div class="task-list">
+                    {% for t in item.tarefas %}
+                        <div class="tarefa task-modal-item">
+                            <div class="tarefa-topo">
+                                <div>
+                                    <span class="nome">{{ t.nome }}</span>
+                                    {% if t.prazo %}
+                                        {% if t.prazo < today and not t.validado %}
+                                            <div class="prazo atrasado">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                        {% elif (t.prazo - today).days <= 2 and not t.validado %}
+                                            <div class="prazo urgente">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                        {% else %}
+                                            <div class="prazo">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="prazo">Prazo não definido</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="task-status-area">
+                                    {% if t.validado %}
+                                        <span class="sector-status-badge status-success">Finalizada</span>
+                                    {% elif t.entregue %}
+                                        <span class="sector-status-badge status-warning">Entregue</span>
+                                    {% elif t.prazo and t.prazo < today %}
+                                        <span class="sector-status-badge status-danger">Atrasada</span>
+                                    {% else %}
+                                        <span class="sector-status-badge status-muted">Pendente</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="task-actions">
+                                {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                                <button class="btn btn-outline-primary btn-sm"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#editarTarefa{{ t.id }}"
+                                        aria-expanded="false"
+                                        aria-controls="editarTarefa{{ t.id }}">
+                                    Editar
+                                </button>
+                                {% endif %}
+
+                                {% if tipo == "SETOR" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}">
+                                    <button class="btn btn-entregar btn-sm" type="submit">Entregar</button>
+                                </form>
+                                {% endif %}
+
+                                {% if tipo in ["ATENDENTE", "ADMIN"] and t.entregue and not t.validado %}
+                                <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
+                                    <button class="btn btn-validar btn-sm" type="submit">Validar</button>
+                                </form>
+
+                                <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}">
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">Recusar</button>
+                                </form>
+                                {% endif %}
+                            </div>
+
+                            {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                            <div class="collapse" id="editarTarefa{{ t.id }}">
+                                <form method="POST" action="{{ url_for('editar_tarefa', id=t.id) }}" class="form-editar-tarefa">
+                                    <input type="text"
+                                           name="nome"
+                                           class="form-control"
+                                           value="{{ t.nome }}"
+                                           required>
+
+                                    <input type="date"
+                                           name="prazo"
+                                           class="form-control"
+                                           value="{{ t.prazo.strftime('%Y-%m-%d') if t.prazo else '' }}">
+
+                                    <select name="setor_id" class="form-select">
+                                        {% for setor_op in op.op_setores %}
+                                            <option value="{{ setor_op.setor.id }}"
+                                                    {{ 'selected' if setor_op.setor.id == t.setor_id else '' }}>
+                                                {{ setor_op.setor.nome }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+
+                                    <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p class="empty-task-list">Nenhuma tarefa cadastrada para este setor.</p>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
