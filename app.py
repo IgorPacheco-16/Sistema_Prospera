@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
 from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor, HistoricoOP
 from datetime import datetime, timedelta, date
-from werkzeug.security import generate_password_hash, check_password_hash
 import importlib.util
 import os
 from pathlib import Path
@@ -57,7 +56,9 @@ config_module = carregar_modulo("pacheco_config", "app/config.py")
 security_module = carregar_modulo("pacheco_security", "app/security.py")
 historico_module = carregar_modulo("pacheco_historico_services", "app/historico/services.py")
 notificacoes_module = carregar_modulo("pacheco_notificacoes_services", "app/notificacoes/services.py")
+notificacoes_routes_module = carregar_modulo("pacheco_notificacoes_routes", "app/notificacoes/routes.py")
 auth_routes_module = carregar_modulo("pacheco_auth_routes", "app/auth/routes.py")
+usuarios_routes_module = carregar_modulo("pacheco_usuarios_routes", "app/usuarios/routes.py")
 
 configure_app = config_module.configure_app
 initialize_database = config_module.initialize_database
@@ -79,7 +80,9 @@ link_tarefa = notificacoes_module.link_tarefa
 query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
 criar_notificacao = notificacoes_module.criar_notificacao
 gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
+create_notificacoes_blueprint = notificacoes_routes_module.create_notificacoes_blueprint
 create_auth_blueprint = auth_routes_module.create_auth_blueprint
+create_usuarios_blueprint = usuarios_routes_module.create_usuarios_blueprint
 
 app = Flask(__name__)
 configure_app(app)
@@ -101,6 +104,30 @@ app.add_url_rule("/esqueci_senha", endpoint="esqueci_senha", build_only=True)
 app.add_url_rule("/redefinir_senha", endpoint="redefinir_senha", build_only=True)
 app.add_url_rule("/definir_senha", endpoint="definir_senha", build_only=True)
 
+usuarios_bp = create_usuarios_blueprint(
+    login_required=login_required,
+    tipos_permitidos=tipos_permitidos,
+    normalizar_email=normalizar_email
+)
+app.register_blueprint(usuarios_bp)
+
+app.add_url_rule("/criar_usuario", endpoint="criar_usuario", build_only=True)
+app.add_url_rule("/minha_conta", endpoint="minha_conta", build_only=True)
+
+notificacoes_bp = create_notificacoes_blueprint(
+    login_required=login_required,
+    is_setor=is_setor,
+    gerar_notificacoes_pendentes=gerar_notificacoes_pendentes,
+    query_notificacoes_usuario=query_notificacoes_usuario,
+    criar_notificacao=criar_notificacao
+)
+app.register_blueprint(notificacoes_bp)
+
+app.add_url_rule("/notificacoes", endpoint="notificacoes", build_only=True)
+app.add_url_rule("/ler_notificacao/<int:id>", endpoint="ler_notificacao", build_only=True)
+app.add_url_rule("/api/notificacoes", endpoint="api_notificacoes", build_only=True)
+app.add_url_rule("/teste_notificacao", endpoint="teste_notificacao", build_only=True)
+
 @app.before_request
 def before():
     pass
@@ -118,45 +145,6 @@ def inject_notificacoes():
             total_notificacoes=notificacoes_nao_lidas,
             notificacoes_recentes=notificacoes_recentes
         )
-
-    return dict(total_notificacoes=0, notificacoes_recentes=[])
-
-@app.route("/notificacoes")
-@login_required
-def notificacoes():
-    gerar_notificacoes_pendentes()
-
-    lista = query_notificacoes_usuario().order_by(
-        Notificacao.data.desc()
-    ).limit(30).all()
-
-    return render_template("notificacoes/index.html", notificacoes=lista)
-
-@app.route("/ler_notificacao/<int:id>", methods=["POST"])
-@login_required
-def ler_notificacao(id):
-    notif = Notificacao.query.get_or_404(id)
-
-    if notif.usuario != session.get("tipo"):
-        return "Acesso negado", 403
-
-    if is_setor() and notif.setor_id != session.get("setor_id"):
-        return "Acesso negado", 403
-
-    notif.lida = True
-    db.session.commit()
-
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        total = query_notificacoes_usuario().filter_by(lida=False).count()
-        return jsonify({
-            "ok": True,
-            "total": total,
-            "id": notif.id
-        })
-
-    return redirect(request.referrer or url_for("dashboard"))
-
-#Rota para a importação do Dashboard (pág inicial do sistema) e também o core do projeto
 
 @app.route("/dashboard")
 @login_required
@@ -562,148 +550,6 @@ def calendario():
         today=hoje
     )
 
-#Rota para criar um novo usuário (preciso atualizar isso)
-
-@app.route("/criar_usuario", methods=["GET", "POST"])
-@tipos_permitidos("ADMIN")
-def criar_usuario():
-    setores = Setor.query.all()
-    tipos = ["ADMIN", "ATENDENTE", "PCP", "SETOR"]
-
-    if request.method == "POST":
-        email = normalizar_email(request.form.get("email"))
-        tipo = request.form.get("tipo")
-        setor_id = request.form.get("setor")
-        senha = request.form.get("senha")
-
-        if not email:
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Informe o email."
-            )
-
-        if tipo not in tipos:
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Tipo de usuario invalido."
-            )
-
-        if User.query.filter_by(email=email).first():
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Ja existe um usuario com este email."
-            )
-
-        if not (senha or "").strip():
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Informe a senha inicial."
-            )
-
-        if tipo == "SETOR" and not setor_id:
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Informe o setor para usuarios do tipo SETOR."
-            )
-
-        try:
-            setor_id_convertido = int(setor_id) if tipo == "SETOR" and setor_id else None
-        except ValueError:
-            setor_id_convertido = None
-
-        if tipo == "SETOR" and not setor_id_convertido:
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Setor invalido."
-            )
-
-        if setor_id_convertido and not db.session.get(Setor, setor_id_convertido):
-            return render_template(
-                "usuario/criar_usuario.html",
-                setores=setores,
-                tipos=tipos,
-                erro="Setor invalido."
-            )
-
-        novo_usuario = User(
-            email=email,
-            tipo=tipo,
-            setor_id=setor_id_convertido,
-            senha=generate_password_hash(senha),
-            ativo=True
-        )
-
-        db.session.add(novo_usuario)
-        db.session.commit()
-
-        return render_template(
-            "usuario/criar_usuario.html",
-            setores=setores,
-            tipos=tipos,
-            mensagem="Usuario criado com sucesso."
-        )
-
-    return render_template("usuario/criar_usuario.html", setores=setores, tipos=tipos)
-
-
-@app.route("/minha_conta", methods=["GET", "POST"])
-@login_required
-def minha_conta():
-    user = User.query.filter_by(email=session.get("usuario")).first()
-    if not user:
-        session.clear()
-        return redirect(url_for("login"))
-
-    if request.method == "POST":
-        senha_atual = request.form.get("senha_atual")
-        nova_senha = request.form.get("nova_senha")
-        confirmar_senha = request.form.get("confirmar_senha")
-
-        if (
-            not (senha_atual or "").strip()
-            or not (nova_senha or "").strip()
-            or not (confirmar_senha or "").strip()
-        ):
-            return render_template(
-                "usuario/minha_conta.html",
-                erro="Preencha todos os campos."
-            )
-
-        if not user.senha or not check_password_hash(user.senha, senha_atual):
-            return render_template(
-                "usuario/minha_conta.html",
-                erro="Senha atual incorreta."
-            )
-
-        if nova_senha != confirmar_senha:
-            return render_template(
-                "usuario/minha_conta.html",
-                erro="A nova senha e a confirmacao nao conferem."
-            )
-
-        user.senha = generate_password_hash(nova_senha)
-        db.session.commit()
-
-        return render_template(
-            "usuario/minha_conta.html",
-            mensagem="Senha alterada com sucesso."
-        )
-
-    return render_template("usuario/minha_conta.html")
-
-
 #Rota para a edição de OPs já abertas (Preciso mexer nisso)
 
 @app.route("/editar_op/<int:id>", methods=["GET", "POST"])
@@ -896,53 +742,6 @@ def finalizar_op(id):
     db.session.commit()
     return redirect(url_for("ver_op", id=op.id))
 
-
-#Core para a criação de notificações (Ainda está com a lógica antiga, preciso mexer nisso)
-
-@app.route("/api/notificacoes")
-@login_required
-def api_notificacoes():
-    gerar_notificacoes_pendentes()
-
-    total = query_notificacoes_usuario().filter_by(lida=False).count()
-
-    recentes = query_notificacoes_usuario().order_by(
-        Notificacao.data.desc()
-    ).limit(8).all()
-
-    return jsonify({
-        "total": total,
-        "notificacoes": [
-            {
-                "id": n.id,
-                "mensagem": n.mensagem,
-                "link": n.link,
-                "op_id": n.op_id,
-                "tarefa_id": n.tarefa_id,
-                "setor_id": n.setor_id,
-                "tipo_evento": n.tipo_evento,
-                "lida": n.lida,
-                "data": n.data.strftime("%d/%m/%Y %H:%M")
-            }
-            for n in recentes
-        ]
-    })
-
-
-#Teste para ver se a notificação está funcionando...
-
-@app.route("/teste_notificacao")
-@login_required
-def teste_notificacao():
-    criar_notificacao(
-        session.get("tipo"),
-        "Teste de notificação no dashboard",
-        link=url_for("dashboard"),
-        tipo_evento="teste_notificacao"
-    )
-    db.session.commit()
-
-    return "OK"
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_ENV") == "development")

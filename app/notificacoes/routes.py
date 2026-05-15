@@ -1,0 +1,92 @@
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+
+from database.models import db, Notificacao
+
+
+def create_notificacoes_blueprint(
+    login_required,
+    is_setor,
+    gerar_notificacoes_pendentes,
+    query_notificacoes_usuario,
+    criar_notificacao
+):
+    notificacoes_bp = Blueprint("notificacoes", __name__)
+
+    @notificacoes_bp.route("/notificacoes")
+    @login_required
+    def notificacoes():
+        gerar_notificacoes_pendentes()
+
+        lista = query_notificacoes_usuario().order_by(
+            Notificacao.data.desc()
+        ).limit(30).all()
+
+        return render_template("notificacoes/index.html", notificacoes=lista)
+
+    @notificacoes_bp.route("/ler_notificacao/<int:id>", methods=["POST"])
+    @login_required
+    def ler_notificacao(id):
+        notif = Notificacao.query.get_or_404(id)
+
+        if notif.usuario != session.get("tipo"):
+            return "Acesso negado", 403
+
+        if is_setor() and notif.setor_id != session.get("setor_id"):
+            return "Acesso negado", 403
+
+        notif.lida = True
+        db.session.commit()
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            total = query_notificacoes_usuario().filter_by(lida=False).count()
+            return jsonify({
+                "ok": True,
+                "total": total,
+                "id": notif.id
+            })
+
+        return redirect(request.referrer or url_for("dashboard"))
+
+    @notificacoes_bp.route("/api/notificacoes")
+    @login_required
+    def api_notificacoes():
+        gerar_notificacoes_pendentes()
+
+        total = query_notificacoes_usuario().filter_by(lida=False).count()
+
+        recentes = query_notificacoes_usuario().order_by(
+            Notificacao.data.desc()
+        ).limit(8).all()
+
+        return jsonify({
+            "total": total,
+            "notificacoes": [
+                {
+                    "id": n.id,
+                    "mensagem": n.mensagem,
+                    "link": n.link,
+                    "op_id": n.op_id,
+                    "tarefa_id": n.tarefa_id,
+                    "setor_id": n.setor_id,
+                    "tipo_evento": n.tipo_evento,
+                    "lida": n.lida,
+                    "data": n.data.strftime("%d/%m/%Y %H:%M")
+                }
+                for n in recentes
+            ]
+        })
+
+    @notificacoes_bp.route("/teste_notificacao")
+    @login_required
+    def teste_notificacao():
+        criar_notificacao(
+            session.get("tipo"),
+            "Teste de notificação no dashboard",
+            link=url_for("dashboard"),
+            tipo_evento="teste_notificacao"
+        )
+        db.session.commit()
+
+        return "OK"
+
+    return notificacoes_bp
