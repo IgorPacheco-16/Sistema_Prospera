@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify, flash
 from database.models import db, User, OP, Tarefa, Notificacao, Setor, OPSetor
 from datetime import datetime, timedelta, date
+from functools import wraps
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -17,6 +18,28 @@ def is_admin(): return session.get("tipo") == "ADMIN"
 def is_atendente(): return session.get("tipo") == "ATENDENTE"
 def is_pcp(): return session.get("tipo") == "PCP"
 def is_setor(): return session.get("tipo") == "SETOR"
+
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if "usuario" not in session:
+            return redirect(url_for("login"))
+        return func(*args, **kwargs)
+    return wrapper
+
+def tipos_permitidos(*tipos):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if "usuario" not in session:
+                return redirect(url_for("login"))
+
+            if session.get("tipo") not in tipos:
+                return "Acesso negado", 403
+
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 #Init do banco de dados
 
@@ -111,6 +134,7 @@ def login():
 #Função para o logout
 
 @app.route("/logout")
+@login_required
 def logout():
     session.clear()
     return redirect(url_for("login"))
@@ -159,6 +183,7 @@ def inject_notificacoes():
     return dict(total_notificacoes=0)
 
 @app.route("/notificacoes")
+@login_required
 def notificacoes():
     lista = Notificacao.query.filter_by(
         usuario=session.get("tipo"),
@@ -168,8 +193,13 @@ def notificacoes():
     return render_template("notificacoes/index.html", notificacoes=lista)
 
 @app.route("/ler_notificacao/<int:id>", methods=["POST"])
+@login_required
 def ler_notificacao(id):
     notif = Notificacao.query.get_or_404(id)
+
+    if notif.usuario != session.get("tipo"):
+        return "Acesso negado", 403
+
     notif.lida = True
     db.session.commit()
     return redirect(url_for("notificacoes"))
@@ -179,10 +209,8 @@ def ler_notificacao(id):
 from datetime import date, datetime
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
-    if "usuario" not in session:
-        return redirect(url_for("login"))
-
     hoje = date.today()
 
     busca = request.args.get("busca", "")
@@ -274,10 +302,8 @@ def dashboard():
 #Rota e função para a criação das novas OPs
 
 @app.route("/criar_op", methods=["GET", "POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def criar_op():
-    if not (is_atendente() or is_admin()):
-        return "Acesso negado"
-
     if request.method == "POST":
         nome = request.form.get("nome")
         prazo = request.form.get("prazo")
@@ -314,6 +340,7 @@ def criar_op():
 #Rota para entrada da aba das OPs e tudo mais
 
 @app.route("/op/<int:id>")
+@login_required
 def ver_op(id):
     op = db.session.get(OP, id)
     if not op:
@@ -348,9 +375,15 @@ def ver_op(id):
 #Rota feita para a parte de criação de novas tarefas
 
 @app.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
+@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
 def criar_tarefa(op_id, setor_id):
-    if not (is_pcp() or is_admin()):
-        return "Acesso negado"
+    setor_vinculado = OPSetor.query.filter_by(
+        op_id=op_id,
+        setor_id=setor_id
+    ).first()
+
+    if not setor_vinculado:
+        return "Setor não vinculado a esta OP", 400
 
     nome = request.form.get("nome")
     prazo = request.form.get("prazo")
@@ -371,15 +404,12 @@ def criar_tarefa(op_id, setor_id):
 #Rota para a entrega de tarefas
 
 @app.route("/entregar_tarefa/<int:id>", methods=["POST"])
+@tipos_permitidos("SETOR", "ADMIN")
 def entregar_tarefa(id):
     tarefa = Tarefa.query.get_or_404(id)
 
-    if not is_admin():
-        if not is_setor():
-            return "Apenas setor entrega"
-
-        if session.get("setor_id") != tarefa.setor_id:
-            return "Setor incorreto"
+    if is_setor() and session.get("setor_id") != tarefa.setor_id:
+        return "Setor incorreto", 403
 
     tarefa.entregue = True
     db.session.commit()
@@ -389,10 +419,8 @@ def entregar_tarefa(id):
 #Rota para quem tiver permissão de atendente validar as tarefas entregues
 
 @app.route("/validar_tarefa/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def validar_tarefa(id):
-    if not (is_atendente() or is_admin()):
-        return "Acesso negado"
-
     tarefa = Tarefa.query.get_or_404(id)
 
     if not tarefa.entregue:
@@ -406,8 +434,12 @@ def validar_tarefa(id):
 #Rota para as Ops que estão arquivadas
 
 @app.route("/arquivar_op/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def arquivar_op(id):
     op = db.session.get(OP, id)
+    if not op:
+        abort(404)
+
     op.status = "ARQUIVADA"
     db.session.commit()
     return redirect(url_for("dashboard"))
@@ -415,8 +447,11 @@ def arquivar_op(id):
 #Rota para a exclusão das ops que estão arquivadas
 
 @app.route("/excluir_op/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def excluir_op(id):
     op = db.session.get(OP, id)
+    if not op:
+        abort(404)
 
     Tarefa.query.filter_by(op_id=id).delete()
     db.session.delete(op)
@@ -427,11 +462,13 @@ def excluir_op(id):
 #Ops que forem arquivadas recebem o status de arquivadas
 
 @app.route("/arquivadas")
+@login_required
 def arquivadas():
     ops = OP.query.filter_by(status="ARQUIVADA").all()
     return render_template("arquivadas/index.html", ops=ops)
 
 @app.route("/desarquivar_op/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def desarquivar_op(id):
     op = db.session.get(OP, id)
     if not op:
@@ -444,10 +481,8 @@ def desarquivar_op(id):
 #Rota para entrarmos no calendário com a lógica por traás
 
 @app.route("/calendario")
+@login_required
 def calendario():
-    if "usuario" not in session:
-        return redirect(url_for("login"))
-
     hoje = date.today()
     amanha = hoje + timedelta(days=1)
     semana = hoje + timedelta(days=7)
@@ -481,10 +516,8 @@ def calendario():
 #Rota para criar um novo usuário (preciso atualizar isso)
 
 @app.route("/criar_usuario", methods=["GET", "POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def criar_usuario():
-    if not (is_atendente() or is_admin()):
-        return "Acesso negado"
-
     setores = Setor.query.all()
 
     if request.method == "POST":
@@ -535,11 +568,9 @@ def definir_senha():
 #Rota para a edição de OPs já abertas (Preciso mexer nisso)
 
 @app.route("/editar_op/<int:id>", methods=["GET", "POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def editar_op(id):
     pode_editar_op = is_atendente() or is_admin()
-
-    if not pode_editar_op:
-        return "Acesso negado"
 
     op = db.session.get(OP, id)
     if not op:
@@ -597,10 +628,8 @@ def editar_op(id):
 #Rota para edição de tarefas (diferente de editar uma OP, tbm preciso mexer nisso)
 
 @app.route("/editar_tarefa/<int:id>", methods=["POST"])
+@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
 def editar_tarefa(id):
-    if not (is_pcp() or is_atendente() or is_admin()):
-        return "Acesso negado"
-
     tarefa = Tarefa.query.get_or_404(id)
 
     tarefa.nome = request.form.get("nome")
@@ -616,10 +645,8 @@ def editar_tarefa(id):
 
 
 @app.route("/excluir_tarefa/<int:id>", methods=["POST"])
+@tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
 def excluir_tarefa(id):
-    if not (is_pcp() or is_atendente() or is_admin()):
-        return "Acesso negado"
-
     tarefa = Tarefa.query.get_or_404(id)
     op_id = tarefa.op_id
 
@@ -629,10 +656,8 @@ def excluir_tarefa(id):
     return redirect(url_for("ver_op", id=op_id))
 
 @app.route("/recusar_tarefa/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def recusar_tarefa(id):
-    if not (is_atendente() or is_admin()):
-        return "Acesso negado"
-
     tarefa = Tarefa.query.get_or_404(id)
     tarefa.entregue = False
     tarefa.validado = False
@@ -642,10 +667,8 @@ def recusar_tarefa(id):
 
 
 @app.route("/finalizar_op/<int:id>", methods=["POST"])
+@tipos_permitidos("ATENDENTE", "ADMIN")
 def finalizar_op(id):
-    if not (is_atendente() or is_admin()):
-        return "Acesso negado"
-
     op = db.session.get(OP, id)
     if not op:
         abort(404)
@@ -662,10 +685,8 @@ def finalizar_op(id):
 #Core para a criação de notificações (Ainda está com a lógica antiga, preciso mexer nisso)
 
 @app.route("/api/notificacoes")
+@login_required
 def api_notificacoes():
-    if "tipo" not in session:
-        return jsonify({"total": 0})
-
     total = Notificacao.query.filter_by(
         usuario=session.get("tipo"),
         lida=False
@@ -677,10 +698,8 @@ def api_notificacoes():
 #Teste para ver se a notificação está funcionando...
 
 @app.route("/teste_notificacao")
+@login_required
 def teste_notificacao():
-    if "tipo" not in session:
-        return "Usuário não logado"
-
     notif = Notificacao(
         usuario=session.get("tipo"),
         mensagem="🚨 Teste funcionando!"

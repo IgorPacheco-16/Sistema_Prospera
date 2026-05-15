@@ -116,7 +116,7 @@
                 </div>
 
                 <div class="modal-body">
-                    {% if tipo in ["PCP", "ADMIN"] %}
+                    {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                     <form method="POST" action="{{ url_for('criar_tarefa', op_id=op.id, setor_id=item.setor.id) }}" class="form-tarefa modal-add-task">
                         <input type="text" name="nome" class="form-control" placeholder="Nome da tarefa" required>
                         <input type="date" name="prazo" class="form-control">
