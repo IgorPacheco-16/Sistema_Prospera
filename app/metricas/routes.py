@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template
+from datetime import date, datetime, time, timedelta
+
+from flask import Blueprint, render_template, request
 
 from database.models import OP, Setor, Tarefa
 
@@ -14,6 +16,75 @@ STATUS_TAREFAS = [
     STATUS_EM_VALIDACAO,
     STATUS_ENTREGUE,
 ]
+
+TIPOS_OP_FILTRO = [
+    ("todas", "Todas"),
+    ("alta_prioridade", "Alta prioridade"),
+    ("op_atrasada", "OP atrasada"),
+    ("op_urgente", "OP urgente"),
+]
+
+PERIODOS_FILTRO = [
+    ("todos", "Todos os per\u00edodos"),
+    ("7", "\u00daltimos 7 dias"),
+    ("30", "\u00daltimos 30 dias"),
+    ("mes_atual", "M\u00eas atual"),
+    ("personalizado", "Personalizado"),
+]
+
+
+def ids_querystring(nome):
+    ids = []
+    for valor in request.args.getlist(nome):
+        try:
+            ids.append(int(valor))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def id_querystring(nome):
+    try:
+        return int(request.args.get(nome, ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def data_querystring(nome):
+    valor = request.args.get(nome, "").strip()
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(valor, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def filtros_metricas():
+    status = [
+        valor
+        for valor in request.args.getlist("status")
+        if valor in STATUS_TAREFAS
+    ]
+    tipo_op = request.args.get("tipo_op", "todas").strip() or "todas"
+    tipos_validos = {valor for valor, _rotulo in TIPOS_OP_FILTRO}
+    if tipo_op not in tipos_validos:
+        tipo_op = "todas"
+
+    periodo = request.args.get("periodo", "todos").strip() or "todos"
+    periodos_validos = {valor for valor, _rotulo in PERIODOS_FILTRO}
+    if periodo not in periodos_validos:
+        periodo = "todos"
+
+    return {
+        "setores": ids_querystring("setores"),
+        "ops": ids_querystring("ops"),
+        "status": status,
+        "tipo_op": tipo_op,
+        "periodo": periodo,
+        "data_inicio": data_querystring("data_inicio"),
+        "data_fim": data_querystring("data_fim"),
+    }
 
 
 def status_visual_tarefa(tarefa):
@@ -46,6 +117,102 @@ def formatar_dias(valor):
         horas = valor * 24
         return f"{horas:.1f} h"
     return f"{valor:.1f} dias"
+
+
+def intervalo_periodo(filtros, hoje):
+    periodo = filtros["periodo"]
+
+    if periodo == "7":
+        return hoje - timedelta(days=6), hoje
+    if periodo == "30":
+        return hoje - timedelta(days=29), hoje
+    if periodo == "mes_atual":
+        return hoje.replace(day=1), hoje
+    if periodo == "personalizado":
+        inicio = filtros["data_inicio"]
+        fim = filtros["data_fim"]
+        if inicio and fim and fim < inicio:
+            inicio, fim = fim, inicio
+        return inicio, fim
+
+    return None, None
+
+
+def data_no_intervalo(valor, inicio, fim):
+    if not inicio and not fim:
+        return True
+    if not valor:
+        return False
+
+    data = valor.date() if hasattr(valor, "date") else valor
+    if inicio and data < inicio:
+        return False
+    if fim and data > fim:
+        return False
+    return True
+
+
+def op_atrasada(op, hoje):
+    return bool(
+        op.prazo_final
+        and op.prazo_final < hoje
+        and op.status not in ["FINALIZADA", "ARQUIVADA"]
+    )
+
+
+def op_urgente(op, hoje):
+    return bool(
+        op.prazo_final
+        and hoje <= op.prazo_final <= hoje + timedelta(days=2)
+        and op.status not in ["FINALIZADA", "ARQUIVADA"]
+    )
+
+
+def op_no_filtro_tipo(op, tipo_op, hoje):
+    if tipo_op == "alta_prioridade":
+        return bool(op.alta_prioridade)
+    if tipo_op == "op_atrasada":
+        return op_atrasada(op, hoje)
+    if tipo_op == "op_urgente":
+        return op_urgente(op, hoje)
+    return True
+
+
+def aplicar_filtros_tarefas(tarefas, filtros, hoje):
+    inicio, fim = intervalo_periodo(filtros, hoje)
+    tarefas_filtradas = []
+
+    for tarefa in tarefas:
+        if filtros["setores"] and tarefa.setor_id not in filtros["setores"]:
+            continue
+        if filtros["ops"] and tarefa.op_id not in filtros["ops"]:
+            continue
+        if filtros["status"] and status_visual_tarefa(tarefa) not in filtros["status"]:
+            continue
+        if tarefa.op and not op_no_filtro_tipo(tarefa.op, filtros["tipo_op"], hoje):
+            continue
+        if not data_no_intervalo(tarefa.criada_em, inicio, fim):
+            continue
+
+        tarefas_filtradas.append(tarefa)
+
+    return tarefas_filtradas
+
+
+def aplicar_filtros_ops(ops, filtros, hoje):
+    inicio, fim = intervalo_periodo(filtros, hoje)
+    ops_filtradas = []
+
+    for op in ops:
+        if filtros["ops"] and op.id not in filtros["ops"]:
+            continue
+        if not op_no_filtro_tipo(op, filtros["tipo_op"], hoje):
+            continue
+        if not data_no_intervalo(op.criada_em, inicio, fim):
+            continue
+        ops_filtradas.append(op)
+
+    return ops_filtradas
 
 
 def metricas_tarefas(tarefas):
@@ -109,6 +276,8 @@ def gargalos_por_setor(setores, tarefas):
             "pendentes": contagens[STATUS_PENDENTE],
             "em_andamento": contagens[STATUS_EM_ANDAMENTO],
             "em_validacao": contagens[STATUS_EM_VALIDACAO],
+            "entregues": contagens[STATUS_ENTREGUE],
+            "total": len(tarefas_setor),
             "media_producao": media_producao,
         })
 
@@ -121,6 +290,67 @@ def gargalos_por_setor(setores, tarefas):
         )
     )
     return linhas
+
+
+def ranking_setores_pendentes(gargalos):
+    return [
+        linha
+        for linha in gargalos
+        if linha["pendentes"] > 0
+    ]
+
+
+def ranking_setores_producao(gargalos):
+    linhas = [
+        linha
+        for linha in gargalos
+        if linha["media_producao"] is not None
+    ]
+    linhas.sort(
+        key=lambda linha: (
+            -linha["media_producao"],
+            linha["setor"].nome,
+        )
+    )
+    return linhas
+
+
+def dias_op_aberta(op, agora):
+    if not op.criada_em:
+        return None
+    fim = op.finalizada_em or agora
+    return diferenca_dias(op.criada_em, fim)
+
+
+def ranking_ops_abertas(ops, agora):
+    linhas = []
+
+    for op in ops:
+        if op.status in ["FINALIZADA", "ARQUIVADA"]:
+            continue
+        tempo_aberta = dias_op_aberta(op, agora)
+        if tempo_aberta is None:
+            continue
+        linhas.append({
+            "op": op,
+            "tempo_aberta": tempo_aberta,
+        })
+
+    linhas.sort(
+        key=lambda linha: (
+            -linha["tempo_aberta"],
+            linha["op"].nome,
+        )
+    )
+    return linhas
+
+
+def filtros_restringem_tarefas(filtros):
+    return bool(
+        filtros["setores"]
+        or filtros["status"]
+        or filtros["periodo"] != "todos"
+    )
 
 
 def metricas_ops(ops):
@@ -136,26 +366,142 @@ def metricas_ops(ops):
     }
 
 
+def grafico_status(totais_por_status):
+    return {
+        "labels": list(totais_por_status.keys()),
+        "data": list(totais_por_status.values()),
+    }
+
+
+def grafico_setores(gargalos):
+    linhas = [
+        linha
+        for linha in gargalos
+        if linha["total"] > 0
+    ]
+    return {
+        "labels": [linha["setor"].nome for linha in linhas],
+        "data": [linha["total"] for linha in linhas],
+    }
+
+
+def grafico_tempos(tempos):
+    etapas = [
+        ("Até iniciar", tempos["ate_iniciar"]),
+        ("Em produção", tempos["em_producao"]),
+        ("Aguardando validação", tempos["aguardando_validacao"]),
+        ("Total", tempos["total"]),
+    ]
+    etapas_com_dados = [
+        (rotulo, valor)
+        for rotulo, valor in etapas
+        if valor is not None
+    ]
+    return {
+        "labels": [rotulo for rotulo, _valor in etapas_com_dados],
+        "data": [round(valor, 2) for _rotulo, valor in etapas_com_dados],
+    }
+
+
+def formatar_data(valor):
+    if not valor:
+        return "-"
+    return valor.strftime("%d/%m/%Y")
+
+
+def formatar_data_hora(valor):
+    if not valor:
+        return "-"
+    return valor.strftime("%d/%m/%Y %H:%M")
+
+
+def tarefas_para_analise(tarefas):
+    return sorted(
+        tarefas,
+        key=lambda tarefa: (
+            tarefa.op.nome if tarefa.op else "",
+            tarefa.nome,
+            tarefa.id,
+        )
+    )
+
+
+def analise_tarefa(tarefa):
+    if not tarefa:
+        return None
+
+    fim_tarefa = tarefa.concluida_em or tarefa.validada_em
+
+    return {
+        "tarefa": tarefa,
+        "status": status_visual_tarefa(tarefa),
+        "validada_concluida_em": fim_tarefa,
+        "tempo_ate_iniciar": diferenca_dias(tarefa.criada_em, tarefa.iniciada_em),
+        "tempo_em_producao": diferenca_dias(tarefa.iniciada_em, tarefa.enviada_validacao_em),
+        "tempo_aguardando_validacao": diferenca_dias(tarefa.enviada_validacao_em, fim_tarefa),
+        "tempo_total": diferenca_dias(tarefa.criada_em, fim_tarefa),
+    }
+
+
 def create_metricas_blueprint(tipos_permitidos):
     metricas_bp = Blueprint("metricas_bp", __name__)
 
     @metricas_bp.route("/metricas")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP")
     def metricas():
+        hoje = date.today()
+        agora = datetime.combine(hoje, time.max)
+        filtros = filtros_metricas()
+        tarefa_id = id_querystring("tarefa_id")
+
         tarefas = Tarefa.query.all()
         setores = Setor.query.order_by(Setor.nome).all()
         ops = OP.query.all()
 
+        tarefas = aplicar_filtros_tarefas(tarefas, filtros, hoje)
+        ops_filtradas = aplicar_filtros_ops(ops, filtros, hoje)
+        if filtros_restringem_tarefas(filtros):
+            op_ids_tarefas = {tarefa.op_id for tarefa in tarefas}
+            ops_filtradas = [
+                op
+                for op in ops_filtradas
+                if op.id in op_ids_tarefas
+            ]
+
         tarefas_metricas = metricas_tarefas(tarefas)
+        gargalos = gargalos_por_setor(setores, tarefas)
+        tarefas_opcoes = tarefas_para_analise(tarefas)
+        tarefa_selecionada = next(
+            (tarefa for tarefa in tarefas_opcoes if tarefa.id == tarefa_id),
+            None
+        )
 
         return render_template(
             "metricas/index.html",
             status_tarefas=STATUS_TAREFAS,
+            tipos_op_filtro=TIPOS_OP_FILTRO,
+            periodos_filtro=PERIODOS_FILTRO,
+            filtros=filtros,
+            setores_disponiveis=setores,
+            ops_disponiveis=OP.query.order_by(OP.nome).all(),
             totais_por_status=tarefas_metricas["totais_por_status"],
             tempos=tarefas_metricas["tempos"],
-            gargalos=gargalos_por_setor(setores, tarefas),
-            ops=metricas_ops(ops),
+            gargalos=gargalos,
+            ranking_pendentes=ranking_setores_pendentes(gargalos),
+            ranking_producao=ranking_setores_producao(gargalos),
+            ranking_ops=ranking_ops_abertas(ops_filtradas, agora),
+            ops=metricas_ops(ops_filtradas),
+            graficos={
+                "status": grafico_status(tarefas_metricas["totais_por_status"]),
+                "setores": grafico_setores(gargalos),
+                "tempos": grafico_tempos(tarefas_metricas["tempos"]),
+            },
+            tarefas_opcoes=tarefas_opcoes,
+            tarefa_selecionada_id=tarefa_id,
+            analise_tarefa=analise_tarefa(tarefa_selecionada),
             formatar_dias=formatar_dias,
+            formatar_data=formatar_data,
+            formatar_data_hora=formatar_data_hora,
         )
 
     return metricas_bp

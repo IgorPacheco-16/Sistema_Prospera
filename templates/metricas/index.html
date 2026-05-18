@@ -7,57 +7,453 @@
         <div>
             <p class="metricas-eyebrow">Operacional</p>
             <h1>Métricas</h1>
+            <p class="metricas-subtitle">Análise de gargalos por tarefa, setor e OP.</p>
         </div>
     </div>
 
-    <section class="metricas-section">
-        <h2>Tarefas por status</h2>
-        <div class="metricas-card-grid">
-            {% for status in status_tarefas %}
-            <div class="metricas-card">
-                <span>{{ status }}</span>
-                <strong>{{ totais_por_status[status] }}</strong>
+    {% set filtros_ativos = namespace(total=0) %}
+    {% if filtros.setores %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.setores|length) %}{% endif %}
+    {% if filtros.ops %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.ops|length) %}{% endif %}
+    {% if filtros.status %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.status|length) %}{% endif %}
+    {% if filtros.tipo_op != "todas" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+    {% if filtros.periodo != "todos" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+
+    <form method="get" action="{{ url_for('metricas') }}" class="metricas-filter-shell" id="metricasFilterForm">
+        <div class="metricas-filter-bar">
+            <div class="metricas-filter-summary">
+                <strong>Filtros de análise</strong>
+                <span>Combine filtros para investigar gargalos operacionais.</span>
             </div>
+
+            <button class="btn btn-primary kanban-filter-open"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#metricasFiltersPanel"
+                    aria-controls="metricasFiltersPanel">
+                Filtros
+                <span class="kanban-active-count" aria-label="{{ filtros_ativos.total }} filtros ativos">
+                    {{ filtros_ativos.total }}
+                </span>
+            </button>
+
+            <a href="{{ url_for('metricas') }}" class="btn btn-outline-secondary kanban-clear-link">Limpar</a>
+        </div>
+
+        <div class="offcanvas offcanvas-end kanban-filter-drawer metricas-filter-drawer" tabindex="-1" id="metricasFiltersPanel" aria-labelledby="metricasFiltersPanelTitle">
+            <div class="offcanvas-header">
+                <div>
+                    <h2 class="offcanvas-title" id="metricasFiltersPanelTitle">Filtros</h2>
+                    <p class="kanban-filter-drawer-subtitle">Refine os dados usados nas métricas.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+            </div>
+
+            <div class="offcanvas-body">
+                <div class="kanban-filter-drawer-layout">
+                    <div class="kanban-filter-categories" aria-label="Categorias de filtros">
+                        <button type="button" class="kanban-filter-category active" data-metricas-filter-tab="setores">
+                            <span>Setores</span>
+                            {% if filtros.setores %}<strong>{{ filtros.setores|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="ops">
+                            <span>OPs</span>
+                            {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="status">
+                            <span>Status</span>
+                            {% if filtros.status %}<strong>{{ filtros.status|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="tipo-op">
+                            <span>Tipo de OP</span>
+                            {% if filtros.tipo_op != "todas" %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="periodo">
+                            <span>Período</span>
+                            {% if filtros.periodo != "todos" %}<strong>1</strong>{% endif %}
+                        </button>
+                    </div>
+
+                    <div class="kanban-filter-panels">
+                        <section class="kanban-filter-panel active" data-metricas-filter-panel="setores">
+                            <div class="kanban-filter-panel-head">
+                                <h3>Setores</h3>
+                                <p>Selecione um ou mais setores.</p>
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar setor"
+                                   data-metricas-list-search="setores">
+                            <div class="kanban-check-list" data-metricas-list="setores">
+                                {% for setor in setores_disponiveis %}
+                                <label class="kanban-check-row" data-metricas-list-item>
+                                    <input type="checkbox"
+                                           name="setores"
+                                           value="{{ setor.id }}"
+                                           {{ 'checked' if setor.id in filtros.setores else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ setor.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhum setor disponível.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="ops" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>OPs</h3>
+                                <p>Filtre por uma ou mais OPs.</p>
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar OP"
+                                   data-metricas-list-search="ops">
+                            <div class="kanban-check-list" data-metricas-list="ops">
+                                {% for op in ops_disponiveis %}
+                                <label class="kanban-check-row" data-metricas-list-item>
+                                    <input type="checkbox"
+                                           name="ops"
+                                           value="{{ op.id }}"
+                                           {{ 'checked' if op.id in filtros.ops else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ op.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhuma OP disponível.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="status" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Status da tarefa</h3>
+                                <p>Selecione uma ou mais etapas.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for status in status_tarefas %}
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="status"
+                                           value="{{ status }}"
+                                           {{ 'checked' if status in filtros.status else '' }}>
+                                    <span>{{ status }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="tipo-op" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Tipo de OP</h3>
+                                <p>Escolha uma característica principal da OP.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in tipos_op_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="radio"
+                                           name="tipo_op"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if filtros.tipo_op == valor else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="periodo" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Período</h3>
+                                <p>O filtro usa a data de criação da tarefa.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in periodos_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="radio"
+                                           name="periodo"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if filtros.periodo == valor else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="metricas-date-range">
+                                <label>
+                                    <span>Início</span>
+                                    <input type="date"
+                                           name="data_inicio"
+                                           class="form-control"
+                                           value="{{ filtros.data_inicio.isoformat() if filtros.data_inicio else '' }}">
+                                </label>
+                                <label>
+                                    <span>Fim</span>
+                                    <input type="date"
+                                           name="data_fim"
+                                           class="form-control"
+                                           value="{{ filtros.data_fim.isoformat() if filtros.data_fim else '' }}">
+                                </label>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-filter-drawer-footer">
+                <a href="{{ url_for('metricas') }}" class="btn btn-outline-secondary">Limpar</a>
+                <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+            </div>
+        </div>
+    </form>
+
+    <section class="metricas-section">
+        <h2>Visão geral</h2>
+        <div class="metricas-overview-grid">
+            <div class="metricas-panel metricas-status-panel">
+                <h3>Tarefas por status</h3>
+                <div class="metricas-status-list">
+                    {% set total_tarefas = totais_por_status.values()|sum %}
+                    {% for status in status_tarefas %}
+                    {% set total_status = totais_por_status[status] %}
+                    {% set percentual = (total_status / total_tarefas * 100) if total_tarefas else 0 %}
+                    <div class="metricas-status-row">
+                        <div>
+                            <span>{{ status }}</span>
+                            <strong>{{ total_status }}</strong>
+                        </div>
+                        <div class="metricas-status-bar" aria-hidden="true">
+                            <span style="width: {{ percentual }}%"></span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="metricas-panel">
+                <h3>Tempo médio por etapa</h3>
+                <div class="metricas-mini-grid">
+                    <div>
+                        <span>Até iniciar</span>
+                        <strong>{{ formatar_dias(tempos.ate_iniciar) }}</strong>
+                    </div>
+                    <div>
+                        <span>Em produção</span>
+                        <strong>{{ formatar_dias(tempos.em_producao) }}</strong>
+                    </div>
+                    <div>
+                        <span>Aguardando validação</span>
+                        <strong>{{ formatar_dias(tempos.aguardando_validacao) }}</strong>
+                    </div>
+                    <div>
+                        <span>Total da tarefa</span>
+                        <strong>{{ formatar_dias(tempos.total) }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metricas-panel">
+                <h3>OPs</h3>
+                <div class="metricas-mini-grid">
+                    <div>
+                        <span>Em andamento</span>
+                        <strong>{{ ops.em_andamento }}</strong>
+                    </div>
+                    <div>
+                        <span>Finalizadas</span>
+                        <strong>{{ ops.finalizadas }}</strong>
+                    </div>
+                    <div>
+                        <span>Tempo médio de conclusão</span>
+                        <strong>{{ formatar_dias(ops.tempo_medio_conclusao) }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="metricas-section">
+        <h2>Gráficos</h2>
+        <div class="metricas-chart-grid">
+            <div class="metricas-panel metricas-chart-panel">
+                <h3>Tarefas por status</h3>
+                <div class="metricas-chart-frame">
+                    <canvas id="metricasStatusChart"></canvas>
+                </div>
+            </div>
+
+            <div class="metricas-panel metricas-chart-panel">
+                <h3>Tarefas por setor</h3>
+                {% if graficos.setores.data %}
+                <div class="metricas-chart-frame">
+                    <canvas id="metricasSetoresChart"></canvas>
+                </div>
+                {% else %}
+                <div class="metricas-empty-chart">Sem tarefas nos filtros atuais.</div>
+                {% endif %}
+            </div>
+
+            <div class="metricas-panel metricas-chart-panel metricas-chart-panel-wide">
+                <h3>Tempo médio por etapa</h3>
+                {% if graficos.tempos.data %}
+                <div class="metricas-chart-frame">
+                    <canvas id="metricasTemposChart"></canvas>
+                </div>
+                {% else %}
+                <div class="metricas-empty-chart">Sem timestamps suficientes para montar este gráfico.</div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="metricas-section">
+        <h2>Analisar tarefa específica</h2>
+        <form method="get" action="{{ url_for('metricas') }}" class="metricas-task-form">
+            {% for setor_id in filtros.setores %}
+            <input type="hidden" name="setores" value="{{ setor_id }}">
             {% endfor %}
+            {% for op_id in filtros.ops %}
+            <input type="hidden" name="ops" value="{{ op_id }}">
+            {% endfor %}
+            {% for status in filtros.status %}
+            <input type="hidden" name="status" value="{{ status }}">
+            {% endfor %}
+            <input type="hidden" name="tipo_op" value="{{ filtros.tipo_op }}">
+            <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+            {% if filtros.data_inicio %}
+            <input type="hidden" name="data_inicio" value="{{ filtros.data_inicio.isoformat() }}">
+            {% endif %}
+            {% if filtros.data_fim %}
+            <input type="hidden" name="data_fim" value="{{ filtros.data_fim.isoformat() }}">
+            {% endif %}
+
+            <label for="metricasTarefaSelect">Tarefa</label>
+            <div class="metricas-task-select-row">
+                <select id="metricasTarefaSelect" name="tarefa_id" class="form-select">
+                    <option value="">Selecione uma tarefa</option>
+                    {% for tarefa in tarefas_opcoes %}
+                    <option value="{{ tarefa.id }}" {{ 'selected' if tarefa.id == tarefa_selecionada_id else '' }}>
+                        {{ tarefa.op.nome if tarefa.op else 'OP sem nome' }} - {{ tarefa.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary">Analisar</button>
+            </div>
+            {% if not tarefas_opcoes %}
+            <p class="metricas-form-hint">Nenhuma tarefa encontrada com os filtros atuais.</p>
+            {% endif %}
+        </form>
+
+        {% if analise_tarefa %}
+        <div class="metricas-task-detail">
+            <div class="metricas-task-detail-head">
+                <div>
+                    <span>Tarefa selecionada</span>
+                    <strong>{{ analise_tarefa.tarefa.nome }}</strong>
+                </div>
+                {% if analise_tarefa.tarefa.op %}
+                <a href="{{ url_for('ver_op', id=analise_tarefa.tarefa.op.id) }}" class="btn btn-outline-primary btn-sm">
+                    Abrir OP
+                </a>
+                {% endif %}
+            </div>
+
+            <dl class="metricas-task-detail-grid">
+                <div>
+                    <dt>OP</dt>
+                    <dd>{{ analise_tarefa.tarefa.op.nome if analise_tarefa.tarefa.op else '-' }}</dd>
+                </div>
+                <div>
+                    <dt>Setor</dt>
+                    <dd>{{ analise_tarefa.tarefa.setor.nome if analise_tarefa.tarefa.setor else '-' }}</dd>
+                </div>
+                <div>
+                    <dt>Status</dt>
+                    <dd>{{ analise_tarefa.status }}</dd>
+                </div>
+                <div>
+                    <dt>Prazo</dt>
+                    <dd>{{ formatar_data(analise_tarefa.tarefa.prazo) }}</dd>
+                </div>
+                <div>
+                    <dt>Criada em</dt>
+                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.criada_em) }}</dd>
+                </div>
+                <div>
+                    <dt>Iniciada em</dt>
+                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.iniciada_em) }}</dd>
+                </div>
+                <div>
+                    <dt>Enviada para validação em</dt>
+                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.enviada_validacao_em) }}</dd>
+                </div>
+                <div>
+                    <dt>Validada/concluída em</dt>
+                    <dd>{{ formatar_data_hora(analise_tarefa.validada_concluida_em) }}</dd>
+                </div>
+                <div>
+                    <dt>Tempo até iniciar</dt>
+                    <dd>{{ formatar_dias(analise_tarefa.tempo_ate_iniciar) }}</dd>
+                </div>
+                <div>
+                    <dt>Tempo em produção</dt>
+                    <dd>{{ formatar_dias(analise_tarefa.tempo_em_producao) }}</dd>
+                </div>
+                <div>
+                    <dt>Tempo aguardando validação</dt>
+                    <dd>{{ formatar_dias(analise_tarefa.tempo_aguardando_validacao) }}</dd>
+                </div>
+                <div>
+                    <dt>Tempo total</dt>
+                    <dd>{{ formatar_dias(analise_tarefa.tempo_total) }}</dd>
+                </div>
+            </dl>
         </div>
+        {% elif tarefa_selecionada_id %}
+        <p class="metricas-form-hint">A tarefa selecionada não está disponível nos filtros atuais.</p>
+        {% endif %}
     </section>
 
     <section class="metricas-section">
-        <h2>Tempo médio por etapa</h2>
-        <div class="metricas-card-grid">
-            <div class="metricas-card">
-                <span>Até iniciar</span>
-                <strong>{{ formatar_dias(tempos.ate_iniciar) }}</strong>
+        <h2>Rankings operacionais</h2>
+        <div class="metricas-ranking-grid">
+            <div class="metricas-panel">
+                <h3>Setores com mais tarefas pendentes</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_pendentes %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ linha.pendentes }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem pendências nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
             </div>
-            <div class="metricas-card">
-                <span>Em produção</span>
-                <strong>{{ formatar_dias(tempos.em_producao) }}</strong>
-            </div>
-            <div class="metricas-card">
-                <span>Aguardando validação</span>
-                <strong>{{ formatar_dias(tempos.aguardando_validacao) }}</strong>
-            </div>
-            <div class="metricas-card">
-                <span>Total da tarefa</span>
-                <strong>{{ formatar_dias(tempos.total) }}</strong>
-            </div>
-        </div>
-    </section>
 
-    <section class="metricas-section">
-        <h2>OPs</h2>
-        <div class="metricas-card-grid">
-            <div class="metricas-card">
-                <span>Em andamento</span>
-                <strong>{{ ops.em_andamento }}</strong>
+            <div class="metricas-panel">
+                <h3>Maior tempo médio em produção</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_producao %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ formatar_dias(linha.media_producao) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem timestamps suficientes.</li>
+                    {% endfor %}
+                </ol>
             </div>
-            <div class="metricas-card">
-                <span>Finalizadas</span>
-                <strong>{{ ops.finalizadas }}</strong>
-            </div>
-            <div class="metricas-card">
-                <span>Tempo médio de conclusão</span>
-                <strong>{{ formatar_dias(ops.tempo_medio_conclusao) }}</strong>
+
+            <div class="metricas-panel">
+                <h3>OPs abertas há mais tempo</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_ops %}
+                    <li>
+                        <span>{{ linha.op.nome }}</span>
+                        <strong>{{ formatar_dias(linha.tempo_aberta) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Nenhuma OP aberta nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
             </div>
         </div>
     </section>
@@ -69,9 +465,11 @@
                 <thead>
                     <tr>
                         <th>Setor</th>
+                        <th>Total</th>
                         <th>Pendentes</th>
                         <th>Em andamento</th>
                         <th>Em validação</th>
+                        <th>Entregues</th>
                         <th>Média em produção</th>
                     </tr>
                 </thead>
@@ -79,14 +477,16 @@
                     {% for linha in gargalos %}
                     <tr>
                         <td>{{ linha.setor.nome }}</td>
+                        <td>{{ linha.total }}</td>
                         <td>{{ linha.pendentes }}</td>
                         <td>{{ linha.em_andamento }}</td>
                         <td>{{ linha.em_validacao }}</td>
+                        <td>{{ linha.entregues }}</td>
                         <td>{{ formatar_dias(linha.media_producao) }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-muted text-center">
+                        <td colspan="7" class="text-muted text-center">
                             Nenhum setor cadastrado
                         </td>
                     </tr>
@@ -96,5 +496,117 @@
         </div>
     </section>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const graficos = {{ graficos|tojson }};
+    const chartTextColor = document.documentElement.classList.contains("dark-mode") ? "#e9ecef" : "#212529";
+    const chartGridColor = document.documentElement.classList.contains("dark-mode") ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)";
+    const chartColors = ["#0d6efd", "#20c997", "#ffc107", "#6f42c1", "#dc3545", "#198754"];
+
+    function renderChart(canvasId, type, data, label, indexAxis) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !window.Chart || !data || !data.data || !data.data.length) {
+            return;
+        }
+
+        const isDoughnut = type === "doughnut";
+        const dataset = {
+            label: label,
+            data: data.data,
+            backgroundColor: isDoughnut ? chartColors : chartColors[0],
+            borderColor: isDoughnut ? "#ffffff" : chartColors[0],
+            borderWidth: isDoughnut ? 2 : 1,
+            borderRadius: isDoughnut ? 0 : 6,
+        };
+
+        new Chart(canvas, {
+            type: type,
+            data: {
+                labels: data.labels,
+                datasets: [dataset],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: indexAxis || "x",
+                plugins: {
+                    legend: {
+                        display: isDoughnut,
+                        labels: {
+                            color: chartTextColor,
+                            boxWidth: 12,
+                        },
+                    },
+                },
+                scales: isDoughnut ? {} : {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: chartTextColor,
+                            precision: 0,
+                        },
+                        grid: {
+                            color: chartGridColor,
+                        },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: chartTextColor,
+                            precision: 0,
+                        },
+                        grid: {
+                            color: chartGridColor,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    renderChart("metricasStatusChart", "doughnut", graficos.status, "Tarefas");
+    renderChart("metricasSetoresChart", "bar", graficos.setores, "Tarefas", "y");
+    renderChart("metricasTemposChart", "bar", graficos.tempos, "Dias");
+
+    const tabButtons = document.querySelectorAll("[data-metricas-filter-tab]");
+    const panels = document.querySelectorAll("[data-metricas-filter-panel]");
+
+    function activatePanel(panelName) {
+        tabButtons.forEach(function(button) {
+            button.classList.toggle("active", button.dataset.metricasFilterTab === panelName);
+        });
+
+        panels.forEach(function(panel) {
+            const active = panel.dataset.metricasFilterPanel === panelName;
+            panel.classList.toggle("active", active);
+            panel.hidden = !active;
+        });
+    }
+
+    tabButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+            activatePanel(button.dataset.metricasFilterTab);
+        });
+    });
+
+    document.querySelectorAll("[data-metricas-list-search]").forEach(function(input) {
+        input.addEventListener("input", function() {
+            const listName = input.dataset.metricasListSearch;
+            const list = document.querySelector('[data-metricas-list="' + listName + '"]');
+            const term = input.value.trim().toLowerCase();
+
+            if (!list) {
+                return;
+            }
+
+            list.querySelectorAll("[data-metricas-list-item]").forEach(function(item) {
+                item.hidden = !item.textContent.toLowerCase().includes(term);
+            });
+        });
+    });
+});
+</script>
 
 {% endblock %}

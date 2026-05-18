@@ -29,6 +29,7 @@
     flex-direction: column;
     gap: 24px;
     padding-bottom: 32px;
+    max-width: 1440px;
 }
 
 .metricas-header {
@@ -42,6 +43,11 @@
     margin: 0;
     font-size: 2rem;
     font-weight: 700;
+}
+
+.metricas-subtitle {
+    color: var(--muted-light);
+    margin: 4px 0 0;
 }
 
 .metricas-eyebrow {
@@ -64,10 +70,66 @@
     font-weight: 700;
 }
 
+.metricas-filter-shell {
+    margin-bottom: 2px;
+}
+
+.metricas-filter-bar {
+    align-items: center;
+    background-color: rgba(255,255,255,0.82);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    padding: 10px;
+}
+
+.metricas-filter-summary {
+    display: grid;
+    gap: 2px;
+}
+
+.metricas-filter-summary strong {
+    font-size: 0.98rem;
+}
+
+.metricas-filter-summary span {
+    color: var(--muted-light);
+    font-size: 0.9rem;
+}
+
+.metricas-filter-drawer {
+    --bs-offcanvas-width: min(780px, 100vw);
+}
+
+.metricas-date-range {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 440px;
+}
+
+.metricas-date-range label {
+    display: grid;
+    gap: 5px;
+}
+
+.metricas-date-range span {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
 .metricas-card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 12px;
+}
+
+.metricas-card-grid-compact {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .metricas-card {
@@ -80,6 +142,10 @@
     flex-direction: column;
     justify-content: space-between;
     gap: 12px;
+}
+
+.metricas-card-compact {
+    min-height: 92px;
 }
 
 .metricas-card span {
@@ -103,6 +169,20 @@
 
 .metricas-table {
     margin: 0;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text-light);
+    --bs-table-border-color: var(--border-light);
+    color: var(--text-light);
+}
+
+.metricas-table > :not(caption) > * > * {
+    background-color: transparent;
+    border-color: var(--border-light);
+    color: inherit;
+}
+
+.metricas-table thead {
+    background-color: #f8f9fb;
 }
 
 .metricas-table th {
@@ -111,26 +191,314 @@
     text-transform: uppercase;
 }
 
+.metricas-table td {
+    font-weight: 600;
+}
+
+.metricas-ranking-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metricas-panel {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+}
+
+.metricas-panel h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.metricas-overview-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(280px, 1.25fr) repeat(2, minmax(220px, 1fr));
+}
+
+.metricas-status-list,
+.metricas-mini-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.metricas-status-row {
+    display: grid;
+    gap: 7px;
+}
+
+.metricas-status-row > div:first-child {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.metricas-status-row span,
+.metricas-mini-grid span,
+.metricas-task-form label,
+.metricas-task-detail-head span,
+.metricas-task-detail-grid dt {
+    color: var(--muted-light);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.metricas-status-row strong,
+.metricas-mini-grid strong {
+    color: var(--text-light);
+    font-size: 1.05rem;
+}
+
+.metricas-status-bar {
+    background-color: rgba(13, 110, 253, 0.10);
+    border-radius: 999px;
+    height: 9px;
+    overflow: hidden;
+}
+
+.metricas-status-bar span {
+    background: linear-gradient(90deg, #0d6efd, #20c997);
+    display: block;
+    height: 100%;
+    min-width: 3px;
+}
+
+.metricas-mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metricas-mini-grid > div {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    min-height: 76px;
+    padding: 12px;
+}
+
+.metricas-chart-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metricas-chart-panel {
+    min-height: 340px;
+}
+
+.metricas-chart-panel-wide {
+    grid-column: 1 / -1;
+}
+
+.metricas-chart-frame {
+    height: 260px;
+    min-width: 0;
+    position: relative;
+}
+
+.metricas-empty-chart,
+.metricas-form-hint {
+    align-items: center;
+    color: var(--muted-light);
+    display: flex;
+    font-weight: 700;
+    justify-content: center;
+    margin: 0;
+    min-height: 180px;
+    text-align: center;
+}
+
+.metricas-task-form {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+}
+
+.metricas-task-select-row {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.metricas-task-detail {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 14px;
+    margin-top: 12px;
+    padding: 16px;
+}
+
+.metricas-task-detail-head {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.metricas-task-detail-head > div {
+    display: grid;
+    gap: 3px;
+}
+
+.metricas-task-detail-head strong {
+    font-size: 1.1rem;
+}
+
+.metricas-task-detail-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+}
+
+.metricas-task-detail-grid div {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    min-width: 0;
+    padding: 11px;
+}
+
+.metricas-task-detail-grid dt,
+.metricas-task-detail-grid dd {
+    margin: 0;
+}
+
+.metricas-task-detail-grid dd {
+    color: var(--text-light);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.metricas-ranking-list {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.metricas-ranking-list li {
+    align-items: center;
+    background-color: rgba(13, 110, 253, 0.04);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    min-height: 42px;
+    padding: 9px 10px;
+}
+
+.metricas-ranking-list span {
+    overflow-wrap: anywhere;
+}
+
+.metricas-ranking-list strong {
+    color: var(--primary);
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.metricas-ranking-list .metricas-empty {
+    color: var(--muted-light);
+    justify-content: center;
+    text-align: center;
+}
+
 html.dark-mode .metricas-eyebrow,
+html.dark-mode .metricas-subtitle,
+html.dark-mode .metricas-filter-summary span,
+html.dark-mode .metricas-date-range span,
+html.dark-mode .metricas-status-row span,
+html.dark-mode .metricas-mini-grid span,
+html.dark-mode .metricas-task-form label,
+html.dark-mode .metricas-task-detail-head span,
+html.dark-mode .metricas-task-detail-grid dt,
+html.dark-mode .metricas-empty-chart,
+html.dark-mode .metricas-form-hint,
 html.dark-mode .metricas-card span,
-html.dark-mode .metricas-table th {
+html.dark-mode .metricas-table th,
+html.dark-mode .metricas-ranking-list .metricas-empty {
     color: var(--muted-dark);
 }
 
 html.dark-mode .metricas-card,
+html.dark-mode .metricas-panel,
+html.dark-mode .metricas-task-form,
+html.dark-mode .metricas-task-detail,
 html.dark-mode .metricas-table-wrap {
     background: var(--card-dark);
     border-color: var(--border-dark);
 }
 
+html.dark-mode .metricas-filter-bar {
+    background-color: rgba(255,255,255,0.055);
+    border-color: var(--border-dark);
+    box-shadow: 0 14px 32px rgba(0,0,0,0.22);
+}
+
 html.dark-mode .metricas-card strong,
+html.dark-mode .metricas-panel h3,
+html.dark-mode .metricas-status-row strong,
+html.dark-mode .metricas-mini-grid strong,
+html.dark-mode .metricas-task-detail-head strong,
+html.dark-mode .metricas-task-detail-grid dd,
 html.dark-mode .metricas-table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text-dark);
+    --bs-table-border-color: var(--border-dark);
     color: var(--text-dark);
+}
+
+html.dark-mode .metricas-mini-grid > div,
+html.dark-mode .metricas-task-detail-grid div {
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .metricas-status-bar {
+    background-color: rgba(158, 197, 254, 0.16);
 }
 
 html.dark-mode .metricas-table td,
 html.dark-mode .metricas-table th {
     border-color: var(--border-dark);
+}
+
+html.dark-mode .metricas-table > :not(caption) > * > * {
+    background-color: transparent;
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .metricas-table thead {
+    background-color: rgba(255,255,255,0.04);
+}
+
+html.dark-mode .metricas-table tbody tr:hover {
+    background-color: rgba(90, 160, 255, 0.08);
+}
+
+html.dark-mode .metricas-ranking-list li {
+    background-color: #151922;
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .metricas-ranking-list strong {
+    color: #9ec5fe;
 }
 
 /* ========================================= */
@@ -1758,8 +2126,35 @@ html.dark-mode .kanban-empty {
         grid-template-columns: 1fr;
     }
 
+    .metricas-filter-bar {
+        grid-template-columns: 1fr;
+    }
+
     .kanban-filter-open,
     .kanban-clear-link {
+        width: 100%;
+    }
+
+    .metricas-date-range,
+    .metricas-overview-grid,
+    .metricas-chart-grid,
+    .metricas-ranking-grid,
+    .metricas-task-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .metricas-task-select-row,
+    .metricas-task-detail-head {
+        grid-template-columns: 1fr;
+    }
+
+    .metricas-task-detail-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .metricas-task-select-row .btn,
+    .metricas-task-detail-head .btn {
         width: 100%;
     }
 
@@ -1804,6 +2199,19 @@ html.dark-mode .kanban-empty {
     .kanban-board {
         grid-template-columns: repeat(2, minmax(240px, 1fr));
     }
+
+    .metricas-ranking-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .metricas-overview-grid,
+    .metricas-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .metricas-task-detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -1812,6 +2220,11 @@ html.dark-mode .kanban-empty {
     }
 
     .kanban-board {
+        grid-template-columns: 1fr;
+    }
+
+    .metricas-mini-grid,
+    .metricas-task-detail-grid {
         grid-template-columns: 1fr;
     }
 }
