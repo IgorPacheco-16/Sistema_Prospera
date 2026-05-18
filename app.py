@@ -63,6 +63,7 @@ dashboard_routes_module = carregar_modulo("pacheco_dashboard_routes", "app/dashb
 calendario_routes_module = carregar_modulo("pacheco_calendario_routes", "app/calendario/routes.py")
 ops_routes_module = carregar_modulo("pacheco_ops_routes", "app/ops/routes.py")
 tarefas_routes_module = carregar_modulo("pacheco_tarefas_routes", "app/tarefas/routes.py")
+kanban_routes_module = carregar_modulo("pacheco_kanban_routes", "app/kanban/routes.py")
 
 configure_app = config_module.configure_app
 initialize_database = config_module.initialize_database
@@ -93,6 +94,7 @@ create_dashboard_blueprint = dashboard_routes_module.create_dashboard_blueprint
 create_calendario_blueprint = calendario_routes_module.create_calendario_blueprint
 create_ops_blueprint = ops_routes_module.create_ops_blueprint
 create_tarefas_blueprint = tarefas_routes_module.create_tarefas_blueprint
+create_kanban_blueprint = kanban_routes_module.create_kanban_blueprint
 
 
 BUILD_ONLY_ALIASES = [
@@ -109,6 +111,7 @@ BUILD_ONLY_ALIASES = [
     ("/teste_notificacao", "teste_notificacao"),
     ("/dashboard", "dashboard"),
     ("/calendario", "calendario"),
+    ("/kanban", "kanban"),
     ("/arquivadas", "arquivadas"),
     ("/criar_op", "criar_op"),
     ("/op/<int:id>", "ver_op"),
@@ -173,6 +176,9 @@ app.register_blueprint(dashboard_bp)
 
 calendario_bp = create_calendario_blueprint(login_required=login_required)
 app.register_blueprint(calendario_bp)
+
+kanban_bp = create_kanban_blueprint(login_required=login_required)
+app.register_blueprint(kanban_bp)
 
 ops_bp = create_ops_blueprint(
     login_required=login_required,

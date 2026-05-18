@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban</title>
+
+    <script>
+    (function() {
+        const theme = localStorage.getItem("theme");
+        if (theme === "dark") {
+            document.documentElement.classList.add("dark-mode");
+        }
+    })();
+    </script>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+</head>
+
+<body>
+
+{% include "base/components/navbar.html" %}
+
+<div class="container mt-4 kanban-page">
+    <div class="kanban-header">
+        <div>
+            <h1>Kanban</h1>
+            <p class="kanban-subtitle">
+                Visualiza&ccedil;&atilde;o das tarefas ativas por status.
+            </p>
+        </div>
+        <span class="op-status-pill">
+            {{ tipo }}
+        </span>
+    </div>
+
+    {% set filtros_ativos = namespace(total=0) %}
+    {% if filtros.busca %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+    {% if filtros.status != "todos" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+    {% if tipo != "SETOR" and filtros.setores %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.setores|length) %}{% endif %}
+    {% if filtros.ops %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.ops|length) %}{% endif %}
+    {% if filtros.tipos_op %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.tipos_op|length) %}{% endif %}
+    {% if filtros.prazos %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.prazos|length) %}{% endif %}
+
+    <form method="get" action="{{ url_for('kanban') }}" class="kanban-filter-shell" id="kanbanFilterForm">
+        <div class="kanban-filter-bar">
+            <div class="kanban-search-field">
+                <label class="visually-hidden" for="kanban-busca">Buscar por tarefa, OP ou setor</label>
+                <input id="kanban-busca"
+                       type="search"
+                       name="busca"
+                       class="form-control"
+                       value="{{ filtros.busca }}"
+                       placeholder="Buscar tarefa, OP ou setor">
+            </div>
+
+            <button class="btn btn-primary kanban-filter-open"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#kanbanFiltersPanel"
+                    aria-controls="kanbanFiltersPanel">
+                Filtros
+                <span class="kanban-active-count" aria-label="{{ filtros_ativos.total }} filtros ativos">
+                    {{ filtros_ativos.total }}
+                </span>
+            </button>
+
+            <a href="{{ url_for('kanban') }}" class="btn btn-outline-secondary kanban-clear-link">Limpar</a>
+        </div>
+
+        <div class="offcanvas offcanvas-end kanban-filter-drawer" tabindex="-1" id="kanbanFiltersPanel" aria-labelledby="kanbanFiltersPanelTitle">
+            <div class="offcanvas-header">
+                <div>
+                    <h2 class="offcanvas-title" id="kanbanFiltersPanelTitle">Filtros</h2>
+                    <p class="kanban-filter-drawer-subtitle">Combine categorias para refinar o Kanban.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+            </div>
+
+            <div class="offcanvas-body">
+                <div class="kanban-filter-drawer-layout">
+                    <div class="kanban-filter-categories" aria-label="Categorias de filtros">
+                        <button type="button" class="kanban-filter-category active" data-kanban-filter-tab="status">
+                            <span>Status</span>
+                            {% if filtros.status != "todos" %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="setores">
+                            <span>Setores</span>
+                            {% if tipo != "SETOR" and filtros.setores %}<strong>{{ filtros.setores|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="ops">
+                            <span>OPs</span>
+                            {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="tipo-op">
+                            <span>Tipo de OP</span>
+                            {% if filtros.tipos_op %}<strong>{{ filtros.tipos_op|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="prazo">
+                            <span>Prazo</span>
+                            {% if filtros.prazos %}<strong>{{ filtros.prazos|length }}</strong>{% endif %}
+                        </button>
+                    </div>
+
+                    <div class="kanban-filter-panels">
+                        <section class="kanban-filter-panel active" data-kanban-filter-panel="status">
+                            <div class="kanban-filter-panel-head">
+                                <h3>Status</h3>
+                                <p>Escolha uma etapa do fluxo.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                <label class="kanban-chip">
+                                    <input type="radio" name="status" value="todos" {{ 'checked' if filtros.status == 'todos' else '' }}>
+                                    <span>Todos</span>
+                                </label>
+                                {% for status in status_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="radio" name="status" value="{{ status }}" {{ 'checked' if filtros.status == status else '' }}>
+                                    <span>{{ status }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="setores" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Setores</h3>
+                                {% if tipo == "SETOR" %}
+                                <p>Travado no seu setor.</p>
+                                {% else %}
+                                <p>Selecione um ou mais setores.</p>
+                                {% endif %}
+                            </div>
+                            {% if tipo != "SETOR" %}
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar setor"
+                                   data-kanban-list-search="setores">
+                            {% endif %}
+                            <div class="kanban-check-list" data-kanban-list="setores">
+                                {% for setor in setores_disponiveis %}
+                                <label class="kanban-check-row" data-kanban-list-item>
+                                    <input type="checkbox"
+                                           name="setores"
+                                           value="{{ setor.id }}"
+                                           {{ 'checked' if setor.id in filtros.setores else '' }}
+                                           {% if tipo == "SETOR" %}disabled{% endif %}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ setor.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhum setor dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                            {% if tipo == "SETOR" and setores_disponiveis %}
+                            <input type="hidden" name="setores" value="{{ setores_disponiveis[0].id }}">
+                            {% endif %}
+                        </section>
+
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="ops" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>OPs</h3>
+                                <p>Filtre por uma ou mais OPs ativas.</p>
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar OP"
+                                   data-kanban-list-search="ops">
+                            <div class="kanban-check-list" data-kanban-list="ops">
+                                {% for op in ops_disponiveis %}
+                                <label class="kanban-check-row" data-kanban-list-item>
+                                    <input type="checkbox"
+                                           name="ops"
+                                           value="{{ op.id }}"
+                                           {{ 'checked' if op.id in filtros.ops else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ op.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhuma OP ativa dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="tipo-op" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Tipo de OP</h3>
+                                <p>Combine caracter&iacute;sticas da OP.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in tipos_op_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="tipos_op"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if valor in filtros.tipos_op else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="prazo" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Prazo</h3>
+                                <p>Filtre tarefas pelo vencimento.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in prazos_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="prazos"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if valor in filtros.prazos else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-filter-drawer-footer">
+                <a href="{{ url_for('kanban') }}" class="btn btn-outline-secondary">Limpar</a>
+                <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="kanban-board">
+        {% for coluna in colunas %}
+        <section class="kanban-column" aria-labelledby="kanban-{{ coluna.chave }}">
+            <div class="kanban-column-header">
+                <h2 id="kanban-{{ coluna.chave }}">{{ coluna.titulo }}</h2>
+                <span class="sector-status-badge {{ coluna.classe }}">
+                    {{ coluna.tarefas|length }}
+                </span>
+            </div>
+
+            <div class="kanban-task-list">
+                {% for item in coluna.tarefas %}
+                <a class="kanban-card {{ item.prazo.card_classe }} {% if item.op.alta_prioridade %}kanban-card-priority{% endif %}"
+                   href="{{ item.link }}">
+                    <div class="kanban-card-top">
+                        <strong>{{ item.tarefa.nome }}</strong>
+                        <span class="sector-status-badge {{ coluna.classe }}">
+                            {{ coluna.titulo }}
+                        </span>
+                    </div>
+
+                    <div class="kanban-card-meta">
+                        <span>OP: {{ item.op.nome }}</span>
+                        <span>Setor: {{ item.setor.nome if item.setor else "Sem setor" }}</span>
+                        <span>
+                            Prazo:
+                            {% if item.tarefa.prazo %}
+                                {{ item.tarefa.prazo.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                N&atilde;o definido
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <div class="kanban-card-footer">
+                        <span class="sector-status-badge {{ item.prazo.classe }}">
+                            {{ item.prazo.texto }}
+                        </span>
+                        {% if item.op.alta_prioridade %}
+                        <span class="sector-status-badge status-danger">
+                            Alta prioridade
+                        </span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% else %}
+                <div class="kanban-empty">
+                    Nenhuma tarefa.
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const tabButtons = document.querySelectorAll("[data-kanban-filter-tab]");
+    const panels = document.querySelectorAll("[data-kanban-filter-panel]");
+
+    function activatePanel(panelName) {
+        tabButtons.forEach(function(button) {
+            button.classList.toggle("active", button.dataset.kanbanFilterTab === panelName);
+        });
+
+        panels.forEach(function(panel) {
+            const active = panel.dataset.kanbanFilterPanel === panelName;
+            panel.classList.toggle("active", active);
+            panel.hidden = !active;
+        });
+    }
+
+    tabButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+            activatePanel(button.dataset.kanbanFilterTab);
+        });
+    });
+
+    document.querySelectorAll("[data-kanban-list-search]").forEach(function(input) {
+        input.addEventListener("input", function() {
+            const listName = input.dataset.kanbanListSearch;
+            const list = document.querySelector('[data-kanban-list="' + listName + '"]');
+            const term = input.value.trim().toLowerCase();
+
+            if (!list) {
+                return;
+            }
+
+            list.querySelectorAll("[data-kanban-list-item]").forEach(function(item) {
+                item.hidden = !item.textContent.toLowerCase().includes(term);
+            });
+        });
+    });
+});
+</script>
+</body>
+</html>

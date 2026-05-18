@@ -267,9 +267,13 @@ def create_tarefas_blueprint(
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
+            mensagem = (
+                mensagem_tarefa("entrega_recusada", op, tarefa)
+                + f"\nMotivo: {motivo_recusa}"
+            )
             criar_notificacao(
                 "SETOR",
-                mensagem_tarefa("entrega_recusada", op, tarefa),
+                mensagem,
                 link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
                 op_id=op.id,
                 tarefa_id=tarefa.id,

@@ -178,11 +178,13 @@ def test_recusa_de_tarefa_reabre_entrega_e_notifica_setor(client, login_as, tare
     assert tarefa.status == "PENDENTE"
     assert tarefa.entregue is False
     assert tarefa.validado is False
-    assert Notificacao.query.filter_by(
+    notificacao_recusa = Notificacao.query.filter_by(
         usuario="SETOR",
         tarefa_id=tarefa.id,
         tipo_evento="entrega_recusada"
     ).first()
+    assert notificacao_recusa
+    assert "Motivo: Ajustar acabamento" in notificacao_recusa.mensagem
 
 
 def test_recusa_de_tarefa_exige_motivo(client, login_as, tarefa):
