@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from tempo import agora_brasilia
 
 db = SQLAlchemy()
 
@@ -30,7 +30,7 @@ class PasswordResetToken(db.Model):
     usado = db.Column(db.Boolean, default=False, nullable=False)
     criado_em = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
+        default=agora_brasilia,
         nullable=False
     )
 
@@ -123,7 +123,7 @@ class Notificacao(db.Model):
 
     data = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
+        default=agora_brasilia,
         nullable=False
     )
 
@@ -139,7 +139,7 @@ class HistoricoOP(db.Model):
     descricao = db.Column(db.String(255), nullable=False)
     data = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
+        default=agora_brasilia,
         nullable=False
     )
 

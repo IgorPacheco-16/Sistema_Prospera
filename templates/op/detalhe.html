@@ -27,10 +27,12 @@
     <div class="op-detail-header">
         <div>
             <h1>{{ op.nome }}</h1>
-            <p class="status-op">
-                Status: <b>{{ op.status }}</b> |
-                Prazo: {{ op.prazo_final.strftime('%d/%m/%Y') if op.prazo_final else "Não definido" }}
-            </p>
+            <div class="op-status-strip">
+                <span class="op-status-pill">{{ op.status }}</span>
+                <span class="op-deadline-pill">
+                    Prazo: {{ op.prazo_final.strftime('%d/%m/%Y') if op.prazo_final else "Não definido" }}
+                </span>
+            </div>
         </div>
 
         <div class="op-detail-actions">
@@ -49,14 +51,18 @@
 
             {% if tipo == "ATENDENTE" %}
             <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}">
-                <button class="btn-finalizar" type="submit">OP finalizada</button>
+                <button class="btn-finalizar"
+                        type="submit"
+                        onclick="return confirm('Tem certeza que deseja finalizar esta OP?')">
+                    OP finalizada
+                </button>
             </form>
             {% endif %}
         </div>
     </div>
 
-    {% for mensagem in get_flashed_messages() %}
-        <div class="alert alert-warning">
+    {% for categoria, mensagem in get_flashed_messages(with_categories=True) %}
+        <div class="alert {% if categoria == 'op_finalizada' %}alert-success op-finalizada-alert{% else %}alert-warning{% endif %}">
             {{ mensagem }}
         </div>
     {% endfor %}
@@ -253,7 +259,7 @@
                             </div>
                             <div class="op-history-meta">
                                 <span>{{ h.usuario }}</span>
-                                <span>{{ h.data.strftime('%d/%m/%Y %H:%M') }}</span>
+                                <span>{{ h.data|data_hora_brasilia }}</span>
                             </div>
                         </div>
                         {% else %}

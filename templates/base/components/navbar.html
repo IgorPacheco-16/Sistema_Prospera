@@ -57,7 +57,7 @@
                                     {{ n.mensagem }}
                                 {% endif %}
                                 <div class="notification-date">
-                                    {{ n.data.strftime('%d/%m/%Y %H:%M') }}
+                                    {{ n.data|data_hora_brasilia }}
                                 </div>
                             </div>
 

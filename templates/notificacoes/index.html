@@ -20,7 +20,7 @@
                     </div>
                     {% endif %}
                     <div class="text-muted small">
-                        {{ n.data.strftime('%d/%m/%Y %H:%M') }}
+                        {{ n.data|data_hora_brasilia }}
                     </div>
                 </div>
 

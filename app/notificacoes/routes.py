@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from database.models import db, Notificacao
+from tempo import formatar_data_hora_brasilia
 
 
 def create_notificacoes_blueprint(
@@ -70,7 +71,7 @@ def create_notificacoes_blueprint(
                     "setor_id": n.setor_id,
                     "tipo_evento": n.tipo_evento,
                     "lida": n.lida,
-                    "data": n.data.strftime("%d/%m/%Y %H:%M")
+                    "data": formatar_data_hora_brasilia(n.data)
                 }
                 for n in recentes
             ]

@@ -1,5 +1,6 @@
 from flask import Flask, session
 from database.models import db, Notificacao
+from tempo import formatar_data_hora_brasilia
 import importlib.util
 import os
 from pathlib import Path
@@ -130,6 +131,7 @@ def registrar_aliases_build_only(app):
 app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
+app.jinja_env.filters["data_hora_brasilia"] = formatar_data_hora_brasilia
 
 initialize_database(app)
 

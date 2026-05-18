@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from flask import Blueprint, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.models import db, PasswordResetToken, User
+from tempo import agora_brasilia
 
 
 def create_auth_blueprint(
@@ -76,7 +77,7 @@ def create_auth_blueprint(
                 token = PasswordResetToken(
                     user_id=user.id,
                     codigo_hash=generate_password_hash(codigo),
-                    expira_em=datetime.utcnow() + timedelta(minutes=10),
+                    expira_em=agora_brasilia() + timedelta(minutes=10),
                     usado=False
                 )
                 db.session.add(token)
@@ -131,7 +132,7 @@ def create_auth_blueprint(
                     erro="Codigo invalido ou expirado."
                 )
 
-            if token.expira_em < datetime.utcnow():
+            if token.expira_em < agora_brasilia():
                 token.usado = True
                 db.session.commit()
                 return render_template(

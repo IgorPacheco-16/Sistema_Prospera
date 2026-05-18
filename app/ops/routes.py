@@ -265,6 +265,7 @@ def create_ops_blueprint(
             "OP finalizada."
         )
         db.session.commit()
+        flash("OP Finalizada", "op_finalizada")
         return redirect(url_for("ver_op", id=op.id))
 
     return ops_bp

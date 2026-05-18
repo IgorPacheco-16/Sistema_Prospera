@@ -24,9 +24,34 @@
     box-shadow: 0 12px 30px rgba(0,0,0,0.15);
 }
 
+.resumo-card.active-filter {
+    transform: translateY(-3px) scale(1.02);
+    border-color: var(--bs-primary) !important;
+    box-shadow:
+        0 0 0 2px rgba(13, 110, 253, 0.28),
+        0 14px 32px rgba(13, 110, 253, 0.22);
+}
+
+.resumo-card.active-filter h6,
+.resumo-card.active-filter h3 {
+    color: var(--bs-primary);
+}
+
 /* Dark */
 html.dark-mode .resumo-card:hover {
     box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+}
+
+html.dark-mode .resumo-card.active-filter {
+    border-color: #8ab4ff !important;
+    box-shadow:
+        0 0 0 2px rgba(138, 180, 255, 0.38),
+        0 14px 32px rgba(0,0,0,0.65);
+}
+
+html.dark-mode .resumo-card.active-filter h6,
+html.dark-mode .resumo-card.active-filter h3 {
+    color: #8ab4ff;
 }
 
 /* Título */

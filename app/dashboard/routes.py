@@ -18,7 +18,29 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         busca = request.args.get("busca", "")
         status = request.args.get("status", "")
         atrasadas_filtro = request.args.get("atrasadas", "")
-        filtro_ativo = bool(busca or status or atrasadas_filtro)
+        filtro = request.args.get("filtro", "")
+
+        def op_atrasada(op):
+            return (
+                op.prazo_final
+                and op.prazo_final < hoje
+                and op.status != "FINALIZADA"
+            )
+
+        if status == "FINALIZADA":
+            filtro_dashboard = "finalizadas"
+        elif status == "EM ANDAMENTO":
+            filtro_dashboard = "em_andamento"
+        elif status == "ABERTA":
+            filtro_dashboard = "aberta"
+        elif atrasadas_filtro:
+            filtro_dashboard = "atrasadas"
+        elif filtro == "total":
+            filtro_dashboard = "total"
+        else:
+            filtro_dashboard = "em_andamento"
+
+        filtro_ativo = bool(busca or status or atrasadas_filtro or filtro)
 
         query = OP.query.filter(OP.status != "ARQUIVADA")
 
@@ -27,18 +49,30 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
 
         ops_base = query.all()
 
-        total = len(ops_base)
+        total = sum(
+            1 for op in ops_base
+            if op.status in ("EM ANDAMENTO", "FINALIZADA") or op_atrasada(op)
+        )
         atrasadas = sum(
             1 for op in ops_base
-            if op.prazo_final and op.prazo_final < hoje and op.status != "FINALIZADA"
+            if op_atrasada(op)
         )
         em_andamento = sum(1 for op in ops_base if op.status == "EM ANDAMENTO")
         finalizadas = sum(1 for op in ops_base if op.status == "FINALIZADA")
 
-        if status:
-            ops = [op for op in ops_base if op.status == status]
+        if filtro_dashboard == "total":
+            ops = [
+                op for op in ops_base
+                if op.status in ("EM ANDAMENTO", "FINALIZADA") or op_atrasada(op)
+            ]
+        elif filtro_dashboard == "atrasadas":
+            ops = [op for op in ops_base if op_atrasada(op)]
+        elif filtro_dashboard == "finalizadas":
+            ops = [op for op in ops_base if op.status == "FINALIZADA"]
+        elif filtro_dashboard == "aberta":
+            ops = [op for op in ops_base if op.status == "ABERTA"]
         else:
-            ops = [op for op in ops_base if op.status != "FINALIZADA"]
+            ops = [op for op in ops_base if op.status == "EM ANDAMENTO"]
 
         lista_ops = []
 
@@ -66,14 +100,6 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
                 "validadas": validadas
             })
 
-        if atrasadas_filtro:
-            lista_ops = [
-                item for item in lista_ops
-                if item["op"].prazo_final
-                and item["op"].prazo_final < hoje
-                and item["op"].status != "FINALIZADA"
-            ]
-
         lista_ops.sort(
             key=lambda x: (
                 not getattr(x["op"], "alta_prioridade", False),
@@ -95,7 +121,8 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             busca=busca,
             status=status,
             filtro_ativo=filtro_ativo,
-            atrasadas_filtro=bool(atrasadas_filtro)
+            atrasadas_filtro=bool(atrasadas_filtro),
+            filtro_dashboard=filtro_dashboard
         )
 
     return dashboard_bp

@@ -57,3 +57,12 @@ html.dark-mode .setor-card:has(input:checked) {
     background-color: #1a2a40;
     border-color: #4da3ff;
 }
+
+html.dark-mode .criar-op-page .form-text {
+    color: #c7d2e3;
+}
+
+html.dark-mode .criar-op-page input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.8);
+    opacity: 0.9;
+}

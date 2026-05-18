@@ -23,8 +23,8 @@
     <div class="row mb-4 text-center">
 
         <div class="col-md-3 mb-3">
-            <a href="{{ url_for('dashboard') }}" class="text-decoration-none">
-                <div class="card resumo-card h-100">
+            <a href="{{ url_for('dashboard', filtro='total', busca=busca) }}" class="text-decoration-none">
+                <div class="card resumo-card h-100 {% if filtro_dashboard == 'total' %}active-filter{% endif %}">
                     <div class="card-body">
                         <h6>Total</h6>
                         <h3>{{ total }}</h3>
@@ -34,8 +34,8 @@
         </div>
 
         <div class="col-md-3 mb-3">
-            <a href="{{ url_for('dashboard', atrasadas=1) }}" class="text-decoration-none">
-                <div class="card resumo-card h-100 border-danger">
+            <a href="{{ url_for('dashboard', atrasadas=1, busca=busca) }}" class="text-decoration-none">
+                <div class="card resumo-card h-100 border-danger {% if filtro_dashboard == 'atrasadas' %}active-filter{% endif %}">
                     <div class="card-body">
                         <h6>🔴 Atrasadas</h6>
                         <h3>{{ atrasadas }}</h3>
@@ -45,8 +45,8 @@
         </div>
 
         <div class="col-md-3 mb-3">
-            <a href="{{ url_for('dashboard', status='EM ANDAMENTO') }}" class="text-decoration-none">
-                <div class="card resumo-card h-100 border-warning">
+            <a href="{{ url_for('dashboard', status='EM ANDAMENTO', busca=busca) }}" class="text-decoration-none">
+                <div class="card resumo-card h-100 border-warning {% if filtro_dashboard == 'em_andamento' %}active-filter{% endif %}">
                     <div class="card-body">
                         <h6>🟡 Em andamento</h6>
                         <h3>{{ em_andamento }}</h3>
@@ -56,8 +56,8 @@
         </div>
 
         <div class="col-md-3 mb-3">
-            <a href="{{ url_for('dashboard', status='FINALIZADA') }}" class="text-decoration-none">
-                <div class="card resumo-card h-100 border-success">
+            <a href="{{ url_for('dashboard', status='FINALIZADA', busca=busca) }}" class="text-decoration-none">
+                <div class="card resumo-card h-100 border-success {% if filtro_dashboard == 'finalizadas' %}active-filter{% endif %}">
                     <div class="card-body">
                         <h6>🟢 Finalizadas</h6>
                         <h3>{{ finalizadas }}</h3>
@@ -96,6 +96,12 @@
           action="{{ url_for('dashboard') }}"
           class="row g-2 mb-4 justify-content-center dashboard-filters">
 
+        {% if filtro_dashboard == "total" %}
+            <input type="hidden" name="filtro" value="total">
+        {% elif filtro_dashboard == "atrasadas" %}
+            <input type="hidden" name="atrasadas" value="1">
+        {% endif %}
+
         <div class="col-md-4">
             <input type="text"
                    name="busca"
@@ -108,7 +114,7 @@
             <select name="status" class="form-select">
                 <option value="">Todos</option>
                 <option value="ABERTA" {{ 'selected' if status == 'ABERTA' else '' }}>ABERTA</option>
-                <option value="EM ANDAMENTO" {{ 'selected' if status == 'EM ANDAMENTO' else '' }}>EM ANDAMENTO</option>
+                <option value="EM ANDAMENTO" {{ 'selected' if status == 'EM ANDAMENTO' or filtro_dashboard == 'em_andamento' else '' }}>EM ANDAMENTO</option>
                 <option value="FINALIZADA" {{ 'selected' if status == 'FINALIZADA' else '' }}>FINALIZADA</option>
             </select>
         </div>

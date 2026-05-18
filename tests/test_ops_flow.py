@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from database.models import db, Notificacao, OP, OPSetor, Tarefa
 
 
@@ -7,6 +9,44 @@ def test_dashboard_carrega_logado(client, login_as):
     resposta = client.get("/dashboard")
 
     assert resposta.status_code == 200
+
+
+def test_calendario_mostra_apenas_tarefas_pendentes_de_ops_em_andamento(client, login_as, setores):
+    setor = setores["Acabamento"]
+    prazo = date.today() + timedelta(days=1)
+
+    cenarios = [
+        ("OP Em Andamento", "EM ANDAMENTO", False),
+        ("OP Finalizada", "FINALIZADA", False),
+        ("OP Arquivada", "ARQUIVADA", False),
+        ("OP Validada", "EM ANDAMENTO", True),
+    ]
+
+    for nome, status, validado in cenarios:
+        op = OP(nome=nome, status=status, atendente="atendente@teste.com")
+        db.session.add(op)
+        db.session.flush()
+        db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+        db.session.add(Tarefa(
+            op_id=op.id,
+            setor_id=setor.id,
+            nome=f"Tarefa {nome}",
+            prazo=prazo,
+            validado=validado,
+            liberada=True
+        ))
+
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/calendario")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Em Andamento" in html
+    assert "OP Finalizada" not in html
+    assert "OP Arquivada" not in html
+    assert "OP Validada" not in html
 
 
 def test_criacao_de_op(client, login_as, setores):
