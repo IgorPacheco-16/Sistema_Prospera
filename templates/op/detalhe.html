@@ -160,13 +160,15 @@
 
                                 <div class="task-status-area">
                                     {% if t.validado %}
-                                        <span class="sector-status-badge status-success">Finalizada</span>
+                                        <span class="sector-status-badge status-success">ENTREGUE</span>
                                     {% elif t.entregue %}
-                                        <span class="sector-status-badge status-warning">Aguardando validação</span>
+                                        <span class="sector-status-badge status-warning">EM VALIDAÇÃO</span>
+                                    {% elif t.status == "EM ANDAMENTO" %}
+                                        <span class="sector-status-badge status-warning">EM ANDAMENTO</span>
                                     {% elif t.prazo and t.prazo < today %}
-                                        <span class="sector-status-badge status-danger">Atrasada</span>
+                                        <span class="sector-status-badge status-danger">PENDENTE ATRASADA</span>
                                     {% else %}
-                                        <span class="sector-status-badge status-muted">Pendente</span>
+                                        <span class="sector-status-badge status-muted">PENDENTE</span>
                                     {% endif %}
                                 </div>
                             </div>
@@ -183,19 +185,46 @@
                                 </button>
                                 {% endif %}
 
-                                {% if tipo == "SETOR" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                {% if tipo == "SETOR" and t.status == "PENDENTE" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                <form method="POST" action="{{ url_for('iniciar_tarefa', id=t.id) }}">
+                                    <button class="btn btn-primary btn-sm"
+                                            type="submit"
+                                            onclick="return confirm('Iniciar esta tarefa agora?')">
+                                        Iniciar
+                                    </button>
+                                </form>
+                                {% endif %}
+
+                                {% if tipo == "SETOR" and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
                                 <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}">
-                                    <button class="btn btn-entregar btn-sm" type="submit">Entregar</button>
+                                    <button class="btn btn-entregar btn-sm"
+                                            type="submit"
+                                            onclick="return confirm('Enviar esta tarefa para validação?')">
+                                        Enviar para validação
+                                    </button>
                                 </form>
                                 {% endif %}
 
                                 {% if tipo in ["ATENDENTE", "ADMIN"] and t.entregue and not t.validado %}
                                 <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
-                                    <button class="btn btn-validar btn-sm" type="submit">Validar</button>
+                                    <button class="btn btn-validar btn-sm"
+                                            type="submit"
+                                            onclick="return confirm('Validar esta entrega?')">
+                                        Validar
+                                    </button>
                                 </form>
 
-                                <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}">
-                                    <button class="btn btn-outline-danger btn-sm" type="submit">Recusar</button>
+                                <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}" class="task-refusal-form">
+                                    <input type="text"
+                                           name="motivo_recusa"
+                                           class="form-control form-control-sm"
+                                           placeholder="Motivo da recusa"
+                                           required>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            type="submit"
+                                            onclick="return confirm('Recusar esta entrega e devolver para pendente?')">
+                                        Recusar
+                                    </button>
                                 </form>
                                 {% endif %}
                             </div>

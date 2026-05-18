@@ -9,7 +9,8 @@ def create_notificacoes_blueprint(
     is_setor,
     gerar_notificacoes_pendentes,
     query_notificacoes_usuario,
-    criar_notificacao
+    criar_notificacao,
+    categoria_notificacao
 ):
     notificacoes_bp = Blueprint("notificacoes", __name__)
 
@@ -70,6 +71,7 @@ def create_notificacoes_blueprint(
                     "tarefa_id": n.tarefa_id,
                     "setor_id": n.setor_id,
                     "tipo_evento": n.tipo_evento,
+                    "categoria": categoria_notificacao(n.tipo_evento),
                     "lida": n.lida,
                     "data": formatar_data_hora_brasilia(n.data)
                 }

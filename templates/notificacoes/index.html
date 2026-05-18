@@ -7,15 +7,15 @@
 
     <div class="list-group">
         {% for n in notificacoes %}
-            <div class="list-group-item d-flex justify-content-between gap-3 {% if not n.lida %}list-group-item-light{% endif %}">
+            <div class="list-group-item notification-history-item notif-{{ n.tipo_evento|categoria_notificacao }} d-flex justify-content-between gap-3 {% if not n.lida %}list-group-item-light{% endif %}">
                 <div>
                     {% if n.link %}
                     <a class="{% if not n.lida %}fw-semibold{% endif %}"
                        href="{{ n.link }}">
-                        {{ n.mensagem }}
+                        <span class="notification-message">{{ n.mensagem }}</span>
                     </a>
                     {% else %}
-                    <div class="{% if not n.lida %}fw-semibold{% endif %}">
+                    <div class="notification-message {% if not n.lida %}fw-semibold{% endif %}">
                         {{ n.mensagem }}
                     </div>
                     {% endif %}

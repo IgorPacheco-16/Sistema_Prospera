@@ -80,6 +80,7 @@ def test_criacao_de_tarefa_notifica_setor(client, login_as, op_com_setor):
     assert resposta.status_code == 302
     assert tarefa is not None
     assert tarefa.nome == "Imprimir material"
+    assert tarefa.status == "PENDENTE"
     assert Notificacao.query.filter_by(
         usuario="SETOR",
         op_id=op.id,
@@ -89,7 +90,29 @@ def test_criacao_de_tarefa_notifica_setor(client, login_as, op_com_setor):
     ).first()
 
 
+def test_setor_inicia_tarefa_pendente(client, login_as, tarefa):
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
+    assert tarefa.entregue is False
+    assert tarefa.validado is False
+    assert Notificacao.query.filter_by(
+        usuario="ATENDENTE",
+        tarefa_id=tarefa.id,
+        tipo_evento="tarefa_em_andamento"
+    ).first()
+
+
 def test_entrega_de_tarefa_notifica_atendente_e_pcp(client, login_as, tarefa):
+    tarefa.status = "EM ANDAMENTO"
+    db.session.commit()
     login_as("SETOR", setor_id=tarefa.setor_id)
 
     resposta = client.post(
@@ -99,6 +122,7 @@ def test_entrega_de_tarefa_notifica_atendente_e_pcp(client, login_as, tarefa):
 
     db.session.refresh(tarefa)
     assert resposta.status_code == 302
+    assert tarefa.status == "EM VALIDAÇÃO"
     assert tarefa.entregue is True
     assert tarefa.validado is False
     assert Notificacao.query.filter_by(
@@ -114,6 +138,7 @@ def test_entrega_de_tarefa_notifica_atendente_e_pcp(client, login_as, tarefa):
 
 
 def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
+    tarefa.status = "EM VALIDAÇÃO"
     tarefa.entregue = True
     db.session.commit()
     login_as("ATENDENTE")
@@ -125,6 +150,8 @@ def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
 
     db.session.refresh(tarefa)
     assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.entregue is True
     assert tarefa.validado is True
     assert Notificacao.query.filter_by(
         usuario="SETOR",
@@ -134,18 +161,21 @@ def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
 
 
 def test_recusa_de_tarefa_reabre_entrega_e_notifica_setor(client, login_as, tarefa):
+    tarefa.status = "EM VALIDAÇÃO"
     tarefa.entregue = True
-    tarefa.validado = True
+    tarefa.validado = False
     db.session.commit()
     login_as("ATENDENTE")
 
     resposta = client.post(
         f"/recusar_tarefa/{tarefa.id}",
+        data={"motivo_recusa": "Ajustar acabamento"},
         headers={"Referer": f"/op/{tarefa.op_id}"}
     )
 
     db.session.refresh(tarefa)
     assert resposta.status_code == 302
+    assert tarefa.status == "PENDENTE"
     assert tarefa.entregue is False
     assert tarefa.validado is False
     assert Notificacao.query.filter_by(
@@ -153,6 +183,86 @@ def test_recusa_de_tarefa_reabre_entrega_e_notifica_setor(client, login_as, tare
         tarefa_id=tarefa.id,
         tipo_evento="entrega_recusada"
     ).first()
+
+
+def test_recusa_de_tarefa_exige_motivo(client, login_as, tarefa):
+    tarefa.status = "EM VALIDAÇÃO"
+    tarefa.entregue = True
+    tarefa.validado = False
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/recusar_tarefa/{tarefa.id}",
+        data={"motivo_recusa": ""},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 400
+    assert tarefa.status == "EM VALIDAÇÃO"
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
+
+
+def test_fluxo_completo_status_tarefa(client, login_as, tarefa):
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
+    assert tarefa.entregue is False
+    assert tarefa.validado is False
+
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM VALIDAÇÃO"
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
+
+    login_as("ATENDENTE")
+    resposta = client.post(
+        f"/recusar_tarefa/{tarefa.id}",
+        data={"motivo_recusa": "Refazer acabamento"},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "PENDENTE"
+    assert tarefa.entregue is False
+    assert tarefa.validado is False
+
+    login_as("SETOR", setor_id=tarefa.setor_id)
+    client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM VALIDAÇÃO"
+
+    login_as("ATENDENTE")
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.entregue is True
+    assert tarefa.validado is True
 
 
 def test_api_notificacoes_lista_notificacoes_do_usuario(client, login_as, notificacao):

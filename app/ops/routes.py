@@ -11,6 +11,7 @@ def create_ops_blueprint(
     is_admin,
     is_atendente,
     criar_notificacao,
+    mensagem_op,
     link_op,
     registrar_historico
 ):
@@ -54,7 +55,7 @@ def create_ops_blueprint(
 
             criar_notificacao(
                 "PCP",
-                f"Nova OP criada: OP #{nova_op.id} - {nova_op.nome}",
+                mensagem_op("op_criada", nova_op),
                 link=link_op(nova_op.id),
                 op_id=nova_op.id,
                 tipo_evento="op_criada"

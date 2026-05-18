@@ -480,6 +480,7 @@ html.dark-mode .dropdown-menu .text-muted {
 .notification-item {
     align-items: flex-start;
     border-bottom: 1px solid var(--border-light);
+    border-left: 4px solid transparent;
     display: grid;
     gap: 10px;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -491,9 +492,32 @@ html.dark-mode .dropdown-menu .text-muted {
 }
 
 .notification-message {
+    display: block;
     font-size: 0.9rem;
     line-height: 1.25;
     overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.notification-history-item {
+    border-left-width: 5px;
+    border-left-style: solid;
+}
+
+.notif-urgente {
+    border-left-color: var(--danger);
+}
+
+.notif-pendente {
+    border-left-color: var(--warning);
+}
+
+.notif-sucesso {
+    border-left-color: var(--success);
+}
+
+.notif-info {
+    border-left-color: var(--primary);
 }
 
 .notification-date {
@@ -913,6 +937,16 @@ html.dark-mode .op-history-meta {
     margin: 0;
 }
 
+.task-refusal-form {
+    display: flex;
+    gap: 8px;
+    min-width: min(100%, 320px);
+}
+
+.task-refusal-form .form-control {
+    min-width: 160px;
+}
+
 .task-delete-form {
     margin-top: 8px;
 }
@@ -1038,6 +1072,10 @@ html.dark-mode .prazo.atrasado {
     .task-actions .btn,
     .task-actions form {
         width: 100%;
+    }
+
+    .task-refusal-form {
+        flex-direction: column;
     }
 
     .op-history-item {

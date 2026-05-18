@@ -98,6 +98,7 @@ class Tarefa(db.Model):
     nome = db.Column(db.String(200), nullable=False)
     prazo = db.Column(db.Date, nullable=True)
 
+    status = db.Column(db.String(30), nullable=False, default="PENDENTE")
     liberada = db.Column(db.Boolean, default=True)
     entregue = db.Column(db.Boolean, default=False)
     validado = db.Column(db.Boolean, default=False)

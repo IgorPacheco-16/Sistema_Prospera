@@ -83,6 +83,9 @@ link_tarefa = notificacoes_module.link_tarefa
 query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
 criar_notificacao = notificacoes_module.criar_notificacao
 gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
+mensagem_op = notificacoes_module.mensagem_op
+mensagem_tarefa = notificacoes_module.mensagem_tarefa
+categoria_notificacao = notificacoes_module.categoria_notificacao
 create_notificacoes_blueprint = notificacoes_routes_module.create_notificacoes_blueprint
 create_auth_blueprint = auth_routes_module.create_auth_blueprint
 create_usuarios_blueprint = usuarios_routes_module.create_usuarios_blueprint
@@ -115,6 +118,7 @@ BUILD_ONLY_ALIASES = [
     ("/excluir_op/<int:id>", "excluir_op"),
     ("/finalizar_op/<int:id>", "finalizar_op"),
     ("/criar_tarefa/<int:op_id>/<int:setor_id>", "criar_tarefa"),
+    ("/iniciar_tarefa/<int:id>", "iniciar_tarefa"),
     ("/entregar_tarefa/<int:id>", "entregar_tarefa"),
     ("/validar_tarefa/<int:id>", "validar_tarefa"),
     ("/recusar_tarefa/<int:id>", "recusar_tarefa"),
@@ -132,6 +136,7 @@ app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
 app.jinja_env.filters["data_hora_brasilia"] = formatar_data_hora_brasilia
+app.jinja_env.filters["categoria_notificacao"] = categoria_notificacao
 
 initialize_database(app)
 
@@ -155,7 +160,8 @@ notificacoes_bp = create_notificacoes_blueprint(
     is_setor=is_setor,
     gerar_notificacoes_pendentes=gerar_notificacoes_pendentes,
     query_notificacoes_usuario=query_notificacoes_usuario,
-    criar_notificacao=criar_notificacao
+    criar_notificacao=criar_notificacao,
+    categoria_notificacao=categoria_notificacao
 )
 app.register_blueprint(notificacoes_bp)
 
@@ -174,6 +180,7 @@ ops_bp = create_ops_blueprint(
     is_admin=is_admin,
     is_atendente=is_atendente,
     criar_notificacao=criar_notificacao,
+    mensagem_op=mensagem_op,
     link_op=link_op,
     registrar_historico=registrar_historico
 )
@@ -183,6 +190,7 @@ tarefas_bp = create_tarefas_blueprint(
     tipos_permitidos=tipos_permitidos,
     is_setor=is_setor,
     criar_notificacao=criar_notificacao,
+    mensagem_tarefa=mensagem_tarefa,
     link_tarefa=link_tarefa,
     registrar_historico=registrar_historico
 )

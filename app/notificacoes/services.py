@@ -26,6 +26,40 @@ def setores_da_op(op_id):
     return OPSetor.query.filter_by(op_id=op_id).all()
 
 
+def mensagem_op(evento, op):
+    titulos = {
+        "op_atrasada": "🚨 URGENTE • OP ATRASADA",
+        "op_criada": "🆕 NOVA OP",
+        "op_finalizada": "🎉 OP FINALIZADA",
+        "op_urgente": "⚠️ PRIORIDADE ALTA",
+    }
+    titulo = titulos.get(evento, "ℹ️ OP")
+    return f"{titulo}\nOP: {op.nome}"
+
+
+def mensagem_tarefa(evento, op, tarefa):
+    titulos = {
+        "tarefa_atrasada": "🚨 URGENTE • TAREFA ATRASADA",
+        "tarefa_em_andamento": "▶️ TAREFA EM ANDAMENTO",
+        "tarefa_aguardando_validacao": "⏳ VALIDAÇÃO PENDENTE",
+        "tarefa_criada": "🆕 NOVA TAREFA",
+        "entrega_validada": "✅ ENTREGA VALIDADA",
+        "entrega_recusada": "❌ ENTREGA RECUSADA",
+    }
+    titulo = titulos.get(evento, "ℹ️ TAREFA")
+    return f"{titulo}\nOP: {op.nome}\nTarefa: {tarefa.nome}"
+
+
+def categoria_notificacao(tipo_evento):
+    if tipo_evento in ("op_atrasada", "tarefa_atrasada", "op_urgente"):
+        return "urgente"
+    if tipo_evento == "tarefa_aguardando_validacao":
+        return "pendente"
+    if tipo_evento in ("entrega_validada", "op_finalizada"):
+        return "sucesso"
+    return "info"
+
+
 def criar_notificacao(
     usuario,
     mensagem,
@@ -107,7 +141,7 @@ def verificar_atrasos():
         if not op:
             continue
 
-        mensagem = f"Tarefa atrasada: {t.setor.nome} na OP #{op.id} - {op.nome}"
+        mensagem = mensagem_tarefa("tarefa_atrasada", op, t)
         link = link_tarefa(op.id, t.setor_id, t.id)
 
         for usuario in ["ATENDENTE", "PCP"]:
@@ -137,7 +171,7 @@ def verificar_atrasos():
     ).all()
 
     for op in ops_atrasadas:
-        mensagem = f"OP atrasada: OP #{op.id} - {op.nome}"
+        mensagem = mensagem_op("op_atrasada", op)
         notificar_op_para_gestao(op, "op_atrasada", mensagem)
         notificar_op_para_setores(op, "op_atrasada", mensagem)
 
@@ -148,7 +182,7 @@ def verificar_atrasos():
     ).all()
 
     for op in ops_urgentes:
-        mensagem = f"OP urgente: OP #{op.id} - {op.nome}"
+        mensagem = mensagem_op("op_urgente", op)
         notificar_op_para_gestao(op, "op_urgente", mensagem)
         notificar_op_para_setores(op, "op_urgente", mensagem)
 
@@ -166,7 +200,7 @@ def gerar_notificacoes_pendentes():
         if not op:
             continue
 
-        mensagem = f"Tarefa aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
+        mensagem = mensagem_tarefa("tarefa_aguardando_validacao", op, tarefa)
         link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
 
         for usuario in ["ATENDENTE", "PCP"]:

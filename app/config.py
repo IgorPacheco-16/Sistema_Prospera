@@ -69,11 +69,34 @@ def garantir_colunas_notificacao():
     adicionar_coluna_se_nao_existir("notificacoes", "tipo_evento", "VARCHAR(80)")
 
 
+def garantir_colunas_tarefa():
+    adicionar_coluna_se_nao_existir(
+        "tarefas",
+        "status",
+        "VARCHAR(30) NOT NULL DEFAULT 'PENDENTE'"
+    )
+    db.session.execute(text(
+        "UPDATE tarefas SET status = 'ENTREGUE' WHERE validado = 1"
+    ))
+    db.session.execute(text(
+        "UPDATE tarefas "
+        "SET status = 'EM VALIDAÇÃO' "
+        "WHERE validado = 0 AND entregue = 1"
+    ))
+    db.session.execute(text(
+        "UPDATE tarefas "
+        "SET status = 'PENDENTE' "
+        "WHERE status IS NULL OR status = ''"
+    ))
+    db.session.commit()
+
+
 def initialize_database(app):
     with app.app_context():
         db.create_all()
         garantir_coluna_alta_prioridade()
         garantir_colunas_notificacao()
+        garantir_colunas_tarefa()
 
         setores_nomes = [
             "Atendimento", "Criação", "Projeto", "Compras/Estoque", "PCP",

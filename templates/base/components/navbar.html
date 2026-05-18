@@ -47,15 +47,8 @@
 
                     <div class="notifications-list">
                         {% for n in notificacoes_recentes %}
-                        <div class="notification-item {% if not n.lida %}is-unread{% endif %}" data-notification-id="{{ n.id }}">
-                            <div class="notification-message">
-                                {% if n.link %}
-                                    <a href="{{ n.link }}">
-                                        {{ n.mensagem }}
-                                    </a>
-                                {% else %}
-                                    {{ n.mensagem }}
-                                {% endif %}
+                        <div class="notification-item notif-{{ n.tipo_evento|categoria_notificacao }} {% if not n.lida %}is-unread{% endif %}" data-notification-id="{{ n.id }}">
+                            <div class="notification-message">{% if n.link %}<a href="{{ n.link }}">{{ n.mensagem }}</a>{% else %}{{ n.mensagem }}{% endif %}
                                 <div class="notification-date">
                                     {{ n.data|data_hora_brasilia }}
                                 </div>

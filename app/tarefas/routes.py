@@ -5,10 +5,39 @@ from flask import Blueprint, redirect, request, session, url_for
 from database.models import db, OP, OPSetor, Tarefa
 
 
+STATUS_PENDENTE = "PENDENTE"
+STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
+STATUS_EM_VALIDACAO = "EM VALIDAÇÃO"
+STATUS_ENTREGUE = "ENTREGUE"
+
+
+def status_atual_tarefa(tarefa):
+    if tarefa.validado:
+        return STATUS_ENTREGUE
+    if tarefa.entregue:
+        return STATUS_EM_VALIDACAO
+    return tarefa.status or STATUS_PENDENTE
+
+
+def aplicar_status_tarefa(tarefa, status):
+    tarefa.status = status
+
+    if status == STATUS_ENTREGUE:
+        tarefa.entregue = True
+        tarefa.validado = True
+    elif status == STATUS_EM_VALIDACAO:
+        tarefa.entregue = True
+        tarefa.validado = False
+    else:
+        tarefa.entregue = False
+        tarefa.validado = False
+
+
 def create_tarefas_blueprint(
     tipos_permitidos,
     is_setor,
     criar_notificacao,
+    mensagem_tarefa,
     link_tarefa,
     registrar_historico
 ):
@@ -33,6 +62,7 @@ def create_tarefas_blueprint(
             setor_id=setor_id,
             nome=nome,
             prazo=datetime.strptime(prazo, "%Y-%m-%d").date() if prazo else None,
+            status=STATUS_PENDENTE,
             liberada=True
         )
 
@@ -43,7 +73,7 @@ def create_tarefas_blueprint(
         if op:
             criar_notificacao(
                 "SETOR",
-                f"Nova tarefa criada: {nova.nome} na OP #{op.id} - {op.nome}",
+                mensagem_tarefa("tarefa_criada", op, nova),
                 link=link_tarefa(op.id, setor_id, nova.id),
                 op_id=op.id,
                 tarefa_id=nova.id,
@@ -60,6 +90,42 @@ def create_tarefas_blueprint(
 
         return redirect(request.referrer)
 
+    @tarefas_bp.route("/iniciar_tarefa/<int:id>", methods=["POST"])
+    @tipos_permitidos("SETOR", "ADMIN")
+    def iniciar_tarefa(id):
+        tarefa = Tarefa.query.get_or_404(id)
+
+        if is_setor() and session.get("setor_id") != tarefa.setor_id:
+            return "Setor incorreto", 403
+
+        if status_atual_tarefa(tarefa) != STATUS_PENDENTE:
+            return "A tarefa precisa estar pendente para iniciar", 400
+
+        aplicar_status_tarefa(tarefa, STATUS_EM_ANDAMENTO)
+
+        op = db.session.get(OP, tarefa.op_id)
+        if op:
+            mensagem = mensagem_tarefa("tarefa_em_andamento", op, tarefa)
+            link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
+            for usuario in ["ATENDENTE", "PCP"]:
+                criar_notificacao(
+                    usuario,
+                    mensagem,
+                    link=link,
+                    op_id=op.id,
+                    tarefa_id=tarefa.id,
+                    setor_id=tarefa.setor_id,
+                    tipo_evento="tarefa_em_andamento"
+                )
+            registrar_historico(
+                op.id,
+                "Tarefa em andamento",
+                f"Tarefa '{tarefa.nome}' iniciada pelo setor {tarefa.setor.nome}."
+            )
+
+        db.session.commit()
+        return redirect(request.referrer)
+
     @tarefas_bp.route("/entregar_tarefa/<int:id>", methods=["POST"])
     @tipos_permitidos("SETOR", "ADMIN")
     def entregar_tarefa(id):
@@ -68,12 +134,14 @@ def create_tarefas_blueprint(
         if is_setor() and session.get("setor_id") != tarefa.setor_id:
             return "Setor incorreto", 403
 
-        tarefa.entregue = True
-        tarefa.validado = False
+        if status_atual_tarefa(tarefa) != STATUS_EM_ANDAMENTO:
+            return "A tarefa precisa estar em andamento para enviar à validação", 400
+
+        aplicar_status_tarefa(tarefa, STATUS_EM_VALIDACAO)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
-            mensagem = f"Tarefa entregue aguardando validação: {tarefa.setor.nome} na OP #{op.id} - {op.nome}"
+            mensagem = mensagem_tarefa("tarefa_aguardando_validacao", op, tarefa)
             link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
             criar_notificacao(
                 "ATENDENTE",
@@ -108,16 +176,16 @@ def create_tarefas_blueprint(
     def validar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        if not tarefa.entregue:
-            return "Precisa entregar antes"
+        if status_atual_tarefa(tarefa) != STATUS_EM_VALIDACAO:
+            return "A tarefa precisa estar em validação", 400
 
-        tarefa.validado = True
+        aplicar_status_tarefa(tarefa, STATUS_ENTREGUE)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
             criar_notificacao(
                 "SETOR",
-                f"Entrega validada: {tarefa.nome} na OP #{op.id} - {op.nome}",
+                mensagem_tarefa("entrega_validada", op, tarefa),
                 link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
                 op_id=op.id,
                 tarefa_id=tarefa.id,
@@ -187,14 +255,21 @@ def create_tarefas_blueprint(
     @tipos_permitidos("ATENDENTE", "ADMIN")
     def recusar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
-        tarefa.entregue = False
-        tarefa.validado = False
+        motivo_recusa = request.form.get("motivo_recusa", "").strip()
+
+        if not motivo_recusa:
+            return "Motivo da recusa obrigatório", 400
+
+        if status_atual_tarefa(tarefa) != STATUS_EM_VALIDACAO:
+            return "A tarefa precisa estar em validação para recusar", 400
+
+        aplicar_status_tarefa(tarefa, STATUS_PENDENTE)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
             criar_notificacao(
                 "SETOR",
-                f"Entrega recusada: {tarefa.nome} na OP #{op.id} - {op.nome}",
+                mensagem_tarefa("entrega_recusada", op, tarefa),
                 link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
                 op_id=op.id,
                 tarefa_id=tarefa.id,
@@ -204,7 +279,7 @@ def create_tarefas_blueprint(
             registrar_historico(
                 op.id,
                 "Entrega recusada",
-                f"Entrega da tarefa '{tarefa.nome}' recusada."
+                f"Entrega da tarefa '{tarefa.nome}' recusada. Motivo: {motivo_recusa}"
             )
 
         db.session.commit()
