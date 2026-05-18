@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, redirect, request, session, url_for
 
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import agora_brasilia
 
 
 STATUS_PENDENTE = "PENDENTE"
@@ -31,6 +32,11 @@ def aplicar_status_tarefa(tarefa, status):
     else:
         tarefa.entregue = False
         tarefa.validado = False
+
+
+def preencher_data_se_vazia(objeto, atributo, valor):
+    if getattr(objeto, atributo) is None:
+        setattr(objeto, atributo, valor)
 
 
 def create_tarefas_blueprint(
@@ -63,7 +69,8 @@ def create_tarefas_blueprint(
             nome=nome,
             prazo=datetime.strptime(prazo, "%Y-%m-%d").date() if prazo else None,
             status=STATUS_PENDENTE,
-            liberada=True
+            liberada=True,
+            criada_em=agora_brasilia()
         )
 
         db.session.add(nova)
@@ -101,7 +108,9 @@ def create_tarefas_blueprint(
         if status_atual_tarefa(tarefa) != STATUS_PENDENTE:
             return "A tarefa precisa estar pendente para iniciar", 400
 
+        agora = agora_brasilia()
         aplicar_status_tarefa(tarefa, STATUS_EM_ANDAMENTO)
+        preencher_data_se_vazia(tarefa, "iniciada_em", agora)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
@@ -137,7 +146,10 @@ def create_tarefas_blueprint(
         if status_atual_tarefa(tarefa) != STATUS_EM_ANDAMENTO:
             return "A tarefa precisa estar em andamento para enviar à validação", 400
 
+        agora = agora_brasilia()
         aplicar_status_tarefa(tarefa, STATUS_EM_VALIDACAO)
+        preencher_data_se_vazia(tarefa, "enviada_validacao_em", agora)
+        preencher_data_se_vazia(tarefa, "entregue_em", agora)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
@@ -179,7 +191,10 @@ def create_tarefas_blueprint(
         if status_atual_tarefa(tarefa) != STATUS_EM_VALIDACAO:
             return "A tarefa precisa estar em validação", 400
 
+        agora = agora_brasilia()
         aplicar_status_tarefa(tarefa, STATUS_ENTREGUE)
+        preencher_data_se_vazia(tarefa, "validada_em", agora)
+        preencher_data_se_vazia(tarefa, "concluida_em", agora)
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
@@ -263,7 +278,10 @@ def create_tarefas_blueprint(
         if status_atual_tarefa(tarefa) != STATUS_EM_VALIDACAO:
             return "A tarefa precisa estar em validação para recusar", 400
 
+        agora = agora_brasilia()
         aplicar_status_tarefa(tarefa, STATUS_PENDENTE)
+        preencher_data_se_vazia(tarefa, "recusada_em", agora)
+        tarefa.motivo_recusa = motivo_recusa
 
         op = db.session.get(OP, tarefa.op_id)
         if op:

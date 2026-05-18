@@ -1,0 +1,100 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+
+<div class="metricas-page">
+    <div class="metricas-header">
+        <div>
+            <p class="metricas-eyebrow">Operacional</p>
+            <h1>Métricas</h1>
+        </div>
+    </div>
+
+    <section class="metricas-section">
+        <h2>Tarefas por status</h2>
+        <div class="metricas-card-grid">
+            {% for status in status_tarefas %}
+            <div class="metricas-card">
+                <span>{{ status }}</span>
+                <strong>{{ totais_por_status[status] }}</strong>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="metricas-section">
+        <h2>Tempo médio por etapa</h2>
+        <div class="metricas-card-grid">
+            <div class="metricas-card">
+                <span>Até iniciar</span>
+                <strong>{{ formatar_dias(tempos.ate_iniciar) }}</strong>
+            </div>
+            <div class="metricas-card">
+                <span>Em produção</span>
+                <strong>{{ formatar_dias(tempos.em_producao) }}</strong>
+            </div>
+            <div class="metricas-card">
+                <span>Aguardando validação</span>
+                <strong>{{ formatar_dias(tempos.aguardando_validacao) }}</strong>
+            </div>
+            <div class="metricas-card">
+                <span>Total da tarefa</span>
+                <strong>{{ formatar_dias(tempos.total) }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="metricas-section">
+        <h2>OPs</h2>
+        <div class="metricas-card-grid">
+            <div class="metricas-card">
+                <span>Em andamento</span>
+                <strong>{{ ops.em_andamento }}</strong>
+            </div>
+            <div class="metricas-card">
+                <span>Finalizadas</span>
+                <strong>{{ ops.finalizadas }}</strong>
+            </div>
+            <div class="metricas-card">
+                <span>Tempo médio de conclusão</span>
+                <strong>{{ formatar_dias(ops.tempo_medio_conclusao) }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="metricas-section">
+        <h2>Gargalos por setor</h2>
+        <div class="metricas-table-wrap">
+            <table class="table metricas-table align-middle">
+                <thead>
+                    <tr>
+                        <th>Setor</th>
+                        <th>Pendentes</th>
+                        <th>Em andamento</th>
+                        <th>Em validação</th>
+                        <th>Média em produção</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in gargalos %}
+                    <tr>
+                        <td>{{ linha.setor.nome }}</td>
+                        <td>{{ linha.pendentes }}</td>
+                        <td>{{ linha.em_andamento }}</td>
+                        <td>{{ linha.em_validacao }}</td>
+                        <td>{{ formatar_dias(linha.media_producao) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-muted text-center">
+                            Nenhum setor cadastrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+{% endblock %}

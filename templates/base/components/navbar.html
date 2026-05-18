@@ -23,6 +23,12 @@
                 Kanban
             </a>
 
+            {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP"] %}
+            <a href="{{ url_for('metricas') }}" class="nav-link">
+                Métricas
+            </a>
+            {% endif %}
+
             <a href="{{ url_for('minha_conta') }}" class="nav-link">
                 Minha conta
             </a>

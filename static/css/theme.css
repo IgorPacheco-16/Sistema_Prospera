@@ -21,6 +21,119 @@
 }
 
 /* ========================================= */
+/* METRICAS */
+/* ========================================= */
+
+.metricas-page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 32px;
+}
+
+.metricas-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.metricas-header h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.metricas-eyebrow {
+    margin: 0 0 4px;
+    color: var(--muted-light);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.metricas-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.metricas-section h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.metricas-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.metricas-card {
+    min-height: 112px;
+    padding: 18px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--card-light);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.metricas-card span {
+    color: var(--muted-light);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.metricas-card strong {
+    color: var(--text-light);
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.metricas-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--card-light);
+}
+
+.metricas-table {
+    margin: 0;
+}
+
+.metricas-table th {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+}
+
+html.dark-mode .metricas-eyebrow,
+html.dark-mode .metricas-card span,
+html.dark-mode .metricas-table th {
+    color: var(--muted-dark);
+}
+
+html.dark-mode .metricas-card,
+html.dark-mode .metricas-table-wrap {
+    background: var(--card-dark);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .metricas-card strong,
+html.dark-mode .metricas-table {
+    color: var(--text-dark);
+}
+
+html.dark-mode .metricas-table td,
+html.dark-mode .metricas-table th {
+    border-color: var(--border-dark);
+}
+
+/* ========================================= */
 /* 🌍 BASE */
 /* ========================================= */
 

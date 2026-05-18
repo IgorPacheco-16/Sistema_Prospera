@@ -3,6 +3,7 @@ from datetime import date, datetime
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 
 from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa
+from tempo import agora_brasilia
 
 
 def create_ops_blueprint(
@@ -41,7 +42,8 @@ def create_ops_blueprint(
                 prazo_final=prazo_convertido,
                 status="EM ANDAMENTO",
                 atendente=session.get("usuario"),
-                alta_prioridade=alta_prioridade
+                alta_prioridade=alta_prioridade,
+                criada_em=agora_brasilia()
             )
 
             db.session.add(nova_op)
@@ -120,6 +122,8 @@ def create_ops_blueprint(
             abort(404)
 
         op.status = "ARQUIVADA"
+        if op.arquivada_em is None:
+            op.arquivada_em = agora_brasilia()
         registrar_historico(
             op.id,
             "OP arquivada",
@@ -260,6 +264,8 @@ def create_ops_blueprint(
             return "Ainda existem tarefas pendentes de validação"
 
         op.status = "FINALIZADA"
+        if op.finalizada_em is None:
+            op.finalizada_em = agora_brasilia()
         registrar_historico(
             op.id,
             "OP finalizada",

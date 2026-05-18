@@ -6,6 +6,7 @@ from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash
 
 from database.models import db, Setor, User
+from tempo import agora_brasilia
 
 
 def configure_app(app):
@@ -75,6 +76,19 @@ def garantir_colunas_tarefa():
         "status",
         "VARCHAR(30) NOT NULL DEFAULT 'PENDENTE'"
     )
+    adicionar_coluna_se_nao_existir("tarefas", "criada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "iniciada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "enviada_validacao_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "validada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "recusada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "entregue_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "concluida_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "motivo_recusa", "VARCHAR(255)")
+    agora = agora_brasilia()
+    db.session.execute(
+        text("UPDATE tarefas SET criada_em = :agora WHERE criada_em IS NULL"),
+        {"agora": agora}
+    )
     db.session.execute(text(
         "UPDATE tarefas SET status = 'ENTREGUE' WHERE validado = 1"
     ))
@@ -91,10 +105,23 @@ def garantir_colunas_tarefa():
     db.session.commit()
 
 
+def garantir_colunas_op_metricas():
+    adicionar_coluna_se_nao_existir("ops", "criada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("ops", "finalizada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("ops", "arquivada_em", "DATETIME")
+    agora = agora_brasilia()
+    db.session.execute(
+        text("UPDATE ops SET criada_em = :agora WHERE criada_em IS NULL"),
+        {"agora": agora}
+    )
+    db.session.commit()
+
+
 def initialize_database(app):
     with app.app_context():
         db.create_all()
         garantir_coluna_alta_prioridade()
+        garantir_colunas_op_metricas()
         garantir_colunas_notificacao()
         garantir_colunas_tarefa()
 
