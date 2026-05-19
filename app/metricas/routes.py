@@ -345,6 +345,150 @@ def ranking_ops_abertas(ops, agora):
     return linhas
 
 
+def op_nao_arquivada(op):
+    return bool(op and op.status != "ARQUIVADA" and not op.arquivada_em)
+
+
+def tarefas_ops_nao_arquivadas(tarefas):
+    return [
+        tarefa
+        for tarefa in tarefas
+        if op_nao_arquivada(tarefa.op)
+    ]
+
+
+def fim_tarefa(tarefa):
+    return tarefa.concluida_em or tarefa.validada_em
+
+
+def inicio_tarefa(tarefa, usar_criacao_como_fallback=False):
+    if tarefa.iniciada_em:
+        return tarefa.iniciada_em
+    if usar_criacao_como_fallback:
+        return tarefa.criada_em
+    return None
+
+
+def tempo_conclusao_tarefa(tarefa, usar_criacao_como_fallback=False):
+    return diferenca_dias(
+        inicio_tarefa(tarefa, usar_criacao_como_fallback),
+        fim_tarefa(tarefa),
+    )
+
+
+def tarefa_concluida(tarefa):
+    return bool(
+        fim_tarefa(tarefa)
+        or tarefa.validado
+        or tarefa.status == STATUS_ENTREGUE
+    )
+
+
+def tarefa_recusada(tarefa):
+    return bool(tarefa.recusada_em or tarefa.motivo_recusa)
+
+
+def ranking_setores_tempo_conclusao(
+    setores,
+    tarefas,
+    mais_rapidos=False,
+    usar_criacao_como_fallback=True,
+):
+    linhas = []
+
+    for setor in setores:
+        tempos = [
+            tempo
+            for tempo in (
+                tempo_conclusao_tarefa(
+                    tarefa,
+                    usar_criacao_como_fallback=usar_criacao_como_fallback,
+                )
+                for tarefa in tarefas
+                if tarefa.setor_id == setor.id
+            )
+            if tempo is not None
+        ]
+
+        if not tempos:
+            continue
+
+        linhas.append({
+            "setor": setor,
+            "media": media_dias(tempos),
+            "quantidade": len(tempos),
+            "maior_atraso": max(tempos),
+        })
+
+    linhas.sort(
+        key=lambda linha: (
+            linha["media"] if mais_rapidos else -linha["media"],
+            linha["setor"].nome,
+        )
+    )
+    return linhas
+
+
+def ranking_setores_recusadas(setores, tarefas):
+    linhas = []
+
+    for setor in setores:
+        total = sum(
+            1
+            for tarefa in tarefas
+            if tarefa.setor_id == setor.id and tarefa_recusada(tarefa)
+        )
+        if total:
+            linhas.append({
+                "setor": setor,
+                "total": total,
+            })
+
+    linhas.sort(key=lambda linha: (-linha["total"], linha["setor"].nome))
+    return linhas
+
+
+def ranking_setores_concluidas(setores, tarefas):
+    linhas = []
+
+    for setor in setores:
+        total = sum(
+            1
+            for tarefa in tarefas
+            if tarefa.setor_id == setor.id and tarefa_concluida(tarefa)
+        )
+        if total:
+            linhas.append({
+                "setor": setor,
+                "total": total,
+            })
+
+    linhas.sort(key=lambda linha: (-linha["total"], linha["setor"].nome))
+    return linhas
+
+
+def ranking_tarefas_demoradas(tarefas):
+    linhas = []
+
+    for tarefa in tarefas:
+        tempo = tempo_conclusao_tarefa(tarefa, usar_criacao_como_fallback=True)
+        if tempo is None:
+            continue
+        linhas.append({
+            "tarefa": tarefa,
+            "tempo": tempo,
+        })
+
+    linhas.sort(
+        key=lambda linha: (
+            -linha["tempo"],
+            linha["tarefa"].op.nome if linha["tarefa"].op else "",
+            linha["tarefa"].nome,
+        )
+    )
+    return linhas
+
+
 def filtros_restringem_tarefas(filtros):
     return bool(
         filtros["setores"]
@@ -470,6 +614,7 @@ def create_metricas_blueprint(tipos_permitidos):
 
         tarefas_metricas = metricas_tarefas(tarefas)
         gargalos = gargalos_por_setor(setores, tarefas)
+        tarefas_rankings = tarefas_ops_nao_arquivadas(tarefas)
         tarefas_opcoes = tarefas_para_analise(tarefas)
         tarefa_selecionada = next(
             (tarefa for tarefa in tarefas_opcoes if tarefa.id == tarefa_id),
@@ -490,6 +635,19 @@ def create_metricas_blueprint(tipos_permitidos):
             ranking_pendentes=ranking_setores_pendentes(gargalos),
             ranking_producao=ranking_setores_producao(gargalos),
             ranking_ops=ranking_ops_abertas(ops_filtradas, agora),
+            ranking_setores_rapidos=ranking_setores_tempo_conclusao(
+                setores,
+                tarefas_rankings,
+                mais_rapidos=True,
+                usar_criacao_como_fallback=False,
+            ),
+            ranking_setores_gargalo=ranking_setores_tempo_conclusao(
+                setores,
+                tarefas_rankings,
+            ),
+            ranking_setores_recusadas=ranking_setores_recusadas(setores, tarefas_rankings),
+            ranking_setores_concluidas=ranking_setores_concluidas(setores, tarefas_rankings),
+            ranking_tarefas_demoradas=ranking_tarefas_demoradas(tarefas_rankings),
             ops=metricas_ops(ops_filtradas),
             graficos={
                 "status": grafico_status(tarefas_metricas["totais_por_status"]),

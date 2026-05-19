@@ -413,7 +413,143 @@
 
     <section class="metricas-section">
         <h2>Rankings operacionais</h2>
-        <div class="metricas-ranking-grid">
+        <div class="metricas-panel metricas-ranking-carousel" data-metricas-ranking-carousel>
+            <div class="metricas-ranking-head">
+                <div>
+                    <h3 data-metricas-ranking-title>Setores que mais seguram OPs</h3>
+                    <p data-metricas-ranking-description>Maior tempo medio para concluir tarefas, usando inicio ou criacao ate conclusao/validacao.</p>
+                </div>
+                <div class="metricas-ranking-controls" aria-label="Alternar rankings">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-metricas-ranking-prev aria-label="Ranking anterior">&larr;</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-metricas-ranking-next aria-label="Proximo ranking">&rarr;</button>
+                </div>
+            </div>
+
+            <div class="metricas-ranking-tabs" role="tablist" aria-label="Rankings operacionais">
+                <button type="button" class="active" data-metricas-ranking-tab="gargalo">Gargalos</button>
+                <button type="button" data-metricas-ranking-tab="rapidos">Mais rapidos</button>
+                <button type="button" data-metricas-ranking-tab="recusadas">Recusas</button>
+                <button type="button" data-metricas-ranking-tab="concluidas">Concluidas</button>
+                <button type="button" data-metricas-ranking-tab="ops">OPs abertas</button>
+                <button type="button" data-metricas-ranking-tab="tarefas">Tarefas lentas</button>
+                <button type="button" data-metricas-ranking-tab="pendentes">Pendentes</button>
+                <button type="button" data-metricas-ranking-tab="producao">Em producao</button>
+            </div>
+
+            <div class="metricas-ranking-panel active" data-metricas-ranking-panel="gargalo" data-title="Setores que mais seguram OPs" data-description="Maior tempo medio para concluir tarefas, usando inicio ou criacao ate conclusao/validacao.">
+                <ol class="metricas-ranking-list metricas-ranking-list-detailed">
+                    {% for linha in ranking_setores_gargalo[:8] %}
+                    <li>
+                        <span>
+                            <strong class="metricas-ranking-name">{{ linha.setor.nome }}</strong>
+                            <small>{{ linha.quantidade }} tarefas consideradas | maior atraso: {{ formatar_dias(linha.maior_atraso) }}</small>
+                        </span>
+                        <strong>{{ formatar_dias(linha.media) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem datas suficientes para medir gargalos.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="rapidos" data-title="Setores que entregam mais rapido" data-description="Menor tempo medio entre inicio e conclusao/validacao, ignorando tarefas sem essas datas.">
+                <ol class="metricas-ranking-list metricas-ranking-list-detailed">
+                    {% for linha in ranking_setores_rapidos[:8] %}
+                    <li>
+                        <span>
+                            <strong class="metricas-ranking-name">{{ linha.setor.nome }}</strong>
+                            <small>{{ linha.quantidade }} tarefas consideradas | maior atraso: {{ formatar_dias(linha.maior_atraso) }}</small>
+                        </span>
+                        <strong>{{ formatar_dias(linha.media) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem datas suficientes para calcular velocidade.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="recusadas" data-title="Setores com mais tarefas recusadas" data-description="Conta tarefas com recusada_em ou motivo de recusa preenchido.">
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_setores_recusadas[:8] %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ linha.total }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Nenhuma tarefa recusada nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="concluidas" data-title="Setores com mais tarefas concluidas" data-description="Conta tarefas concluidas, validadas ou marcadas como entregues.">
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_setores_concluidas[:8] %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ linha.total }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Nenhuma tarefa concluida nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="ops" data-title="OPs abertas ha mais tempo" data-description="Mostra OPs em aberto ordenadas pelo tempo desde a criacao.">
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_ops[:8] %}
+                    <li>
+                        <span>{{ linha.op.nome }}</span>
+                        <strong>{{ formatar_dias(linha.tempo_aberta) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Nenhuma OP aberta nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="tarefas" data-title="Tarefas que mais demoraram" data-description="Usa inicio ou criacao ate conclusao/validacao, ignorando tarefas sem datas suficientes.">
+                <ol class="metricas-ranking-list metricas-ranking-list-detailed">
+                    {% for linha in ranking_tarefas_demoradas[:8] %}
+                    <li>
+                        <span>
+                            <strong class="metricas-ranking-name">{{ linha.tarefa.nome }}</strong>
+                            <small>{{ linha.tarefa.op.nome if linha.tarefa.op else 'OP sem nome' }} | {{ linha.tarefa.setor.nome if linha.tarefa.setor else 'Sem setor' }}</small>
+                        </span>
+                        <strong>{{ formatar_dias(linha.tempo) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem tarefas com datas suficientes.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="pendentes" data-title="Setores com mais tarefas pendentes" data-description="Ranking ja existente, mantido para acompanhar volume parado.">
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_pendentes[:8] %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ linha.pendentes }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem pendencias nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-ranking-panel" data-metricas-ranking-panel="producao" data-title="Maior tempo medio em producao" data-description="Ranking ja existente com tempo medio entre inicio e envio para validacao.">
+                <ol class="metricas-ranking-list">
+                    {% for linha in ranking_producao[:8] %}
+                    <li>
+                        <span>{{ linha.setor.nome }}</span>
+                        <strong>{{ formatar_dias(linha.media_producao) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem timestamps suficientes.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+        <div class="metricas-ranking-grid metricas-ranking-legacy">
             <div class="metricas-panel">
                 <h3>Setores com mais tarefas pendentes</h3>
                 <ol class="metricas-ranking-list">
@@ -501,64 +637,96 @@
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const graficos = {{ graficos|tojson }};
-    const chartTextColor = document.documentElement.classList.contains("dark-mode") ? "#e9ecef" : "#212529";
-    const chartGridColor = document.documentElement.classList.contains("dark-mode") ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)";
     const chartColors = ["#0d6efd", "#20c997", "#ffc107", "#6f42c1", "#dc3545", "#198754"];
+    const chartDefinitions = [];
+    const chartInstances = {};
 
-    function renderChart(canvasId, type, data, label, indexAxis) {
-        const canvas = document.getElementById(canvasId);
-        if (!canvas || !window.Chart || !data || !data.data || !data.data.length) {
+    function readCssVar(name, fallback) {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return value || fallback;
+    }
+
+    function getChartTheme() {
+        const html = document.documentElement;
+        const isDark = html.classList.contains("dark-mode");
+
+        return {
+            textColor: isDark ? readCssVar("--text-dark", "#e4e4e4") : readCssVar("--text-light", "#212529"),
+            gridColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)",
+            tooltipBgColor: isDark ? readCssVar("--card-dark", "#1b1f27") : "#212529",
+            tooltipBorderColor: isDark ? readCssVar("--border-dark", "#343a46") : readCssVar("--border-light", "#d9dee7"),
+        };
+    }
+
+    function createChart(definition) {
+        const canvas = document.getElementById(definition.canvasId);
+        if (!canvas || !window.Chart) {
             return;
         }
 
-        const isDoughnut = type === "doughnut";
+        if (chartInstances[definition.canvasId]) {
+            chartInstances[definition.canvasId].destroy();
+        }
+
+        const theme = getChartTheme();
+        const isDoughnut = definition.type === "doughnut";
         const dataset = {
-            label: label,
-            data: data.data,
+            label: definition.label,
+            data: definition.data.data,
             backgroundColor: isDoughnut ? chartColors : chartColors[0],
             borderColor: isDoughnut ? "#ffffff" : chartColors[0],
             borderWidth: isDoughnut ? 2 : 1,
             borderRadius: isDoughnut ? 0 : 6,
         };
 
-        new Chart(canvas, {
-            type: type,
+        chartInstances[definition.canvasId] = new Chart(canvas, {
+            type: definition.type,
             data: {
-                labels: data.labels,
+                labels: definition.data.labels,
                 datasets: [dataset],
             },
             options: {
+                color: theme.textColor,
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
-                indexAxis: indexAxis || "x",
+                indexAxis: definition.indexAxis || "x",
                 plugins: {
                     legend: {
                         display: isDoughnut,
                         labels: {
-                            color: chartTextColor,
+                            color: theme.textColor,
                             boxWidth: 12,
                         },
+                    },
+                    tooltip: {
+                        titleColor: "#ffffff",
+                        bodyColor: "#ffffff",
+                        footerColor: "#ffffff",
+                        backgroundColor: theme.tooltipBgColor,
+                        borderColor: theme.tooltipBorderColor,
+                        borderWidth: 1,
                     },
                 },
                 scales: isDoughnut ? {} : {
                     x: {
                         beginAtZero: true,
                         ticks: {
-                            color: chartTextColor,
+                            color: theme.textColor,
                             precision: 0,
                         },
                         grid: {
-                            color: chartGridColor,
+                            color: theme.gridColor,
                         },
                     },
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            color: chartTextColor,
+                            color: theme.textColor,
                             precision: 0,
                         },
                         grid: {
-                            color: chartGridColor,
+                            color: theme.gridColor,
                         },
                     },
                 },
@@ -566,9 +734,43 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    function renderChart(canvasId, type, data, label, indexAxis) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !window.Chart || !data || !data.data || !data.data.length) {
+            return;
+        }
+
+        const definition = {
+            canvasId: canvasId,
+            type: type,
+            data: data,
+            label: label,
+            indexAxis: indexAxis,
+        };
+
+        chartDefinitions.push(definition);
+        createChart(definition);
+    }
+
+    function refreshChartsTheme() {
+        chartDefinitions.forEach(createChart);
+    }
+
     renderChart("metricasStatusChart", "doughnut", graficos.status, "Tarefas");
     renderChart("metricasSetoresChart", "bar", graficos.setores, "Tarefas", "y");
     renderChart("metricasTemposChart", "bar", graficos.tempos, "Dias");
+
+    const themeObserver = new MutationObserver(function(mutations) {
+        const themeChanged = mutations.some(function(mutation) {
+            return mutation.attributeName === "class";
+        });
+
+        if (themeChanged) {
+            refreshChartsTheme();
+        }
+    });
+
+    themeObserver.observe(document.documentElement, { attributes: true });
 
     const tabButtons = document.querySelectorAll("[data-metricas-filter-tab]");
     const panels = document.querySelectorAll("[data-metricas-filter-panel]");
@@ -605,6 +807,70 @@ document.addEventListener("DOMContentLoaded", function() {
                 item.hidden = !item.textContent.toLowerCase().includes(term);
             });
         });
+    });
+
+    document.querySelectorAll("[data-metricas-ranking-carousel]").forEach(function(carousel) {
+        const title = carousel.querySelector("[data-metricas-ranking-title]");
+        const description = carousel.querySelector("[data-metricas-ranking-description]");
+        const tabs = Array.from(carousel.querySelectorAll("[data-metricas-ranking-tab]"));
+        const rankingPanels = Array.from(carousel.querySelectorAll("[data-metricas-ranking-panel]"));
+        const previousButton = carousel.querySelector("[data-metricas-ranking-prev]");
+        const nextButton = carousel.querySelector("[data-metricas-ranking-next]");
+        let activeIndex = Math.max(0, rankingPanels.findIndex(function(panel) {
+            return panel.classList.contains("active");
+        }));
+
+        function activateRanking(index) {
+            if (!rankingPanels.length) {
+                return;
+            }
+
+            activeIndex = (index + rankingPanels.length) % rankingPanels.length;
+            const activePanel = rankingPanels[activeIndex];
+            const activeName = activePanel.dataset.metricasRankingPanel;
+
+            rankingPanels.forEach(function(panel) {
+                const active = panel === activePanel;
+                panel.classList.toggle("active", active);
+                panel.hidden = !active;
+            });
+
+            tabs.forEach(function(tab) {
+                const active = tab.dataset.metricasRankingTab === activeName;
+                tab.classList.toggle("active", active);
+                tab.setAttribute("aria-selected", active ? "true" : "false");
+            });
+
+            if (title) {
+                title.textContent = activePanel.dataset.title || "";
+            }
+            if (description) {
+                description.textContent = activePanel.dataset.description || "";
+            }
+        }
+
+        tabs.forEach(function(tab) {
+            tab.addEventListener("click", function() {
+                const panelIndex = rankingPanels.findIndex(function(panel) {
+                    return panel.dataset.metricasRankingPanel === tab.dataset.metricasRankingTab;
+                });
+                activateRanking(panelIndex);
+            });
+        });
+
+        if (previousButton) {
+            previousButton.addEventListener("click", function() {
+                activateRanking(activeIndex - 1);
+            });
+        }
+
+        if (nextButton) {
+            nextButton.addEventListener("click", function() {
+                activateRanking(activeIndex + 1);
+            });
+        }
+
+        activateRanking(activeIndex);
     });
 });
 </script>

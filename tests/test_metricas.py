@@ -134,6 +134,81 @@ def test_metricas_renderiza_contagens_tempos_e_gargalos(client, login_as, setore
     assert "3.0 dias" in html
 
 
+def test_metricas_rankings_operacionais_ignoram_ops_arquivadas_e_datas_incompletas(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+    agora = datetime(2026, 5, 18, 9, 0)
+
+    op_ativa = OP(
+        nome="OP Ranking Ativa",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        criada_em=agora - timedelta(days=10),
+    )
+    op_arquivada = OP(
+        nome="OP Ranking Arquivada",
+        status="ARQUIVADA",
+        atendente="atendente@teste.com",
+        criada_em=agora - timedelta(days=10),
+        arquivada_em=agora - timedelta(days=1),
+    )
+    db.session.add_all([op_ativa, op_arquivada])
+    db.session.flush()
+
+    criar_tarefa_metricas(
+        op_ativa,
+        acabamento,
+        "Tarefa lenta ranking",
+        "ENTREGUE",
+        agora - timedelta(days=8),
+        iniciada_em=agora - timedelta(days=7),
+        concluida_em=agora - timedelta(days=2),
+        validado=True,
+    )
+    criar_tarefa_metricas(
+        op_ativa,
+        acabamento,
+        "Tarefa recusada ranking",
+        "PENDENTE",
+        agora - timedelta(days=4),
+        recusada_em=agora - timedelta(days=3),
+        motivo_recusa="Ajustar arquivo",
+    )
+    criar_tarefa_metricas(
+        op_ativa,
+        pcp,
+        "Tarefa sem datas ranking",
+        "ENTREGUE",
+        agora - timedelta(days=3),
+    )
+    criar_tarefa_metricas(
+        op_arquivada,
+        pcp,
+        "Tarefa arquivada ranking",
+        "ENTREGUE",
+        agora - timedelta(days=9),
+        iniciada_em=agora - timedelta(days=8),
+        concluida_em=agora - timedelta(days=1),
+        validado=True,
+    )
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/metricas")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Setores que mais seguram OPs" in html
+    assert "Setores que entregam mais rapido" in html
+    assert "Setores com mais tarefas recusadas" in html
+    assert "Tarefa lenta ranking" in html
+
+    inicio_ranking_tarefas = html.index('data-metricas-ranking-panel="tarefas"')
+    fim_ranking_tarefas = html.index('data-metricas-ranking-panel="pendentes"')
+    ranking_tarefas_html = html[inicio_ranking_tarefas:fim_ranking_tarefas]
+    assert "Tarefa arquivada ranking" not in ranking_tarefas_html
+
+
 def test_metricas_combina_filtros_de_setor_op_status_tipo_e_periodo(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]

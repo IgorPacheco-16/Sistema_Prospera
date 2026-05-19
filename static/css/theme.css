@@ -201,6 +201,10 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.metricas-ranking-legacy {
+    display: none;
+}
+
 .metricas-panel {
     background: var(--card-light);
     border: 1px solid var(--border-light);
@@ -418,6 +422,89 @@
     text-align: center;
 }
 
+.metricas-ranking-carousel {
+    gap: 14px;
+}
+
+.metricas-ranking-head {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.metricas-ranking-head p {
+    color: var(--muted-light);
+    font-size: 0.9rem;
+    margin: 4px 0 0;
+}
+
+.metricas-ranking-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.metricas-ranking-controls .btn {
+    align-items: center;
+    display: inline-flex;
+    font-weight: 800;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    width: 38px;
+}
+
+.metricas-ranking-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.metricas-ranking-tabs button {
+    background-color: rgba(13, 110, 253, 0.05);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--muted-light);
+    flex: 0 0 auto;
+    font-size: 0.84rem;
+    font-weight: 800;
+    min-height: 34px;
+    padding: 7px 11px;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.metricas-ranking-tabs button:hover,
+.metricas-ranking-tabs button.active {
+    background-color: rgba(13, 110, 253, 0.12);
+    border-color: rgba(13, 110, 253, 0.38);
+    color: var(--primary);
+}
+
+.metricas-ranking-panel {
+    display: none;
+}
+
+.metricas-ranking-panel.active {
+    display: block;
+}
+
+.metricas-ranking-list-detailed li > span {
+    display: grid;
+    gap: 3px;
+}
+
+.metricas-ranking-name {
+    color: var(--text-light);
+    font-size: 0.98rem;
+}
+
+.metricas-ranking-list small {
+    color: var(--muted-light);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
 html.dark-mode .metricas-eyebrow,
 html.dark-mode .metricas-subtitle,
 html.dark-mode .metricas-filter-summary span,
@@ -431,7 +518,10 @@ html.dark-mode .metricas-empty-chart,
 html.dark-mode .metricas-form-hint,
 html.dark-mode .metricas-card span,
 html.dark-mode .metricas-table th,
-html.dark-mode .metricas-ranking-list .metricas-empty {
+html.dark-mode .metricas-ranking-list .metricas-empty,
+html.dark-mode .metricas-ranking-head p,
+html.dark-mode .metricas-ranking-tabs button,
+html.dark-mode .metricas-ranking-list small {
     color: var(--muted-dark);
 }
 
@@ -498,6 +588,22 @@ html.dark-mode .metricas-ranking-list li {
 }
 
 html.dark-mode .metricas-ranking-list strong {
+    color: #9ec5fe;
+}
+
+html.dark-mode .metricas-ranking-name {
+    color: var(--text-dark);
+}
+
+html.dark-mode .metricas-ranking-tabs button {
+    background-color: rgba(255,255,255,0.04);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .metricas-ranking-tabs button:hover,
+html.dark-mode .metricas-ranking-tabs button.active {
+    background-color: rgba(90, 160, 255, 0.16);
+    border-color: rgba(90, 160, 255, 0.45);
     color: #9ec5fe;
 }
 
