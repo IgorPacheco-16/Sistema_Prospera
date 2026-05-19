@@ -11,7 +11,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=True)
     email = db.Column(db.String(100), unique=True)
-    senha = db.Column(db.String(100), nullable=True)
+    senha = db.Column(db.String(255), nullable=True)
     tipo = db.Column(db.String(20))
 
     setor_id = db.Column(db.Integer, db.ForeignKey('setor.id'))
