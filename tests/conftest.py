@@ -89,6 +89,12 @@ def seed_base_data():
             ativo=True
         ),
         User(
+            email="espectador@teste.com",
+            senha=generate_password_hash("123"),
+            tipo="ESPECTADOR",
+            ativo=True
+        ),
+        User(
             email="novo@teste.com",
             senha=None,
             tipo="ATENDENTE",
@@ -114,6 +120,7 @@ def login_as(client):
             "ATENDENTE": "atendente@teste.com",
             "PCP": "pcp@teste.com",
             "SETOR": "setor@teste.com",
+            "ESPECTADOR": "espectador@teste.com",
         }
 
         with client.session_transaction() as sess:

@@ -11,7 +11,7 @@
                 Dashboard
             </a>
 
-            {% if session.get("tipo") != "SETOR" %}
+            {% if session.get("tipo") not in ["SETOR", "ESPECTADOR"] %}
             <a href="{{ url_for('arquivadas') }}" class="nav-link">
                 Arquivadas
             </a>
@@ -24,6 +24,12 @@
             <a href="{{ url_for('kanban') }}" class="nav-link">
                 Kanban
             </a>
+
+            {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP", "ESPECTADOR"] %}
+            <a href="{{ url_for('slides') }}" class="nav-link">
+                Slides
+            </a>
+            {% endif %}
 
             {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP"] %}
             <a href="{{ url_for('metricas') }}" class="nav-link">

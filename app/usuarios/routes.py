@@ -6,7 +6,7 @@ from database.models import db, Setor, User
 
 def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email):
     usuarios_bp = Blueprint("usuarios", __name__)
-    tipos = ["ADMIN", "ATENDENTE", "PCP", "SETOR"]
+    tipos = ["ADMIN", "ATENDENTE", "PCP", "SETOR", "ESPECTADOR"]
 
     def contexto_formulario(**extra):
         contexto = {

@@ -37,6 +37,24 @@ def test_criar_usuario_atendente_pode_ficar_sem_setor(client, login_as):
     assert usuario.setor_id is None
 
 
+def test_admin_consegue_criar_usuario_espectador(client, login_as):
+    login_as("ADMIN")
+
+    resposta = client.post("/criar_usuario", data={
+        "email": "espectador.novo@teste.com",
+        "tipo": "ESPECTADOR",
+        "setor": "",
+        "senha": "123",
+    })
+
+    usuario = User.query.filter_by(email="espectador.novo@teste.com").first()
+
+    assert resposta.status_code == 200
+    assert usuario is not None
+    assert usuario.tipo == "ESPECTADOR"
+    assert usuario.setor_id is None
+
+
 def test_criar_usuario_setor_continua_exigindo_setor(client, login_as):
     login_as("ADMIN")
 

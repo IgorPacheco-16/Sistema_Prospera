@@ -25,7 +25,7 @@ def create_ops_blueprint(
     @ops_bp.route("/arquivadas")
     @login_required
     def arquivadas():
-        if session.get("tipo") == "SETOR":
+        if session.get("tipo") in ["SETOR", "ESPECTADOR"]:
             abort(403)
 
         ops = OP.query.filter_by(status="ARQUIVADA").all()

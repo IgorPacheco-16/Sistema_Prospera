@@ -10,10 +10,13 @@
         <!-- MENU CENTRAL -->
         <div class="mx-auto d-flex gap-3">
             <a href="/dashboard" class="nav-link-custom">Dashboard</a>
-            {% if session.get("tipo") != "SETOR" %}
+            {% if session.get("tipo") not in ["SETOR", "ESPECTADOR"] %}
             <a href="/arquivadas" class="nav-link-custom">Arquivadas</a>
             {% endif %}
             <a href="/calendario" class="nav-link-custom">Calendário</a>
+            {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP", "ESPECTADOR"] %}
+            <a href="/slides" class="nav-link-custom">Slides</a>
+            {% endif %}
         </div>
 
         <!-- AÇÕES -->

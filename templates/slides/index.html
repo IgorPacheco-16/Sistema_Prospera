@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel TV - Slides</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slides.css') }}">
+</head>
+<body>
+    <main class="tv-shell" data-slides-app data-api-url="/api/slides">
+        <header class="tv-header">
+            <div>
+                <p class="tv-eyebrow">Prospera Producoes</p>
+                <h1>Painel de entregas</h1>
+            </div>
+            <div class="tv-clock">
+                <span data-tv-clock>--:--</span>
+                <small data-tv-updated>Atualizando...</small>
+            </div>
+        </header>
+
+        <section class="tv-stage" data-slide-stage>
+            <div class="tv-loading">Carregando painel...</div>
+        </section>
+
+        <footer class="tv-footer">
+            <div class="tv-progress">
+                <span data-slide-position>Slide 0/0</span>
+                <div class="tv-progress-bar">
+                    <span data-slide-progress></span>
+                </div>
+            </div>
+            <span>Dados atualizados automaticamente</span>
+        </footer>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/slides.js') }}"></script>
+</body>
+</html>
