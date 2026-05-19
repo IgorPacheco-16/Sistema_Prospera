@@ -71,17 +71,21 @@
     <!-- BOTÕES -->
     <div class="d-flex justify-content-center gap-2 mb-4 flex-wrap">
 
+        {% if tipo in ["ATENDENTE", "ADMIN"] %}
         <a href="{{ url_for('criar_op') }}" class="btn btn-success btn-sm">
             ➕ Nova OP
         </a>
+        {% endif %}
 
         <a href="{{ url_for('calendario') }}" class="btn btn-outline-primary btn-sm">
             📅 Calendário
         </a>
 
+        {% if tipo != "SETOR" %}
         <a href="{{ url_for('arquivadas') }}" class="btn btn-outline-secondary btn-sm">
             📁 Arquivadas
         </a>
+        {% endif %}
 
         {% if tipo == "ADMIN" %}
         <a href="{{ url_for('listar_usuarios') }}" class="btn btn-outline-primary btn-sm">
@@ -215,10 +219,11 @@
                     <div class="d-flex gap-2">
 
                         <a href="{{ url_for('ver_op', id=item.op.id) }}"
-                           class="btn btn-primary btn-sm w-50">
+                           class="btn btn-primary btn-sm {% if tipo == 'SETOR' %}w-100{% else %}w-50{% endif %}">
                             Ver OP
                         </a>
 
+                        {% if tipo != "SETOR" %}
                         <form action="{{ url_for('arquivar_op', id=item.op.id) }}"
                               method="POST"
                               class="w-50">
@@ -230,6 +235,7 @@
                             </button>
 
                         </form>
+                        {% endif %}
 
                     </div>
 

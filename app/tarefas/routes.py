@@ -42,6 +42,7 @@ def preencher_data_se_vazia(objeto, atributo, valor):
 def create_tarefas_blueprint(
     tipos_permitidos,
     is_setor,
+    usuario_pode_acionar_tarefa,
     criar_notificacao,
     mensagem_tarefa,
     link_tarefa,
@@ -49,6 +50,12 @@ def create_tarefas_blueprint(
     registrar_historico
 ):
     tarefas_bp = Blueprint("tarefas_bp", __name__)
+
+    def exigir_tarefa_do_setor(tarefa):
+        if is_setor() and not usuario_pode_acionar_tarefa(tarefa):
+            return "Setor incorreto", 403
+
+        return None
 
     @tarefas_bp.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
@@ -103,8 +110,9 @@ def create_tarefas_blueprint(
     def iniciar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        if is_setor() and session.get("setor_id") != tarefa.setor_id:
-            return "Setor incorreto", 403
+        acesso_negado = exigir_tarefa_do_setor(tarefa)
+        if acesso_negado:
+            return acesso_negado
 
         if status_atual_tarefa(tarefa) != STATUS_PENDENTE:
             return "A tarefa precisa estar pendente para iniciar", 400
@@ -141,8 +149,9 @@ def create_tarefas_blueprint(
     def entregar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        if is_setor() and session.get("setor_id") != tarefa.setor_id:
-            return "Setor incorreto", 403
+        acesso_negado = exigir_tarefa_do_setor(tarefa)
+        if acesso_negado:
+            return acesso_negado
 
         if status_atual_tarefa(tarefa) != STATUS_EM_ANDAMENTO:
             return "A tarefa precisa estar em andamento para enviar à validação", 400

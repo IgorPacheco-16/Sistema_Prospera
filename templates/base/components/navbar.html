@@ -11,9 +11,11 @@
                 Dashboard
             </a>
 
+            {% if session.get("tipo") != "SETOR" %}
             <a href="{{ url_for('arquivadas') }}" class="nav-link">
                 Arquivadas
             </a>
+            {% endif %}
 
             <a href="{{ url_for('calendario') }}" class="nav-link">
                 Calendario

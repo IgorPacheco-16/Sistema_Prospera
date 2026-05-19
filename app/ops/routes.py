@@ -11,6 +11,7 @@ def create_ops_blueprint(
     tipos_permitidos,
     is_admin,
     is_atendente,
+    usuario_pode_acionar_tarefa,
     criar_notificacao,
     mensagem_op,
     link_op,
@@ -22,6 +23,9 @@ def create_ops_blueprint(
     @ops_bp.route("/arquivadas")
     @login_required
     def arquivadas():
+        if session.get("tipo") == "SETOR":
+            abort(403)
+
         ops = OP.query.filter_by(status="ARQUIVADA").all()
         return render_template("arquivadas/index.html", ops=ops)
 
@@ -32,6 +36,7 @@ def create_ops_blueprint(
             nome = request.form.get("nome")
             prazo = request.form.get("prazo")
             alta_prioridade = request.form.get("alta_prioridade") == "on"
+            caminho_pasta = request.form.get("caminho_pasta", "").strip() or None
             setores = request.form.getlist("setores")
 
             prazo_convertido = None
@@ -44,6 +49,7 @@ def create_ops_blueprint(
                 status="EM ANDAMENTO",
                 atendente=session.get("usuario"),
                 alta_prioridade=alta_prioridade,
+                caminho_pasta=caminho_pasta,
                 criada_em=agora_brasilia()
             )
 
@@ -88,9 +94,27 @@ def create_ops_blueprint(
         if not op:
             abort(404)
 
+        tipo_usuario = session.get("tipo")
+        setor_usuario_id = session.get("setor_id")
+        if tipo_usuario == "SETOR":
+            vinculo_setor = OPSetor.query.filter_by(
+                op_id=op.id,
+                setor_id=setor_usuario_id
+            ).first()
+            if not vinculo_setor:
+                abort(403)
+
         estrutura = []
 
-        for op_setor in op.op_setores:
+        op_setores = op.op_setores
+        if tipo_usuario == "SETOR":
+            op_setores = [
+                op_setor
+                for op_setor in op_setores
+                if op_setor.setor_id == setor_usuario_id
+            ]
+
+        for op_setor in op_setores:
             setor = op_setor.setor
 
             tarefas = Tarefa.query.filter_by(
@@ -102,7 +126,14 @@ def create_ops_blueprint(
                 "setor": setor,
                 "tarefas": tarefas,
                 "total": len(tarefas),
-                "validadas": sum(1 for t in tarefas if t.validado)
+                "validadas": sum(1 for t in tarefas if t.validado),
+                "pode_acionar": all(
+                    usuario_pode_acionar_tarefa(tarefa)
+                    for tarefa in tarefas
+                ) if tarefas else (
+                    session.get("tipo") != "SETOR"
+                    or session.get("setor_id") == setor.id
+                )
             })
 
         historico = HistoricoOP.query.filter_by(
@@ -115,7 +146,7 @@ def create_ops_blueprint(
             estrutura=estrutura,
             historico=historico,
             setores=Setor.query.all(),
-            tipo=session.get("tipo"),
+            tipo=tipo_usuario,
             today=date.today(),
             focus_setor_id=request.args.get("setor", type=int),
             focus_tarefa_id=request.args.get("tarefa", type=int)
@@ -186,9 +217,11 @@ def create_ops_blueprint(
             nome_anterior = op.nome
             prazo_anterior = op.prazo_final
             prioridade_anterior = op.alta_prioridade
+            caminho_pasta_anterior = op.caminho_pasta
 
             op.nome = request.form.get("nome")
             op.alta_prioridade = request.form.get("alta_prioridade") == "on"
+            op.caminho_pasta = request.form.get("caminho_pasta", "").strip() or None
 
             prazo = request.form.get("prazo")
             if prazo:
@@ -240,6 +273,8 @@ def create_ops_blueprint(
                 mudancas.append("prazo final")
             if prioridade_anterior != op.alta_prioridade:
                 mudancas.append("alta prioridade")
+            if caminho_pasta_anterior != op.caminho_pasta:
+                mudancas.append("caminho da pasta")
 
             if mudancas:
                 registrar_historico(

@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, session
 
 from database.models import OP, Tarefa
 
@@ -20,7 +20,12 @@ def create_calendario_blueprint(login_required):
             Tarefa.prazo.isnot(None),
             Tarefa.validado.is_(False),
             OP.status == "EM ANDAMENTO"
-        ).all()
+        )
+
+        if session.get("tipo") == "SETOR":
+            tarefas = tarefas.filter(Tarefa.setor_id == session.get("setor_id"))
+
+        tarefas = tarefas.all()
 
         hoje_amanha = []
         semana_lista = []

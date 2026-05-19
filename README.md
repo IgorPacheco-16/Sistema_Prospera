@@ -7,8 +7,10 @@ Sistema web interno em Flask para gerenciamento de Ordens de Producao (OPs), set
 - Python
 - Flask
 - Jinja2
-- SQLite em desenvolvimento
+- SQLite em desenvolvimento e teste
+- PostgreSQL em producao
 - SQLAlchemy
+- Flask-Migrate
 - Bootstrap
 - CSS proprio em `static/css/theme.css`
 
@@ -35,16 +37,35 @@ Copie `.env.example` para `.env` e preencha os valores conforme o ambiente:
 Copy-Item .env.example .env
 ```
 
-Variaveis usadas pela aplicacao:
+Variaveis principais:
 
-- `SECRET_KEY`: chave secreta do Flask. Use um valor forte em producao.
-- `DATABASE_URL`: URL do banco. Se estiver vazia, a aplicacao usa `sqlite:///database.db`.
-- `FLASK_ENV`: use `development` localmente para habilitar debug ao rodar `app.py`.
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`: configuracoes de envio de email.
+- `APP_ENV`: ambiente atual. Use `development`, `test` ou `production`.
+- `SECRET_KEY`: chave secreta do Flask. Obrigatoria fora de desenvolvimento.
+- `DATABASE_URL`: URL do banco.
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_DEFAULT_SENDER`: configuracoes de envio de email.
+
+Em `APP_ENV=production`, `DATABASE_URL` e obrigatoria e deve apontar para PostgreSQL. URLs iniciadas com `postgres://` sao convertidas para `postgresql://`.
+
+Em `APP_ENV=test`, a aplicacao usa SQLite de teste. Em `APP_ENV=development`, se `DATABASE_URL` estiver vazia, a aplicacao usa SQLite local com `sqlite:///database.db`.
 
 O arquivo `.env` nao deve ser versionado.
 
-O projeto tenta carregar `.env` automaticamente quando `python-dotenv` esta instalado. Em deploy, tambem e valido configurar as variaveis diretamente no painel/ambiente do servidor.
+## Banco de dados
+
+O projeto usa migracoes do Flask-Migrate. Depois de configurar o ambiente e o banco, rode:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask db upgrade
+```
+
+Nao use `db.create_all()` para preparar o banco da aplicacao. O fluxo esperado e sempre aplicar as migracoes com `flask db upgrade`.
+
+Em producao, o sistema inicia com banco virgem e sem seeds. Depois das migracoes, crie o primeiro administrador:
+
+```powershell
+flask criar-admin
+```
 
 ## Rodar localmente
 
@@ -58,26 +79,20 @@ Ou usando Flask:
 
 ```powershell
 $env:FLASK_APP = "app.py"
-$env:FLASK_ENV = "development"
+$env:APP_ENV = "development"
 flask run
 ```
 
-## SMTP e recuperacao de senha
+## Testes
 
-A recuperacao de senha envia um codigo por email quando as variaveis SMTP estao configuradas:
+Rode a suite com:
 
-```text
-SMTP_HOST=smtp.exemplo.com
-SMTP_PORT=587
-SMTP_USER=usuario
-SMTP_PASSWORD=senha
-SMTP_FROM=sistema@exemplo.com
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v
 ```
 
-Se SMTP nao estiver configurado, o sistema usa um fallback apenas para desenvolvimento local e mostra o codigo no console. Nao use esse fallback em producao.
+## Email
 
-## Banco de dados
+A recuperacao de senha e as notificacoes operacionais usam as variaveis `MAIL_*`. As variaveis antigas `SMTP_*` ainda sao aceitas por compatibilidade local.
 
-Por padrao, o desenvolvimento local usa SQLite com `sqlite:///database.db`. Para deploy, configure `DATABASE_URL` conforme o banco do ambiente.
-
-As tabelas sao criadas automaticamente com `db.create_all()` quando a aplicacao inicia.
+Se email nao estiver configurado, o sistema usa fallback apenas para desenvolvimento/teste e registra a mensagem no console. Configure email antes do piloto em producao.

@@ -46,6 +46,8 @@ def test_kanban_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, setor
     assert resposta.status_code == 200
     assert "Tarefa do setor" in html
     assert "Tarefa de outro setor" not in html
+    assert "OP Acabamento" in html
+    assert "OP PCP" not in html
 
 
 def test_kanban_perfis_amplos_veem_todos_os_setores(client, login_as, setores):

@@ -1,4 +1,6 @@
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+import os
+
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for
 
 from database.models import db, Notificacao
 from tempo import formatar_data_hora_brasilia
@@ -82,6 +84,13 @@ def create_notificacoes_blueprint(
     @notificacoes_bp.route("/teste_notificacao")
     @login_required
     def teste_notificacao():
+        app_env = os.environ.get("APP_ENV", "production").strip().lower() or "production"
+        if app_env not in {"development", "test"}:
+            abort(404)
+
+        if session.get("tipo") != "ADMIN":
+            return "Acesso negado", 403
+
         criar_notificacao(
             session.get("tipo"),
             "Teste de notificação no dashboard",

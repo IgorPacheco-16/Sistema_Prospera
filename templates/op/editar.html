@@ -32,6 +32,16 @@
                            value="{{ op.prazo_final.strftime('%Y-%m-%d') if op.prazo_final else '' }}">
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label" for="caminhoPasta">Caminho da pasta</label>
+                    <input type="text"
+                           id="caminhoPasta"
+                           name="caminho_pasta"
+                           class="form-control"
+                           value="{{ op.caminho_pasta or '' }}"
+                           placeholder="\\servidor\projetos\Cliente\OP123">
+                </div>
+
                 <div class="form-check form-switch mb-3">
                     <input class="form-check-input"
                            type="checkbox"

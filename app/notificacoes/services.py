@@ -65,12 +65,23 @@ def link_tarefa(op_id, setor_id, tarefa_id):
 
 def smtp_configurado():
     return all([
-        os.environ.get("SMTP_HOST"),
-        os.environ.get("SMTP_PORT"),
-        os.environ.get("SMTP_USER"),
-        os.environ.get("SMTP_PASSWORD"),
-        os.environ.get("SMTP_FROM")
+        mail_env("MAIL_SERVER", "SMTP_HOST"),
+        mail_env("MAIL_PORT", "SMTP_PORT"),
+        mail_env("MAIL_USERNAME", "SMTP_USER"),
+        mail_env("MAIL_PASSWORD", "SMTP_PASSWORD"),
+        mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
     ])
+
+
+def mail_env(chave_mail, chave_smtp):
+    return os.environ.get(chave_mail) or os.environ.get(chave_smtp)
+
+
+def mail_usa_tls():
+    valor = os.environ.get("MAIL_USE_TLS")
+    if valor is None:
+        return True
+    return valor.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def url_absoluta(link):
@@ -202,16 +213,20 @@ def enviar_email_operacional(
 
     mensagem = EmailMessage()
     mensagem["Subject"] = assunto
-    mensagem["From"] = os.environ["SMTP_FROM"]
+    mensagem["From"] = mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
     mensagem["To"] = ", ".join(emails)
     mensagem.set_content(texto)
     mensagem.add_alternative(html, subtype="html")
 
-    porta = int(os.environ.get("SMTP_PORT", "587"))
+    porta = int(mail_env("MAIL_PORT", "SMTP_PORT") or "587")
     try:
-        with smtplib.SMTP(os.environ["SMTP_HOST"], porta) as servidor:
-            servidor.starttls()
-            servidor.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+        with smtplib.SMTP(mail_env("MAIL_SERVER", "SMTP_HOST"), porta) as servidor:
+            if mail_usa_tls():
+                servidor.starttls()
+            servidor.login(
+                mail_env("MAIL_USERNAME", "SMTP_USER"),
+                mail_env("MAIL_PASSWORD", "SMTP_PASSWORD")
+            )
             servidor.send_message(mensagem)
         return True
     except Exception as erro:

@@ -1,9 +1,12 @@
+import click
 from flask import Flask, session
-from database.models import db, Notificacao
+from flask_migrate import Migrate
+from database.models import db, Notificacao, User
 from tempo import formatar_data_hora_brasilia
 import importlib.util
 import os
 from pathlib import Path
+from werkzeug.security import generate_password_hash
 
 try:
     from dotenv import load_dotenv
@@ -72,6 +75,7 @@ initialize_database = config_module.initialize_database
 is_admin = security_module.is_admin
 is_atendente = security_module.is_atendente
 is_setor = security_module.is_setor
+usuario_pode_acionar_tarefa = security_module.usuario_pode_acionar_tarefa
 login_required = security_module.login_required
 tipos_permitidos = security_module.tipos_permitidos
 normalizar_email = security_module.normalizar_email
@@ -146,6 +150,7 @@ def registrar_aliases_build_only(app):
 app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
+Migrate(app, db)
 app.jinja_env.filters["data_hora_brasilia"] = formatar_data_hora_brasilia
 app.jinja_env.filters["categoria_notificacao"] = categoria_notificacao
 
@@ -196,6 +201,7 @@ ops_bp = create_ops_blueprint(
     tipos_permitidos=tipos_permitidos,
     is_admin=is_admin,
     is_atendente=is_atendente,
+    usuario_pode_acionar_tarefa=usuario_pode_acionar_tarefa,
     criar_notificacao=criar_notificacao,
     mensagem_op=mensagem_op,
     link_op=link_op,
@@ -207,6 +213,7 @@ app.register_blueprint(ops_bp)
 tarefas_bp = create_tarefas_blueprint(
     tipos_permitidos=tipos_permitidos,
     is_setor=is_setor,
+    usuario_pode_acionar_tarefa=usuario_pode_acionar_tarefa,
     criar_notificacao=criar_notificacao,
     mensagem_tarefa=mensagem_tarefa,
     link_tarefa=link_tarefa,
@@ -235,5 +242,48 @@ def inject_notificacoes():
     return {}
 
 
+@app.cli.command("criar-admin")
+@click.option("--email", prompt="Email")
+@click.option("--nome", prompt="Nome")
+@click.option(
+    "--senha",
+    prompt="Senha",
+    hide_input=True,
+    confirmation_prompt=True
+)
+def criar_admin(email, nome, senha):
+    email_normalizado = normalizar_email(email)
+    nome = (nome or "").strip()
+    senha = senha or ""
+
+    if not email_normalizado:
+        raise click.ClickException("Informe um email valido.")
+
+    if not nome:
+        raise click.ClickException("Informe o nome do administrador.")
+
+    if not senha.strip():
+        raise click.ClickException("Informe uma senha.")
+
+    admin_ativo = User.query.filter_by(tipo="ADMIN", ativo=True).first()
+    if admin_ativo:
+        raise click.ClickException(
+            "Ja existe um administrador ativo. Use a gestao de usuarios."
+        )
+
+    if User.query.filter_by(email=email_normalizado).first():
+        raise click.ClickException("Ja existe um usuario com este email.")
+
+    db.session.add(User(
+        email=email_normalizado,
+        nome=nome,
+        senha=generate_password_hash(senha),
+        tipo="ADMIN",
+        ativo=True
+    ))
+    db.session.commit()
+    click.echo(f"Administrador criado: {email_normalizado}")
+
+
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("FLASK_ENV") == "development")
+    app.run(debug=os.environ.get("APP_ENV") == "development")

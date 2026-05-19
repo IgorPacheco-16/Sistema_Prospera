@@ -23,6 +23,20 @@ def is_setor():
     return session.get("tipo") == "SETOR"
 
 
+def setor_id_logado():
+    try:
+        return int(session.get("setor_id"))
+    except (TypeError, ValueError):
+        return None
+
+
+def usuario_pode_acionar_tarefa(tarefa):
+    if not is_setor():
+        return True
+
+    return setor_id_logado() == tarefa.setor_id
+
+
 def login_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -55,13 +69,24 @@ def gerar_codigo_recuperacao():
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+def mail_env(chave_mail, chave_smtp):
+    return os.environ.get(chave_mail) or os.environ.get(chave_smtp)
+
+
+def mail_usa_tls():
+    valor = os.environ.get("MAIL_USE_TLS")
+    if valor is None:
+        return True
+    return valor.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def smtp_configurado():
     return all([
-        os.environ.get("SMTP_HOST"),
-        os.environ.get("SMTP_PORT"),
-        os.environ.get("SMTP_USER"),
-        os.environ.get("SMTP_PASSWORD"),
-        os.environ.get("SMTP_FROM")
+        mail_env("MAIL_SERVER", "SMTP_HOST"),
+        mail_env("MAIL_PORT", "SMTP_PORT"),
+        mail_env("MAIL_USERNAME", "SMTP_USER"),
+        mail_env("MAIL_PASSWORD", "SMTP_PASSWORD"),
+        mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
     ])
 
 
@@ -73,7 +98,7 @@ def enviar_email_recuperacao(destinatario, codigo):
 
     mensagem = EmailMessage()
     mensagem["Subject"] = "Redefinicao de senha - Sistema OP"
-    mensagem["From"] = os.environ["SMTP_FROM"]
+    mensagem["From"] = mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
     mensagem["To"] = destinatario
     mensagem.set_content(
         "Use o codigo abaixo para redefinir sua senha. "
@@ -82,11 +107,15 @@ def enviar_email_recuperacao(destinatario, codigo):
         "Se voce nao solicitou esta alteracao, ignore este email."
     )
 
-    porta = int(os.environ.get("SMTP_PORT", "587"))
+    porta = int(mail_env("MAIL_PORT", "SMTP_PORT") or "587")
     try:
-        with smtplib.SMTP(os.environ["SMTP_HOST"], porta) as servidor:
-            servidor.starttls()
-            servidor.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+        with smtplib.SMTP(mail_env("MAIL_SERVER", "SMTP_HOST"), porta) as servidor:
+            if mail_usa_tls():
+                servidor.starttls()
+            servidor.login(
+                mail_env("MAIL_USERNAME", "SMTP_USER"),
+                mail_env("MAIL_PASSWORD", "SMTP_PASSWORD")
+            )
             servidor.send_message(mensagem)
     except Exception as erro:
         print(f"[ERRO] Falha ao enviar email de recuperacao: {erro}")

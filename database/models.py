@@ -9,6 +9,7 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=True)
     email = db.Column(db.String(100), unique=True)
     senha = db.Column(db.String(100), nullable=True)
     tipo = db.Column(db.String(20))
@@ -47,6 +48,7 @@ class OP(db.Model):
     status = db.Column(db.String(50), nullable=False, default="ABERTA")
     atendente = db.Column(db.String(100), nullable=False)
     alta_prioridade = db.Column(db.Boolean, nullable=False, default=False)
+    caminho_pasta = db.Column(db.String(500), nullable=True)
     criada_em = db.Column(db.DateTime, default=agora_brasilia, nullable=True)
     finalizada_em = db.Column(db.DateTime, nullable=True)
     arquivada_em = db.Column(db.DateTime, nullable=True)

@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from flask import Blueprint, render_template, request, session, url_for
 
-from database.models import OP, Setor, Tarefa
+from database.models import OP, OPSetor, Setor, Tarefa
 
 
 STATUS_PENDENTE = "PENDENTE"
@@ -250,12 +250,11 @@ def create_kanban_blueprint(login_required):
                 if setor.id == setor_usuario_id
             ]
 
-        ops_disponiveis = (
-            OP.query
-            .filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))
-            .order_by(OP.nome)
-            .all()
-        )
+        ops_query = OP.query.filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))
+        if tipo == "SETOR":
+            ops_query = ops_query.join(OPSetor).filter(OPSetor.setor_id == setor_usuario_id)
+
+        ops_disponiveis = ops_query.order_by(OP.nome).all()
 
         colunas = []
         tarefas_por_status = {

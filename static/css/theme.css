@@ -1179,6 +1179,72 @@ html.dark-mode .notification-empty {
     max-width: none;
 }
 
+.op-folder-compact {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin: 0 0 14px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.op-folder-copy {
+    align-items: center;
+    background-color: rgba(13, 110, 253, 0.08);
+    border: 1px solid rgba(13, 110, 253, 0.22);
+    border-radius: 8px;
+    color: var(--primary);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.9rem;
+    font-weight: 700;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 10px;
+}
+
+.op-folder-copy:hover {
+    background-color: rgba(13, 110, 253, 0.12);
+    border-color: rgba(13, 110, 253, 0.34);
+}
+
+.op-folder-icon {
+    line-height: 1;
+}
+
+.op-folder-path {
+    color: var(--muted-light);
+    display: block;
+    font-size: 0.84rem;
+    flex: 1 1 auto;
+    min-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.op-folder-feedback {
+    color: var(--success);
+    flex: 0 0 auto;
+    font-size: 0.84rem;
+    font-weight: 700;
+    min-width: 118px;
+}
+
+html.dark-mode .op-folder-copy {
+    background-color: rgba(90, 160, 255, 0.13);
+    border-color: rgba(90, 160, 255, 0.3);
+    color: #9ec5fe;
+}
+
+html.dark-mode .op-folder-copy:hover {
+    background-color: rgba(90, 160, 255, 0.18);
+}
+
+html.dark-mode .op-folder-path {
+    color: var(--muted-dark);
+}
+
 .sector-summary-grid {
     margin-bottom: 24px;
 }

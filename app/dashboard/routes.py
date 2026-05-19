@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from flask import Blueprint, render_template, request, session
 
-from database.models import OP, Tarefa
+from database.models import OP, OPSetor, Tarefa
 
 
 def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
@@ -43,6 +43,11 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         filtro_ativo = bool(busca or status or atrasadas_filtro or filtro)
 
         query = OP.query.filter(OP.status != "ARQUIVADA")
+        tipo_usuario = session.get("tipo")
+        setor_usuario_id = session.get("setor_id")
+
+        if tipo_usuario == "SETOR":
+            query = query.join(OPSetor).filter(OPSetor.setor_id == setor_usuario_id)
 
         if busca:
             query = query.filter(OP.nome.ilike(f"%{busca}%"))
@@ -77,7 +82,11 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         lista_ops = []
 
         for op in ops:
-            tarefas = Tarefa.query.filter_by(op_id=op.id).all()
+            tarefas_query = Tarefa.query.filter_by(op_id=op.id)
+            if tipo_usuario == "SETOR":
+                tarefas_query = tarefas_query.filter_by(setor_id=setor_usuario_id)
+
+            tarefas = tarefas_query.all()
 
             total_tarefas = len(tarefas)
             validadas = sum(1 for t in tarefas if t.validado)
@@ -112,7 +121,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         return render_template(
             "dashboard/index.html",
             usuario=session.get("usuario"),
-            tipo=session.get("tipo"),
+            tipo=tipo_usuario,
             ops=lista_ops,
             total=total,
             atrasadas=atrasadas,

@@ -55,6 +55,7 @@ def test_criacao_de_op(client, login_as, setores):
     resposta = client.post("/criar_op", data={
         "nome": "OP Nova",
         "prazo": "2026-05-20",
+        "caminho_pasta": r"\\servidor\projetos\Cliente\OP123",
         "setores": [str(setores["Acabamento"].id)],
     })
 
@@ -62,9 +63,43 @@ def test_criacao_de_op(client, login_as, setores):
     assert resposta.status_code == 302
     assert op is not None
     assert op.criada_em is not None
+    assert op.caminho_pasta == r"\\servidor\projetos\Cliente\OP123"
     assert resposta.headers["Location"].endswith(f"/op/{op.id}")
     assert OPSetor.query.filter_by(op_id=op.id, setor_id=setores["Acabamento"].id).first()
     assert Notificacao.query.filter_by(op_id=op.id, usuario="PCP", tipo_evento="op_criada").first()
+
+
+def test_edicao_de_op_altera_caminho_pasta(client, login_as, op_com_setor):
+    op, setor = op_com_setor
+    login_as("ATENDENTE")
+
+    resposta = client.post(f"/editar_op/{op.id}", data={
+        "nome": op.nome,
+        "prazo": "",
+        "caminho_pasta": r"\\servidor\projetos\Cliente\OP456",
+        "setores": [str(setor.id)],
+    })
+
+    db.session.refresh(op)
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith(f"/op/{op.id}")
+    assert op.caminho_pasta == r"\\servidor\projetos\Cliente\OP456"
+
+
+def test_detalhe_de_op_mostra_botao_para_copiar_caminho_pasta(client, login_as, op_com_setor):
+    op, _ = op_com_setor
+    op.caminho_pasta = r"\\servidor\projetos\Cliente\OP789"
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Copiar pasta da OP" in html
+    assert "Caminho copiado!" in html
+    assert "file://" not in html
+    assert r"\\servidor\projetos\Cliente\OP789" in html
 
 
 def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, login_as, setores, monkeypatch, capsys):
@@ -440,3 +475,29 @@ def test_api_notificacoes_lista_notificacoes_do_usuario(client, login_as, notifi
     assert resposta.status_code == 200
     assert dados["total"] == 1
     assert dados["notificacoes"][0]["id"] == notificacao.id
+
+
+def test_teste_notificacao_bloqueia_production(client, login_as, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    login_as("ADMIN")
+
+    resposta = client.get("/teste_notificacao")
+
+    assert resposta.status_code == 404
+
+
+def test_teste_notificacao_bloqueia_nao_admin(client, login_as, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    login_as("ATENDENTE")
+
+    resposta = client.get("/teste_notificacao")
+
+    assert resposta.status_code == 403
+
+
+def test_seeds_de_teste_nao_rodam_em_production(app, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setenv("APP_ENV", "production")
+
+    assert app_module.config_module.ambiente_permite_seed_teste(app) is False
