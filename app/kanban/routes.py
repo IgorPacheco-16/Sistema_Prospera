@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from flask import Blueprint, render_template, request, session, url_for
+from sqlalchemy.orm import load_only, selectinload
 
 from database.models import OP, OPSetor, Setor, Tarefa
 
@@ -225,6 +226,10 @@ def create_kanban_blueprint(login_required):
 
         query = (
             Tarefa.query
+            .options(
+                selectinload(Tarefa.op),
+                selectinload(Tarefa.setor),
+            )
             .join(OP, Tarefa.op_id == OP.id)
             .filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))
         )
@@ -242,7 +247,12 @@ def create_kanban_blueprint(login_required):
         tarefas = aplicar_filtros_visuais(tarefas, filtros, hoje)
         tarefas.sort(key=lambda tarefa: chave_ordenacao(tarefa, hoje))
 
-        setores_disponiveis = Setor.query.order_by(Setor.nome).all()
+        setores_disponiveis = (
+            Setor.query
+            .options(load_only(Setor.id, Setor.nome))
+            .order_by(Setor.nome)
+            .all()
+        )
         if tipo == "SETOR":
             setores_disponiveis = [
                 setor
@@ -250,7 +260,11 @@ def create_kanban_blueprint(login_required):
                 if setor.id == setor_usuario_id
             ]
 
-        ops_query = OP.query.filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))
+        ops_query = (
+            OP.query
+            .options(load_only(OP.id, OP.nome))
+            .filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))
+        )
         if tipo == "SETOR":
             ops_query = ops_query.join(OPSetor).filter(OPSetor.setor_id == setor_usuario_id)
 

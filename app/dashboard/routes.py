@@ -1,8 +1,9 @@
 from datetime import date, datetime
 
 from flask import Blueprint, render_template, request, session
+from sqlalchemy import case, func
 
-from database.models import OP, OPSetor, Tarefa
+from database.models import db, OP, OPSetor, Tarefa
 
 
 def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
@@ -79,17 +80,34 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         else:
             ops = [op for op in ops_base if op.status == "EM ANDAMENTO"]
 
-        lista_ops = []
+        op_ids = [op.id for op in ops]
+        tarefas_por_op = {}
+        if op_ids:
+            tarefas_query = db.session.query(
+                Tarefa.op_id,
+                func.count(Tarefa.id).label("total_tarefas"),
+                func.coalesce(
+                    func.sum(case((Tarefa.validado == True, 1), else_=0)),
+                    0
+                ).label("validadas"),
+            ).filter(Tarefa.op_id.in_(op_ids))
 
-        for op in ops:
-            tarefas_query = Tarefa.query.filter_by(op_id=op.id)
             if tipo_usuario == "SETOR":
-                tarefas_query = tarefas_query.filter_by(setor_id=setor_usuario_id)
+                tarefas_query = tarefas_query.filter(Tarefa.setor_id == setor_usuario_id)
 
-            tarefas = tarefas_query.all()
+            tarefas_por_op = {
+                linha.op_id: {
+                    "total_tarefas": int(linha.total_tarefas or 0),
+                    "validadas": int(linha.validadas or 0),
+                }
+                for linha in tarefas_query.group_by(Tarefa.op_id).all()
+            }
 
-            total_tarefas = len(tarefas)
-            validadas = sum(1 for t in tarefas if t.validado)
+        lista_ops = []
+        for op in ops:
+            resumo_tarefas = tarefas_por_op.get(op.id, {})
+            total_tarefas = resumo_tarefas.get("total_tarefas", 0)
+            validadas = resumo_tarefas.get("validadas", 0)
 
             if op.status == "FINALIZADA":
                 cor = "finalizada"

@@ -1,10 +1,11 @@
 import click
-from flask import Flask, session
+from flask import Flask, g, request, session
 from flask_migrate import Migrate
 from database.models import db, Notificacao, User
 from tempo import formatar_data_hora_brasilia
 import importlib.util
 import os
+import time
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 
@@ -223,6 +224,26 @@ tarefas_bp = create_tarefas_blueprint(
 app.register_blueprint(tarefas_bp)
 
 registrar_aliases_build_only(app)
+
+
+if config_module.app_env() in {"development", "test"}:
+    @app.before_request
+    def iniciar_medicao_requisicao():
+        g.request_started_at = time.perf_counter()
+
+    @app.after_request
+    def registrar_tempo_requisicao(response):
+        inicio = getattr(g, "request_started_at", None)
+        if inicio is not None:
+            duracao_ms = (time.perf_counter() - inicio) * 1000
+            app.logger.debug(
+                "request_timing path=%s endpoint=%s status=%s duration_ms=%.1f",
+                request.path,
+                request.endpoint,
+                response.status_code,
+                duracao_ms
+            )
+        return response
 
 
 @app.context_processor

@@ -3,8 +3,10 @@ from email.message import EmailMessage
 import os
 import smtplib
 import sys
+import time
 
 from flask import current_app, has_request_context, request, session
+from sqlalchemy.orm import selectinload
 
 from database.models import db, Notificacao, OP, OPSetor, Tarefa, User
 
@@ -44,6 +46,9 @@ ASSUNTO_PREFIXO = {
     "tarefa_atrasada": "\u23F0",
     "tarefa_aguardando_validacao": "\u23F3",
 }
+
+INTERVALO_PADRAO_NOTIFICACOES_SEGUNDOS = 300
+_ultima_geracao_pendentes = 0.0
 
 
 def imprimir_log_email(texto):
@@ -169,10 +174,13 @@ def enviar_email_operacional(
     if not config:
         return False
 
-    notificacoes = notificacoes or []
-    if notificacoes and not any(getattr(n, "_foi_criada", False) for n in notificacoes):
+    if notificacoes is not None and not any(
+        getattr(n, "_foi_criada", False)
+        for n in notificacoes
+    ):
         return False
 
+    notificacoes = notificacoes or []
     emails = destinatarios or destinatarios_email_operacional(evento, op=op, tarefa=tarefa)
     emails = list(dict.fromkeys((email or "").strip().lower() for email in emails if email))
 
@@ -323,18 +331,86 @@ def criar_notificacao(
     return notificacao
 
 
-def notificar_op_para_gestao(op, tipo_evento, mensagem):
+def chave_notificacao(usuario, op_id, tarefa_id, setor_id, tipo_evento):
+    return (usuario, op_id, tarefa_id, setor_id, tipo_evento)
+
+
+def carregar_chaves_notificacoes(tipo_evento, op_ids=None, tarefa_ids=None):
+    if op_ids is not None and not op_ids:
+        return set()
+    if tarefa_ids is not None and not tarefa_ids:
+        return set()
+
+    query = db.session.query(
+        Notificacao.usuario,
+        Notificacao.op_id,
+        Notificacao.tarefa_id,
+        Notificacao.setor_id,
+        Notificacao.tipo_evento,
+    ).filter(Notificacao.tipo_evento == tipo_evento)
+
+    if op_ids:
+        query = query.filter(Notificacao.op_id.in_(op_ids))
+    if tarefa_ids:
+        query = query.filter(Notificacao.tarefa_id.in_(tarefa_ids))
+
+    return {tuple(linha) for linha in query.all()}
+
+
+def criar_notificacao_com_chaves(
+    chaves_existentes,
+    usuario,
+    mensagem,
+    link=None,
+    op_id=None,
+    tarefa_id=None,
+    setor_id=None,
+    tipo_evento=None
+):
+    chave = chave_notificacao(usuario, op_id, tarefa_id, setor_id, tipo_evento)
+    if chave in chaves_existentes:
+        return None
+
+    notificacao = Notificacao(
+        usuario=usuario,
+        mensagem=mensagem,
+        link=link,
+        op_id=op_id,
+        tarefa_id=tarefa_id,
+        setor_id=setor_id,
+        tipo_evento=tipo_evento
+    )
+    db.session.add(notificacao)
+    notificacao._foi_criada = True
+    chaves_existentes.add(chave)
+    return notificacao
+
+
+def criar_notificacao_sem_repetir(chaves_existentes=None, **dados):
+    if chaves_existentes is None:
+        return criar_notificacao(**dados)
+    return criar_notificacao_com_chaves(chaves_existentes, **dados)
+
+
+def adicionar_se_criada(notificacoes, notificacao):
+    if notificacao is not None:
+        notificacoes.append(notificacao)
+
+
+def notificar_op_para_gestao(op, tipo_evento, mensagem, chaves_existentes=None):
     notificacoes = []
-    notificacoes.append(criar_notificacao(
-        "ATENDENTE",
-        mensagem,
+    adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+        chaves_existentes,
+        usuario="ATENDENTE",
+        mensagem=mensagem,
         link=link_op(op.id),
         op_id=op.id,
         tipo_evento=tipo_evento
     ))
-    notificacoes.append(criar_notificacao(
-        "PCP",
-        mensagem,
+    adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+        chaves_existentes,
+        usuario="PCP",
+        mensagem=mensagem,
         link=link_op(op.id),
         op_id=op.id,
         tipo_evento=tipo_evento
@@ -342,12 +418,13 @@ def notificar_op_para_gestao(op, tipo_evento, mensagem):
     return notificacoes
 
 
-def notificar_op_para_setores(op, tipo_evento, mensagem):
+def notificar_op_para_setores(op, tipo_evento, mensagem, chaves_existentes=None):
     notificacoes = []
-    for op_setor in setores_da_op(op.id):
-        notificacoes.append(criar_notificacao(
-            "SETOR",
-            mensagem,
+    for op_setor in op.op_setores:
+        adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+            chaves_existentes,
+            usuario="SETOR",
+            mensagem=mensagem,
             link=f"/op/{op.id}?setor={op_setor.setor_id}",
             op_id=op.id,
             setor_id=op_setor.setor_id,
@@ -358,13 +435,22 @@ def notificar_op_para_setores(op, tipo_evento, mensagem):
 
 def verificar_atrasos():
     hoje = date.today()
-    tarefas = Tarefa.query.filter(
-        Tarefa.prazo < hoje,
-        Tarefa.validado == False
-    ).all()
+    tarefas = (
+        Tarefa.query
+        .options(selectinload(Tarefa.op))
+        .filter(
+            Tarefa.prazo < hoje,
+            Tarefa.validado == False
+        )
+        .all()
+    )
+    chaves_tarefas_atrasadas = carregar_chaves_notificacoes(
+        "tarefa_atrasada",
+        tarefa_ids=[t.id for t in tarefas]
+    )
 
     for t in tarefas:
-        op = db.session.get(OP, t.op_id)
+        op = t.op
         if not op:
             continue
 
@@ -373,9 +459,10 @@ def verificar_atrasos():
         notificacoes = []
 
         for usuario in ["ATENDENTE", "PCP"]:
-            notificacoes.append(criar_notificacao(
-                usuario,
-                mensagem,
+            adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+                chaves_tarefas_atrasadas,
+                usuario=usuario,
+                mensagem=mensagem,
                 link=link,
                 op_id=op.id,
                 tarefa_id=t.id,
@@ -383,9 +470,10 @@ def verificar_atrasos():
                 tipo_evento="tarefa_atrasada"
             ))
 
-        notificacoes.append(criar_notificacao(
-            "SETOR",
-            mensagem,
+        adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+            chaves_tarefas_atrasadas,
+            usuario="SETOR",
+            mensagem=mensagem,
             link=link,
             op_id=op.id,
             tarefa_id=t.id,
@@ -400,15 +488,34 @@ def verificar_atrasos():
             notificacoes=notificacoes
         )
 
-    ops_atrasadas = OP.query.filter(
-        OP.prazo_final < hoje,
-        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
-    ).all()
+    ops_atrasadas = (
+        OP.query
+        .options(selectinload(OP.op_setores))
+        .filter(
+            OP.prazo_final < hoje,
+            OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
+        )
+        .all()
+    )
+    chaves_ops_atrasadas = carregar_chaves_notificacoes(
+        "op_atrasada",
+        op_ids=[op.id for op in ops_atrasadas]
+    )
 
     for op in ops_atrasadas:
         mensagem = mensagem_op("op_atrasada", op)
-        notificacoes = notificar_op_para_gestao(op, "op_atrasada", mensagem)
-        notificar_op_para_setores(op, "op_atrasada", mensagem)
+        notificacoes = notificar_op_para_gestao(
+            op,
+            "op_atrasada",
+            mensagem,
+            chaves_ops_atrasadas
+        )
+        notificacoes.extend(notificar_op_para_setores(
+            op,
+            "op_atrasada",
+            mensagem,
+            chaves_ops_atrasadas
+        ))
         enviar_email_operacional(
             "op_atrasada",
             op=op,
@@ -416,16 +523,35 @@ def verificar_atrasos():
             notificacoes=notificacoes
         )
 
-    ops_urgentes = OP.query.filter(
-        OP.prazo_final >= hoje,
-        OP.prazo_final <= hoje + timedelta(days=2),
-        OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
-    ).all()
+    ops_urgentes = (
+        OP.query
+        .options(selectinload(OP.op_setores))
+        .filter(
+            OP.prazo_final >= hoje,
+            OP.prazo_final <= hoje + timedelta(days=2),
+            OP.status.notin_(["FINALIZADA", "ARQUIVADA"])
+        )
+        .all()
+    )
+    chaves_ops_urgentes = carregar_chaves_notificacoes(
+        "op_urgente",
+        op_ids=[op.id for op in ops_urgentes]
+    )
 
     for op in ops_urgentes:
         mensagem = mensagem_op("op_urgente", op)
-        notificacoes = notificar_op_para_gestao(op, "op_urgente", mensagem)
-        notificar_op_para_setores(op, "op_urgente", mensagem)
+        notificacoes = notificar_op_para_gestao(
+            op,
+            "op_urgente",
+            mensagem,
+            chaves_ops_urgentes
+        )
+        notificacoes.extend(notificar_op_para_setores(
+            op,
+            "op_urgente",
+            mensagem,
+            chaves_ops_urgentes
+        ))
         enviar_email_operacional(
             "op_urgente",
             op=op,
@@ -434,16 +560,53 @@ def verificar_atrasos():
         )
 
 
-def gerar_notificacoes_pendentes():
+def intervalo_notificacoes_pendentes():
+    valor = os.environ.get("NOTIFICACOES_INTERVALO_SEGUNDOS")
+    if valor is None and os.environ.get("APP_ENV", "production").strip().lower() == "test":
+        return 0
+
+    try:
+        return int(valor if valor is not None else INTERVALO_PADRAO_NOTIFICACOES_SEGUNDOS)
+    except (TypeError, ValueError):
+        return INTERVALO_PADRAO_NOTIFICACOES_SEGUNDOS
+
+
+def geracao_pendente_em_intervalo(intervalo_segundos):
+    global _ultima_geracao_pendentes
+
+    if intervalo_segundos <= 0:
+        return False
+
+    agora = time.monotonic()
+    if agora - _ultima_geracao_pendentes < intervalo_segundos:
+        return True
+
+    _ultima_geracao_pendentes = agora
+    return False
+
+
+def gerar_notificacoes_pendentes(forcar=False):
+    if not forcar and geracao_pendente_em_intervalo(intervalo_notificacoes_pendentes()):
+        return False
+
     verificar_atrasos()
 
-    tarefas_entregues = Tarefa.query.filter_by(
-        entregue=True,
-        validado=False
-    ).all()
+    tarefas_entregues = (
+        Tarefa.query
+        .options(selectinload(Tarefa.op))
+        .filter_by(
+            entregue=True,
+            validado=False
+        )
+        .all()
+    )
+    chaves_validacao = carregar_chaves_notificacoes(
+        "tarefa_aguardando_validacao",
+        tarefa_ids=[tarefa.id for tarefa in tarefas_entregues]
+    )
 
     for tarefa in tarefas_entregues:
-        op = db.session.get(OP, tarefa.op_id)
+        op = tarefa.op
         if not op:
             continue
 
@@ -452,9 +615,10 @@ def gerar_notificacoes_pendentes():
         notificacoes = []
 
         for usuario in ["ATENDENTE", "PCP"]:
-            notificacoes.append(criar_notificacao(
-                usuario,
-                mensagem,
+            adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
+                chaves_validacao,
+                usuario=usuario,
+                mensagem=mensagem,
                 link=link,
                 op_id=op.id,
                 tarefa_id=tarefa.id,
@@ -470,3 +634,4 @@ def gerar_notificacoes_pendentes():
         )
 
     db.session.commit()
+    return True

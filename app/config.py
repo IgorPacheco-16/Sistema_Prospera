@@ -1,5 +1,6 @@
 import os
 import secrets
+from datetime import timedelta
 
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -74,6 +75,9 @@ def configure_app(app):
 
     app.config["SECRET_KEY"] = secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = (
+        timedelta(hours=12) if ambiente == "production" else 0
+    )
 
 
 def adicionar_coluna_se_nao_existir(tabela, coluna, definicao):

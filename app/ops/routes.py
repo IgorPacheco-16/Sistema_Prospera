@@ -1,6 +1,8 @@
 from datetime import date, datetime
+from collections import defaultdict
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from sqlalchemy.orm import selectinload
 
 from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa
 from tempo import agora_brasilia
@@ -90,7 +92,15 @@ def create_ops_blueprint(
     @ops_bp.route("/op/<int:id>")
     @login_required
     def ver_op(id):
-        op = db.session.get(OP, id)
+        op = (
+            OP.query
+            .options(
+                selectinload(OP.op_setores).selectinload(OPSetor.setor),
+                selectinload(OP.tarefas),
+            )
+            .filter(OP.id == id)
+            .first()
+        )
         if not op:
             abort(404)
 
@@ -114,13 +124,19 @@ def create_ops_blueprint(
                 if op_setor.setor_id == setor_usuario_id
             ]
 
+        tarefas_por_setor = defaultdict(list)
+        for tarefa in op.tarefas:
+            if tipo_usuario == "SETOR" and tarefa.setor_id != setor_usuario_id:
+                continue
+            tarefas_por_setor[tarefa.setor_id].append(tarefa)
+
         for op_setor in op_setores:
             setor = op_setor.setor
 
-            tarefas = Tarefa.query.filter_by(
-                op_id=op.id,
-                setor_id=setor.id
-            ).all()
+            tarefas = sorted(
+                tarefas_por_setor.get(setor.id, []),
+                key=lambda tarefa: tarefa.id
+            )
 
             estrutura.append({
                 "setor": setor,
