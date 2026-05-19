@@ -67,6 +67,38 @@ Em producao, o sistema inicia com banco virgem e sem seeds. Depois das migracoes
 flask criar-admin
 ```
 
+## Deploy Render + Supabase
+
+No Supabase, crie um projeto PostgreSQL e copie a connection string do banco. Use a URL em formato PostgreSQL em `DATABASE_URL`; se o painel fornecer `postgres://`, a aplicacao converte para `postgresql://` na inicializacao.
+
+No Render, crie um Web Service apontando para este repositorio e configure:
+
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `gunicorn app:app`
+- Runtime: Python
+
+O repositório tambem inclui um `Procfile` com:
+
+```text
+web: gunicorn app:app
+```
+
+Configure as variaveis de ambiente no Render:
+
+- `APP_ENV=production`
+- `SECRET_KEY` com um valor forte
+- `DATABASE_URL` com a URL PostgreSQL do Supabase
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_DEFAULT_SENDER`, se email estiver habilitado
+
+Depois do primeiro deploy, abra o Shell do Render e rode:
+
+```bash
+flask db upgrade
+flask criar-admin
+```
+
+Producao inicia com banco virgem e sem seeds. Nao rode `db.create_all()` em producao.
+
 ## Rodar localmente
 
 Com o ambiente virtual ativo:
