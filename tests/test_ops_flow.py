@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from database.models import db, Notificacao, OP, OPSetor, Tarefa
+from database.models import db, Notificacao, OP, OPSetor, Tarefa, User
 
 
 def test_dashboard_carrega_logado(client, login_as):
@@ -65,6 +65,118 @@ def test_criacao_de_op(client, login_as, setores):
     assert resposta.headers["Location"].endswith(f"/op/{op.id}")
     assert OPSetor.query.filter_by(op_id=op.id, setor_id=setores["Acabamento"].id).first()
     assert Notificacao.query.filter_by(op_id=op.id, usuario="PCP", tipo_evento="op_criada").first()
+
+
+def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, login_as, setores, monkeypatch, capsys):
+    for chave in ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]:
+        monkeypatch.delenv(chave, raising=False)
+    login_as("ATENDENTE")
+
+    resposta = client.post("/criar_op", data={
+        "nome": "OP Email Operacional",
+        "prazo": "2026-05-20",
+        "alta_prioridade": "on",
+        "setores": [str(setores["Acabamento"].id)],
+    })
+
+    saida = capsys.readouterr().out
+    op = OP.query.filter_by(nome="OP Email Operacional").first()
+    assert resposta.status_code == 302
+    assert op is not None
+    assert "[EMAIL OPERACIONAL][DESTINATARIOS] op_criada | SMTP ausente -> pcp@teste.com" in saida
+    assert "[EMAIL OPERACIONAL][DEV]" in saida
+    assert "Nova OP criada" in saida
+    assert "pcp@teste.com" in saida
+    assert f"/op/{op.id}" in saida
+
+
+def test_email_operacional_nao_repete_notificacao_existente(app, capsys, monkeypatch):
+    for chave in ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]:
+        monkeypatch.delenv(chave, raising=False)
+
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    op = OP(
+        nome="OP Email Sem Duplicar",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        prazo_final=date(2026, 5, 20),
+    )
+    db.session.add(op)
+    db.session.flush()
+
+    primeira = services.criar_notificacao(
+        "PCP",
+        services.mensagem_op("op_criada", op),
+        link=services.link_op(op.id),
+        op_id=op.id,
+        tipo_evento="op_criada"
+    )
+    services.enviar_email_operacional(
+        "op_criada",
+        op=op,
+        link=services.link_op(op.id),
+        notificacoes=[primeira]
+    )
+    primeira_saida = capsys.readouterr().out
+
+    repetida = services.criar_notificacao(
+        "PCP",
+        services.mensagem_op("op_criada", op),
+        link=services.link_op(op.id),
+        op_id=op.id,
+        tipo_evento="op_criada"
+    )
+    services.enviar_email_operacional(
+        "op_criada",
+        op=op,
+        link=services.link_op(op.id),
+        notificacoes=[repetida]
+    )
+    segunda_saida = capsys.readouterr().out
+
+    assert "[EMAIL OPERACIONAL][DEV]" in primeira_saida
+    assert segunda_saida == ""
+
+
+def test_destinatarios_nova_op_usam_tipo_pcp_mesmo_com_setor(app, setores):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    pcp = User.query.filter_by(email="pcp@teste.com").first()
+    pcp.setor_id = setores["PCP"].id
+    db.session.commit()
+
+    emails = services.destinatarios_email_operacional("op_criada")
+
+    assert emails == ["pcp@teste.com"]
+
+
+def test_destinatarios_de_setor_usam_setor_id_para_qualquer_tipo(app, setores):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    pcp_setor = User(
+        email="pcp.vinculado@teste.com",
+        senha="123",
+        tipo="PCP",
+        setor_id=setores["PCP"].id,
+        ativo=True
+    )
+    setor_pcp = User(
+        email="setor.pcp@teste.com",
+        senha="123",
+        tipo="SETOR",
+        setor_id=setores["PCP"].id,
+        ativo=True
+    )
+    db.session.add_all([pcp_setor, setor_pcp])
+    db.session.commit()
+
+    emails = services.destinatarios_por_setor(setores["PCP"].id)
+
+    assert emails == ["pcp.vinculado@teste.com", "setor.pcp@teste.com"]
 
 
 def test_criacao_de_tarefa_notifica_setor(client, login_as, op_com_setor):

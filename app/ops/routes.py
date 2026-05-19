@@ -14,6 +14,7 @@ def create_ops_blueprint(
     criar_notificacao,
     mensagem_op,
     link_op,
+    enviar_email_operacional,
     registrar_historico
 ):
     ops_bp = Blueprint("ops_bp", __name__)
@@ -55,12 +56,18 @@ def create_ops_blueprint(
                     setor_id=int(setor_id)
                 ))
 
-            criar_notificacao(
+            notificacao_pcp = criar_notificacao(
                 "PCP",
                 mensagem_op("op_criada", nova_op),
                 link=link_op(nova_op.id),
                 op_id=nova_op.id,
                 tipo_evento="op_criada"
+            )
+            enviar_email_operacional(
+                "op_criada",
+                op=nova_op,
+                link=link_op(nova_op.id),
+                notificacoes=[notificacao_pcp]
             )
             registrar_historico(
                 nova_op.id,

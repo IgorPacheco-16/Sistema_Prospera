@@ -29,6 +29,12 @@
             </a>
             {% endif %}
 
+            {% if session.get("tipo") == "ADMIN" %}
+            <a href="{{ url_for('listar_usuarios') }}" class="nav-link">
+                Usuarios
+            </a>
+            {% endif %}
+
             <a href="{{ url_for('minha_conta') }}" class="nav-link">
                 Minha conta
             </a>

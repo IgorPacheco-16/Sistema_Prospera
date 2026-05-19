@@ -1,0 +1,83 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+    <div>
+        <h2 class="h4 fw-bold mb-1">Usuarios</h2>
+        <p class="text-muted mb-0">Gerencie acessos, permissoes e setores vinculados.</p>
+    </div>
+
+    <a href="{{ url_for('criar_usuario') }}" class="btn btn-primary btn-sm">
+        Novo usuario
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Tipo/permissao</th>
+                        <th>Setor vinculado</th>
+                        <th>Status</th>
+                        <th class="text-end">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for usuario in usuarios %}
+                    <tr>
+                        <td>{{ usuario.email }}</td>
+                        <td>{{ usuario.tipo }}</td>
+                        <td>{{ usuario.setor.nome if usuario.setor else "Sem setor" }}</td>
+                        <td>
+                            {% if usuario.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                <a href="{{ url_for('editar_usuario', id=usuario.id) }}"
+                                   class="btn btn-outline-primary btn-sm">
+                                    Editar
+                                </a>
+
+                                {% if usuario.email != session.get("usuario") %}
+                                <form method="POST"
+                                      action="{{ url_for('alternar_status_usuario', id=usuario.id) }}">
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                        {% if usuario.ativo %}Desativar{% else %}Ativar{% endif %}
+                                    </button>
+                                </form>
+
+                                <form method="POST"
+                                      action="{{ url_for('excluir_usuario', id=usuario.id) }}"
+                                      onsubmit="return confirm('Esta acao desativa o usuario para preservar historico. Confirmar?')">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        Excluir
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span class="text-muted small align-self-center">Usuario logado</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            Nenhum usuario cadastrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -45,6 +45,7 @@ def create_tarefas_blueprint(
     criar_notificacao,
     mensagem_tarefa,
     link_tarefa,
+    enviar_email_operacional,
     registrar_historico
 ):
     tarefas_bp = Blueprint("tarefas_bp", __name__)
@@ -155,7 +156,7 @@ def create_tarefas_blueprint(
         if op:
             mensagem = mensagem_tarefa("tarefa_aguardando_validacao", op, tarefa)
             link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-            criar_notificacao(
+            notificacao_atendente = criar_notificacao(
                 "ATENDENTE",
                 mensagem,
                 link=link,
@@ -164,7 +165,7 @@ def create_tarefas_blueprint(
                 setor_id=tarefa.setor_id,
                 tipo_evento="tarefa_aguardando_validacao"
             )
-            criar_notificacao(
+            notificacao_pcp = criar_notificacao(
                 "PCP",
                 mensagem,
                 link=link,
@@ -172,6 +173,13 @@ def create_tarefas_blueprint(
                 tarefa_id=tarefa.id,
                 setor_id=tarefa.setor_id,
                 tipo_evento="tarefa_aguardando_validacao"
+            )
+            enviar_email_operacional(
+                "tarefa_aguardando_validacao",
+                op=op,
+                tarefa=tarefa,
+                link=link,
+                notificacoes=[notificacao_atendente, notificacao_pcp]
             )
             registrar_historico(
                 op.id,

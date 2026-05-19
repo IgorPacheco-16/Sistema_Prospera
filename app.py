@@ -84,6 +84,7 @@ link_op = notificacoes_module.link_op
 link_tarefa = notificacoes_module.link_tarefa
 query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
 criar_notificacao = notificacoes_module.criar_notificacao
+enviar_email_operacional = notificacoes_module.enviar_email_operacional
 gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
 mensagem_op = notificacoes_module.mensagem_op
 mensagem_tarefa = notificacoes_module.mensagem_tarefa
@@ -106,6 +107,10 @@ BUILD_ONLY_ALIASES = [
     ("/redefinir_senha", "redefinir_senha"),
     ("/definir_senha", "definir_senha"),
     ("/criar_usuario", "criar_usuario"),
+    ("/usuarios", "listar_usuarios"),
+    ("/usuarios/<int:id>/editar", "editar_usuario"),
+    ("/usuarios/<int:id>/alternar_status", "alternar_status_usuario"),
+    ("/usuarios/<int:id>/excluir", "excluir_usuario"),
     ("/minha_conta", "minha_conta"),
     ("/notificacoes", "notificacoes"),
     ("/ler_notificacao/<int:id>", "ler_notificacao"),
@@ -194,6 +199,7 @@ ops_bp = create_ops_blueprint(
     criar_notificacao=criar_notificacao,
     mensagem_op=mensagem_op,
     link_op=link_op,
+    enviar_email_operacional=enviar_email_operacional,
     registrar_historico=registrar_historico
 )
 app.register_blueprint(ops_bp)
@@ -204,6 +210,7 @@ tarefas_bp = create_tarefas_blueprint(
     criar_notificacao=criar_notificacao,
     mensagem_tarefa=mensagem_tarefa,
     link_tarefa=link_tarefa,
+    enviar_email_operacional=enviar_email_operacional,
     registrar_historico=registrar_historico
 )
 app.register_blueprint(tarefas_bp)

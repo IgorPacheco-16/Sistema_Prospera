@@ -84,6 +84,10 @@
         </a>
 
         {% if tipo == "ADMIN" %}
+        <a href="{{ url_for('listar_usuarios') }}" class="btn btn-outline-primary btn-sm">
+            Gerenciar usuarios
+        </a>
+
         <a href="{{ url_for('criar_usuario') }}" class="btn btn-outline-primary btn-sm">
             Cadastrar usuario
         </a>
