@@ -44,6 +44,7 @@ class OP(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(200), nullable=False)
+    cliente = db.Column(db.String(200), nullable=True)
     prazo_final = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(50), nullable=False, default="ABERTA")
     atendente = db.Column(db.String(100), nullable=False)

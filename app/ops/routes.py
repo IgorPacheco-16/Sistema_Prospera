@@ -36,6 +36,7 @@ def create_ops_blueprint(
     def criar_op():
         if request.method == "POST":
             nome = request.form.get("nome")
+            cliente = request.form.get("cliente", "").strip() or None
             prazo = request.form.get("prazo")
             alta_prioridade = request.form.get("alta_prioridade") == "on"
             caminho_pasta = request.form.get("caminho_pasta", "").strip() or None
@@ -47,6 +48,7 @@ def create_ops_blueprint(
 
             nova_op = OP(
                 nome=nome,
+                cliente=cliente,
                 prazo_final=prazo_convertido,
                 status="EM ANDAMENTO",
                 atendente=session.get("usuario"),
@@ -231,11 +233,13 @@ def create_ops_blueprint(
 
         if request.method == "POST":
             nome_anterior = op.nome
+            cliente_anterior = op.cliente
             prazo_anterior = op.prazo_final
             prioridade_anterior = op.alta_prioridade
             caminho_pasta_anterior = op.caminho_pasta
 
             op.nome = request.form.get("nome")
+            op.cliente = request.form.get("cliente", "").strip() or None
             op.alta_prioridade = request.form.get("alta_prioridade") == "on"
             op.caminho_pasta = request.form.get("caminho_pasta", "").strip() or None
 
@@ -285,6 +289,8 @@ def create_ops_blueprint(
             mudancas = []
             if nome_anterior != op.nome:
                 mudancas.append("nome")
+            if cliente_anterior != op.cliente:
+                mudancas.append("cliente")
             if prazo_anterior != op.prazo_final:
                 mudancas.append("prazo final")
             if prioridade_anterior != op.alta_prioridade:

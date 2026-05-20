@@ -54,6 +54,7 @@ def test_criacao_de_op(client, login_as, setores):
 
     resposta = client.post("/criar_op", data={
         "nome": "OP Nova",
+        "cliente": "Cliente Prospera",
         "prazo": "2026-05-20",
         "caminho_pasta": r"\\servidor\projetos\Cliente\OP123",
         "setores": [str(setores["Acabamento"].id)],
@@ -63,6 +64,7 @@ def test_criacao_de_op(client, login_as, setores):
     assert resposta.status_code == 302
     assert op is not None
     assert op.criada_em is not None
+    assert op.cliente == "Cliente Prospera"
     assert op.caminho_pasta == r"\\servidor\projetos\Cliente\OP123"
     assert resposta.headers["Location"].endswith(f"/op/{op.id}")
     assert OPSetor.query.filter_by(op_id=op.id, setor_id=setores["Acabamento"].id).first()
@@ -84,6 +86,52 @@ def test_edicao_de_op_altera_caminho_pasta(client, login_as, op_com_setor):
     assert resposta.status_code == 302
     assert resposta.headers["Location"].endswith(f"/op/{op.id}")
     assert op.caminho_pasta == r"\\servidor\projetos\Cliente\OP456"
+
+
+def test_edicao_de_op_altera_cliente(client, login_as, op_com_setor):
+    op, setor = op_com_setor
+    op.cliente = "Cliente Antigo"
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.post(f"/editar_op/{op.id}", data={
+        "nome": op.nome,
+        "cliente": "Cliente Atualizado",
+        "prazo": "",
+        "caminho_pasta": op.caminho_pasta or "",
+        "setores": [str(setor.id)],
+    })
+
+    db.session.refresh(op)
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith(f"/op/{op.id}")
+    assert op.cliente == "Cliente Atualizado"
+
+
+def test_detalhe_de_op_mostra_cliente(client, login_as, op_com_setor):
+    op, _ = op_com_setor
+    op.cliente = "Cliente Detalhe"
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Cliente: Cliente Detalhe" in html
+
+
+def test_detalhe_de_op_mostra_cliente_nao_informado(client, login_as, op_com_setor):
+    op, _ = op_com_setor
+    op.cliente = None
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Cliente: Não informado" in html
 
 
 def test_detalhe_de_op_mostra_botao_para_copiar_caminho_pasta(client, login_as, op_com_setor):

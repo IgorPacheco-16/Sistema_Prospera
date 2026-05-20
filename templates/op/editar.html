@@ -25,6 +25,16 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label" for="cliente">Cliente</label>
+                    <input type="text"
+                           id="cliente"
+                           name="cliente"
+                           class="form-control"
+                           value="{{ op.cliente or '' }}"
+                           placeholder="Nome do cliente">
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label">Prazo final</label>
                     <input type="date"
                            name="prazo"

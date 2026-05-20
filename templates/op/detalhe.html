@@ -30,6 +30,9 @@
             <div class="op-status-strip">
                 <span class="op-status-pill">{{ op.status }}</span>
                 <span class="op-deadline-pill">
+                    Cliente: {{ op.cliente or "Não informado" }}
+                </span>
+                <span class="op-deadline-pill">
                     Prazo: {{ op.prazo_final.strftime('%d/%m/%Y') if op.prazo_final else "Não definido" }}
                 </span>
             </div>

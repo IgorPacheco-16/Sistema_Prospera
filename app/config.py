@@ -106,6 +106,10 @@ def garantir_coluna_alta_prioridade():
     )
 
 
+def garantir_coluna_cliente_op():
+    adicionar_coluna_se_nao_existir("ops", "cliente", "VARCHAR(200)")
+
+
 def garantir_colunas_usuario():
     adicionar_coluna_se_nao_existir("users", "nome", "VARCHAR(100)")
 
@@ -249,6 +253,7 @@ def initialize_database(app):
         db.create_all()
         garantir_colunas_usuario()
         garantir_coluna_alta_prioridade()
+        garantir_coluna_cliente_op()
         garantir_colunas_op_metricas()
         garantir_colunas_notificacao()
         garantir_colunas_tarefa()
