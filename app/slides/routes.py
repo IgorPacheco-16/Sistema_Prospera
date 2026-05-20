@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, url_for
 from sqlalchemy.orm import selectinload
@@ -7,6 +8,20 @@ from database.models import OP, Tarefa
 
 
 SLIDE_ITEM_LIMIT = 5
+BASE_DIR = Path(__file__).resolve().parents[2]
+SLIDES_ASSET_PATHS = (
+    BASE_DIR / "static" / "css" / "slides.css",
+    BASE_DIR / "static" / "js" / "slides.js",
+)
+
+
+def slides_asset_version():
+    mtimes = [
+        int(caminho.stat().st_mtime)
+        for caminho in SLIDES_ASSET_PATHS
+        if caminho.exists()
+    ]
+    return str(max(mtimes) if mtimes else 1)
 
 
 def status_visual_tarefa(tarefa):
@@ -253,7 +268,10 @@ def create_slides_blueprint(tipos_permitidos):
     @slides_bp.route("/slides")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "ESPECTADOR")
     def slides():
-        return render_template("slides/index.html")
+        return render_template(
+            "slides/index.html",
+            slides_asset_version=slides_asset_version()
+        )
 
     @slides_bp.route("/api/slides")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "ESPECTADOR")

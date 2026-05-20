@@ -86,6 +86,17 @@ def test_slides_renderiza_botoes_de_navegacao_no_footer(client, login_as):
     assert "tv-nav-button-next" not in html
 
 
+def test_slides_versiona_assets_para_evitar_cache_visual(client, login_as):
+    login_as("ESPECTADOR")
+
+    resposta = client.get("/slides")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "css/slides.css?v=" in html
+    assert "js/slides.js?v=" in html
+
+
 def test_slides_setor_nao_acessa(client, login_as, setores):
     login_as("SETOR", setor_id=setores["Acabamento"].id)
 

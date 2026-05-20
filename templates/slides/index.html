@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel TV - Slides</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/slides.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slides.css') }}?v={{ slides_asset_version }}">
 </head>
 <body>
     <main class="tv-shell" data-slides-app data-api-url="/api/slides">
@@ -42,6 +42,6 @@
         </footer>
     </main>
 
-    <script src="{{ url_for('static', filename='js/slides.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/slides.js') }}?v={{ slides_asset_version }}"></script>
 </body>
 </html>
