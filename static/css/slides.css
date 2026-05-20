@@ -87,7 +87,31 @@ body {
     overflow: hidden;
 }
 
+.tv-nav-button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--tv-line);
+    border-radius: 8px;
+    background: rgba(8, 17, 31, 0.72);
+    color: var(--tv-text);
+    font-size: 30px;
+    line-height: 1;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.tv-nav-button:hover,
+.tv-nav-button:focus-visible {
+    background: var(--tv-panel-strong);
+    outline: 2px solid var(--tv-info);
+    outline-offset: 3px;
+}
+
 .tv-slide {
+    position: absolute;
+    inset: 0;
     height: 100%;
     padding: 34px;
     display: grid;
@@ -98,7 +122,12 @@ body {
     transition: opacity 420ms ease, transform 420ms ease;
 }
 
+.tv-slide[hidden] {
+    display: none !important;
+}
+
 .tv-slide.is-active {
+    display: grid !important;
     opacity: 1;
     transform: translateY(0);
 }
@@ -249,7 +278,13 @@ body {
 .tv-progress {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+}
+
+.tv-slide-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .tv-progress-bar {

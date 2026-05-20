@@ -6,15 +6,14 @@ from sqlalchemy.orm import selectinload
 from database.models import OP, Tarefa
 
 
-SLIDE_ITEM_LIMIT = 8
-SETOR_ITEM_LIMIT = 6
+SLIDE_ITEM_LIMIT = 5
 
 
 def status_visual_tarefa(tarefa):
     if tarefa.validado:
         return "ENTREGUE"
     if tarefa.entregue:
-        return "EM VALIDACAO"
+        return "EM VALIDAÇÃO"
     return tarefa.status or "PENDENTE"
 
 
@@ -36,12 +35,12 @@ def texto_urgencia(urgencia):
     textos = {
         "atrasada": "Atrasada",
         "hoje": "Entrega hoje",
-        "amanha": "Entrega amanha",
-        "proximos_15_dias": "Proximos 15 dias",
+        "amanha": "Entrega amanhã",
+        "proximos_15_dias": "Próximos 15 dias",
         "futura": "Futura",
         "sem_prazo": "Sem prazo",
     }
-    return textos.get(urgencia, "Sem classificacao")
+    return textos.get(urgencia, "Sem classificação")
 
 
 def data_iso(valor):
@@ -52,25 +51,31 @@ def data_br(valor):
     return valor.strftime("%d/%m/%Y") if valor else "Sem prazo"
 
 
+def cliente_op(op):
+    cliente = (getattr(op, "cliente", None) or "").strip() if op else ""
+    return cliente or "Não informado"
+
+
 def item_tarefa(tarefa, hoje):
     urgencia = urgencia_tarefa(tarefa, hoje)
     op = tarefa.op
     setor = tarefa.setor
+    op_id = tarefa.op_id if tarefa.op_id else None
 
     return {
         "id": tarefa.id,
-        "op_id": tarefa.op_id,
-        "op": op.nome if op else "",
-        "cliente": getattr(op, "cliente", None) or "Nao informado",
-        "tarefa": tarefa.nome,
-        "setor": setor.nome if setor else "",
+        "op_id": op_id,
+        "op": op.nome if op else "OP não informada",
+        "cliente": cliente_op(op),
+        "tarefa": tarefa.nome or "Tarefa sem nome",
+        "setor": setor.nome if setor else "Sem setor",
         "prazo": data_iso(tarefa.prazo),
         "prazo_formatado": data_br(tarefa.prazo),
         "status": status_visual_tarefa(tarefa),
         "urgencia": urgencia,
         "urgencia_texto": texto_urgencia(urgencia),
         "alta_prioridade": bool(getattr(op, "alta_prioridade", False)),
-        "link": url_for("ver_op", id=tarefa.op_id),
+        "link": url_for("ver_op", id=op_id) if op_id else "",
     }
 
 
@@ -103,6 +108,53 @@ def limitar_itens(tarefas, hoje, limite):
     ]
 
 
+def paginar_slides_tarefas(
+    tarefas,
+    hoje,
+    id_base,
+    titulo,
+    vazio=None,
+    incluir_vazio=False,
+):
+    tarefas_ordenadas = sorted(tarefas, key=ordenar_tarefas)
+
+    if not tarefas_ordenadas:
+        if not incluir_vazio:
+            return []
+        return [
+            {
+                "id": id_base,
+                "tipo": "lista",
+                "titulo": titulo,
+                "vazio": vazio or "Nenhuma tarefa",
+                "itens": [],
+            }
+        ]
+
+    total_paginas = (len(tarefas_ordenadas) + SLIDE_ITEM_LIMIT - 1) // SLIDE_ITEM_LIMIT
+    slides = []
+    for indice in range(total_paginas):
+        inicio = indice * SLIDE_ITEM_LIMIT
+        pagina = tarefas_ordenadas[inicio:inicio + SLIDE_ITEM_LIMIT]
+        numero_pagina = indice + 1
+
+        slides.append(
+            {
+                "id": f"{id_base}-{numero_pagina}" if total_paginas > 1 else id_base,
+                "tipo": "lista",
+                "titulo": (
+                    f"{titulo} {numero_pagina}/{total_paginas}"
+                    if total_paginas > 1
+                    else titulo
+                ),
+                "vazio": vazio or "Nenhuma tarefa",
+                "itens": [item_tarefa(tarefa, hoje) for tarefa in pagina],
+            }
+        )
+
+    return slides
+
+
 def montar_payload_slides():
     hoje = date.today()
     amanha = hoje + timedelta(days=1)
@@ -122,21 +174,62 @@ def montar_payload_slides():
         nome_setor = tarefa.setor.nome if tarefa.setor else "Sem setor"
         setores.setdefault(nome_setor, []).append(tarefa)
 
-    slides_setores = [
+    slides_setores = []
+    for nome_setor, tarefas_setor in sorted(setores.items()):
+        slides_setores.extend(
+            paginar_slides_tarefas(
+                tarefas_setor,
+                hoje,
+                f"setor-{nome_setor.lower().replace(' ', '-')}",
+                nome_setor,
+                f"Nenhuma tarefa em {nome_setor}",
+            )
+        )
+
+    slides = [
         {
-            "id": f"setor-{nome_setor.lower().replace(' ', '-')}",
-            "titulo": nome_setor,
-            "vazio": f"Nenhuma tarefa em {nome_setor}",
-            "itens": limitar_itens(tarefas_setor, hoje, SETOR_ITEM_LIMIT),
-        }
-        for nome_setor, tarefas_setor in sorted(setores.items())
+            "id": "resumo",
+            "tipo": "resumo",
+            "titulo": "Resumo geral",
+            "itens": [],
+        },
+        *paginar_slides_tarefas(
+            atrasadas,
+            hoje,
+            "atrasadas",
+            "Tarefas atrasadas",
+            "Não há tarefas em atraso, parabéns!",
+            incluir_vazio=True,
+        ),
+        *paginar_slides_tarefas(
+            hoje_lista,
+            hoje,
+            "hoje",
+            "Entrega hoje",
+            "Nenhuma tarefa para hoje",
+        ),
+        *paginar_slides_tarefas(
+            amanha_lista,
+            hoje,
+            "amanha",
+            "Entrega amanhã",
+            "Nenhuma tarefa para amanhã",
+        ),
+        *paginar_slides_tarefas(
+            proximos_15,
+            hoje,
+            "proximos-15",
+            "Próximos 15 dias",
+            "Nenhuma tarefa nos próximos 15 dias",
+        ),
+        *slides_setores,
     ]
 
     return {
         "atualizado_em": date.today().isoformat(),
         "intervalos": {
-            "atualizacao_ms": 45000,
-            "slide_ms": 10000,
+            "atualizacao_ms": 90000,
+            "slide_ms": 8000,
         },
         "resumo": {
             "total_atrasadas": len(atrasadas),
@@ -150,43 +243,7 @@ def montar_payload_slides():
             "amanha": limitar_itens(amanha_lista, hoje, SLIDE_ITEM_LIMIT),
             "proximos_15_dias": limitar_itens(proximos_15, hoje, SLIDE_ITEM_LIMIT),
         },
-        "slides": [
-            {
-                "id": "resumo",
-                "tipo": "resumo",
-                "titulo": "Resumo geral",
-                "itens": [],
-            },
-            {
-                "id": "atrasadas",
-                "tipo": "lista",
-                "titulo": "Tarefas atrasadas",
-                "vazio": "Nenhuma tarefa atrasada 🎉",
-                "itens": limitar_itens(atrasadas, hoje, SLIDE_ITEM_LIMIT),
-            },
-            {
-                "id": "hoje",
-                "tipo": "lista",
-                "titulo": "Entrega hoje",
-                "vazio": "Nenhuma tarefa para hoje 🎉",
-                "itens": limitar_itens(hoje_lista, hoje, SLIDE_ITEM_LIMIT),
-            },
-            {
-                "id": "amanha",
-                "tipo": "lista",
-                "titulo": "Entrega amanha",
-                "vazio": "Nenhuma tarefa para amanha 🎉",
-                "itens": limitar_itens(amanha_lista, hoje, SLIDE_ITEM_LIMIT),
-            },
-            {
-                "id": "proximos-15",
-                "tipo": "lista",
-                "titulo": "Proximos 15 dias",
-                "vazio": "Nenhuma tarefa nos proximos 15 dias 🎉",
-                "itens": limitar_itens(proximos_15, hoje, SLIDE_ITEM_LIMIT),
-            },
-            *slides_setores,
-        ],
+        "slides": slides,
     }
 
 

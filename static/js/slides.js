@@ -10,6 +10,8 @@
     const updated = app.querySelector("[data-tv-updated]");
     const position = app.querySelector("[data-slide-position]");
     const progress = app.querySelector("[data-slide-progress]");
+    const previousButton = app.querySelector("[data-slide-prev]");
+    const nextButton = app.querySelector("[data-slide-next]");
 
     let payload = null;
     let slides = [];
@@ -18,7 +20,9 @@
     let refreshTimer = null;
     let progressTimer = null;
     let slideStartedAt = Date.now();
-    let slideMs = 10000;
+    let slideMs = 8000;
+    let refreshMs = 90000;
+    let isLoading = false;
 
     function escapeHtml(value) {
         return String(value || "")
@@ -46,8 +50,8 @@
         const cards = [
             ["total_atrasadas", "Atrasadas", "atrasada"],
             ["vencem_hoje", "Vencem hoje", "hoje"],
-            ["vencem_amanha", "Vencem amanha", "amanha"],
-            ["proximas_2_semanas", "Proximas 2 semanas", "proximos_15_dias"],
+            ["vencem_amanha", "Vencem amanhã", "amanha"],
+            ["proximas_2_semanas", "Próximas 2 semanas", "proximos_15_dias"],
         ];
 
         return `
@@ -86,7 +90,7 @@
                     <span>Prazo</span>
                     <strong>${escapeHtml(item.prazo_formatado)}</strong>
                 </div>
-                <span class="tv-pill ${escapeHtml(item.urgencia)}">${escapeHtml(item.urgencia_texto)} · ${escapeHtml(item.status)}</span>
+                <span class="tv-pill ${escapeHtml(item.urgencia)}">${escapeHtml(item.urgencia_texto)} - ${escapeHtml(item.status)}</span>
             </div>
         `;
     }
@@ -108,9 +112,27 @@
         `;
     }
 
+    function slideShouldRender(slidePayload) {
+        if (!slidePayload) {
+            return false;
+        }
+        if (slidePayload.tipo === "resumo") {
+            return true;
+        }
+        return slidePayload.tipo === "lista";
+    }
+
     function renderSlides() {
-        slides = (payload.slides || []).filter(Boolean);
-        currentIndex = Math.min(currentIndex, Math.max(slides.length - 1, 0));
+        const previousSlide = slides[currentIndex];
+        const previousSlideId = previousSlide && previousSlide.id;
+        slides = (payload.slides || []).filter(slideShouldRender);
+
+        const preservedIndex = slides.findIndex(function(slidePayload) {
+            return slidePayload.id === previousSlideId;
+        });
+        currentIndex = preservedIndex >= 0
+            ? preservedIndex
+            : Math.min(currentIndex, Math.max(slides.length - 1, 0));
 
         if (!slides.length) {
             stage.innerHTML = '<div class="tv-empty">Nenhuma tarefa para exibir</div>';
@@ -153,11 +175,27 @@
         showSlide(currentIndex + 1);
     }
 
+    function restartSlideTimer() {
+        window.clearInterval(slideTimer);
+        slideTimer = slides.length > 1
+            ? window.setInterval(nextSlide, slideMs)
+            : null;
+    }
+
+    function navigateManually(offset) {
+        if (!slides.length) {
+            return;
+        }
+
+        showSlide(currentIndex + offset);
+        restartSlideTimer();
+    }
+
     function resetTimers() {
         window.clearInterval(slideTimer);
         window.clearInterval(progressTimer);
 
-        slideTimer = window.setInterval(nextSlide, slideMs);
+        restartSlideTimer();
         progressTimer = window.setInterval(function() {
             if (!progress) {
                 return;
@@ -168,7 +206,17 @@
         }, 250);
     }
 
+    function scheduleRefresh() {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(loadSlides, refreshMs);
+    }
+
     async function loadSlides() {
+        if (isLoading) {
+            return;
+        }
+
+        isLoading = true;
         try {
             const response = await fetch(apiUrl, {
                 headers: {
@@ -182,7 +230,8 @@
             }
 
             payload = await response.json();
-            slideMs = Number(payload.intervalos && payload.intervalos.slide_ms) || 10000;
+            slideMs = Number(payload.intervalos && payload.intervalos.slide_ms) || 8000;
+            refreshMs = Number(payload.intervalos && payload.intervalos.atualizacao_ms) || 90000;
             renderSlides();
             resetTimers();
 
@@ -190,18 +239,43 @@
                 updated.textContent = "Atualizado agora";
             }
         } catch (error) {
-            stage.innerHTML = '<div class="tv-error">Nao foi possivel carregar o painel.</div>';
+            if (!slides.length) {
+                stage.innerHTML = '<div class="tv-error">Não foi possível carregar o painel.</div>';
+            }
+        } finally {
+            isLoading = false;
+            scheduleRefresh();
         }
     }
 
     updateClock();
     window.setInterval(updateClock, 1000);
     loadSlides();
-    refreshTimer = window.setInterval(loadSlides, 45000);
+
+    if (previousButton) {
+        previousButton.addEventListener("click", function() {
+            navigateManually(-1);
+        });
+    }
+
+    if (nextButton) {
+        nextButton.addEventListener("click", function() {
+            navigateManually(1);
+        });
+    }
+
+    window.addEventListener("keydown", function(event) {
+        if (event.key === "ArrowLeft") {
+            navigateManually(-1);
+        }
+        if (event.key === "ArrowRight") {
+            navigateManually(1);
+        }
+    });
 
     window.addEventListener("beforeunload", function() {
         window.clearInterval(slideTimer);
-        window.clearInterval(refreshTimer);
+        window.clearTimeout(refreshTimer);
         window.clearInterval(progressTimer);
     });
 })();
