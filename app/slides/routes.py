@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, render_template, url_for
 from sqlalchemy.orm import selectinload
 
 from database.models import OP, Tarefa
+from tempo import hoje_brasilia
 
 
 SLIDE_ITEM_LIMIT = 5
@@ -171,7 +172,7 @@ def paginar_slides_tarefas(
 
 
 def montar_payload_slides():
-    hoje = date.today()
+    hoje = hoje_brasilia()
     amanha = hoje + timedelta(days=1)
     limite_15 = hoje + timedelta(days=15)
     tarefas = tarefas_ativas()
@@ -241,7 +242,7 @@ def montar_payload_slides():
     ]
 
     return {
-        "atualizado_em": date.today().isoformat(),
+        "atualizado_em": hoje.isoformat(),
         "intervalos": {
             "atualizacao_ms": 90000,
             "slide_ms": 8000,

@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 
+from email_service import enviar_email
+
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -311,6 +313,27 @@ def criar_admin(email, nome, senha):
     ))
     db.session.commit()
     click.echo(f"Administrador criado: {email_normalizado}")
+
+
+@app.cli.command("testar-email")
+@click.option("--para", required=True, help="Email destinatario do teste.")
+def testar_email(para):
+    destinatario = normalizar_email(para)
+    if not destinatario:
+        raise click.ClickException("Informe um email valido em --para.")
+
+    resultado = enviar_email(
+        [destinatario],
+        "Teste de email - Sistema OP",
+        (
+            "Este e um teste controlado de envio SMTP do Sistema OP.\n\n"
+            "Se voce recebeu esta mensagem, a configuracao de email esta funcionando."
+        ),
+    )
+    if not resultado.enviado:
+        raise click.ClickException(resultado.erro or "Email nao enviado.")
+
+    click.echo(f"Email de teste enviado para {destinatario}.")
 
 
 if __name__ == "__main__":

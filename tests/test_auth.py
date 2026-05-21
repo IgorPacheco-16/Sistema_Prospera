@@ -1,6 +1,6 @@
 from werkzeug.security import check_password_hash
 
-from database.models import db, User
+from database.models import db, PasswordResetToken, User
 
 
 def test_login_valido_redireciona_para_dashboard(client):
@@ -51,3 +51,34 @@ def test_definir_senha_para_usuario_temporario(client, app):
     db.session.refresh(user)
     assert user.ativo is True
     assert check_password_hash(user.senha, "nova-senha")
+
+
+def test_esqueci_senha_chama_servico_de_email(client, app, monkeypatch):
+    import app as app_module
+
+    chamadas = []
+
+    def enviar_email_fake(destinatarios, assunto, texto, html=None):
+        chamadas.append({
+            "destinatarios": destinatarios,
+            "assunto": assunto,
+            "texto": texto,
+            "html": html,
+        })
+
+        class Resultado:
+            enviado = True
+
+        return Resultado()
+
+    monkeypatch.setattr(app_module.security_module, "enviar_email", enviar_email_fake)
+
+    resposta = client.post("/esqueci_senha", data={"email": "admin@teste.com"})
+
+    token = PasswordResetToken.query.join(User).filter(User.email == "admin@teste.com").first()
+    assert resposta.status_code == 200
+    assert token is not None
+    assert chamadas
+    assert chamadas[0]["destinatarios"] == ["admin@teste.com"]
+    assert chamadas[0]["assunto"] == "Redefinicao de senha - Sistema OP"
+    assert "Codigo:" in chamadas[0]["texto"]

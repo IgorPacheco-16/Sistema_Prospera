@@ -1,6 +1,51 @@
 from datetime import date, datetime, timedelta
 
 from database.models import db, Notificacao, OP, OPSetor, Tarefa, User
+from tempo import hoje_brasilia
+
+
+EMAIL_ENV_KEYS = [
+    "MAIL_SERVER",
+    "MAIL_PORT",
+    "MAIL_USERNAME",
+    "MAIL_PASSWORD",
+    "MAIL_DEFAULT_SENDER",
+    "MAIL_USE_TLS",
+    "MAIL_USE_SSL",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
+    "SMTP_USE_TLS",
+    "SMTP_USE_SSL",
+    "EMAIL_HOST",
+    "EMAIL_PORT",
+    "EMAIL_USER",
+    "EMAIL_USERNAME",
+    "EMAIL_PASSWORD",
+    "EMAIL_FROM",
+    "EMAIL_USE_TLS",
+    "EMAIL_USE_SSL",
+]
+
+
+def limpar_env_email(monkeypatch):
+    for chave in EMAIL_ENV_KEYS:
+        monkeypatch.delenv(chave, raising=False)
+
+
+def limpar_config_email(flask_app):
+    for chave in [
+        "MAIL_SERVER",
+        "MAIL_PORT",
+        "MAIL_USERNAME",
+        "MAIL_PASSWORD",
+        "MAIL_DEFAULT_SENDER",
+        "MAIL_USE_TLS",
+        "MAIL_USE_SSL",
+    ]:
+        flask_app.config.pop(chave, None)
 
 
 def test_dashboard_carrega_logado(client, login_as):
@@ -13,7 +58,7 @@ def test_dashboard_carrega_logado(client, login_as):
 
 def test_calendario_mostra_apenas_tarefas_pendentes_de_ops_em_andamento(client, login_as, setores):
     setor = setores["Acabamento"]
-    prazo = date.today() + timedelta(days=1)
+    prazo = hoje_brasilia() + timedelta(days=1)
 
     cenarios = [
         ("OP Em Andamento", "EM ANDAMENTO", False),
@@ -150,9 +195,9 @@ def test_detalhe_de_op_mostra_botao_para_copiar_caminho_pasta(client, login_as, 
     assert r"\\servidor\projetos\Cliente\OP789" in html
 
 
-def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, login_as, setores, monkeypatch, capsys):
-    for chave in ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]:
-        monkeypatch.delenv(chave, raising=False)
+def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, app, login_as, setores, monkeypatch, capsys):
+    limpar_env_email(monkeypatch)
+    limpar_config_email(app)
     login_as("ATENDENTE")
 
     resposta = client.post("/criar_op", data={
@@ -174,8 +219,8 @@ def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, login_as
 
 
 def test_email_operacional_nao_repete_notificacao_existente(app, capsys, monkeypatch):
-    for chave in ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]:
-        monkeypatch.delenv(chave, raising=False)
+    limpar_env_email(monkeypatch)
+    limpar_config_email(app)
 
     import app as app_module
 
@@ -221,6 +266,57 @@ def test_email_operacional_nao_repete_notificacao_existente(app, capsys, monkeyp
 
     assert "[EMAIL OPERACIONAL][DEV]" in primeira_saida
     assert segunda_saida == ""
+
+
+def test_notificacao_de_atraso_chama_servico_de_email(app, setores, monkeypatch):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    chamadas = []
+    setor = setores["Acabamento"]
+    op = OP(
+        nome="OP Com Tarefa Atrasada",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        prazo_final=hoje_brasilia() + timedelta(days=5),
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+    tarefa = Tarefa(
+        op_id=op.id,
+        setor_id=setor.id,
+        nome="Tarefa atrasada para email",
+        prazo=hoje_brasilia() - timedelta(days=1),
+        validado=False,
+    )
+    db.session.add(tarefa)
+    db.session.commit()
+
+    def enviar_email_fake(destinatarios, assunto, texto, html=None):
+        chamadas.append({
+            "destinatarios": destinatarios,
+            "assunto": assunto,
+            "texto": texto,
+            "html": html,
+        })
+
+        class Resultado:
+            enviado = True
+            erro = None
+
+        return Resultado()
+
+    monkeypatch.setattr(services, "smtp_configurado", lambda: True)
+    monkeypatch.setattr(services, "enviar_email_smtp", enviar_email_fake)
+
+    assert services.gerar_notificacoes_pendentes(forcar=True) is True
+
+    assert chamadas
+    assert "TAREFA ATRASADA" in chamadas[0]["assunto"]
+    assert "setor@teste.com" in chamadas[0]["destinatarios"]
+    assert "atendente@teste.com" in chamadas[0]["destinatarios"]
+    assert "pcp@teste.com" in chamadas[0]["destinatarios"]
 
 
 def test_destinatarios_nova_op_usam_tipo_pcp_mesmo_com_setor(app, setores):

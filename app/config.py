@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash
 
 from database.models import db, Setor, User
+from email_service import carregar_config_email
 from tempo import agora_brasilia
 
 
@@ -78,6 +79,7 @@ def configure_app(app):
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = (
         timedelta(hours=12) if ambiente == "production" else 0
     )
+    carregar_config_email(app)
 
 
 def adicionar_coluna_se_nao_existir(tabela, coluna, definicao):

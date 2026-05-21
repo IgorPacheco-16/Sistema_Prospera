@@ -1,9 +1,10 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from flask import Blueprint, render_template, request, session, url_for
 from sqlalchemy.orm import load_only, selectinload
 
 from database.models import OP, OPSetor, Setor, Tarefa
+from tempo import hoje_brasilia
 
 
 STATUS_PENDENTE = "PENDENTE"
@@ -219,7 +220,7 @@ def create_kanban_blueprint(login_required):
     @kanban_bp.route("/kanban")
     @login_required
     def kanban():
-        hoje = date.today()
+        hoje = hoje_brasilia()
         tipo = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
         filtros = filtros_kanban()

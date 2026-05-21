@@ -1,6 +1,7 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import hoje_brasilia
 
 
 def test_setor_nao_pode_criar_op(client, login_as, setores):
@@ -175,7 +176,7 @@ def test_calendario_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, o
             op_id=op.id,
             setor_id=acabamento.id,
             nome="Tarefa calendario acabamento",
-            prazo=date.today() + timedelta(days=1),
+            prazo=hoje_brasilia() + timedelta(days=1),
             status="PENDENTE",
             liberada=True
         ),
@@ -183,7 +184,7 @@ def test_calendario_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, o
             op_id=op_pcp.id,
             setor_id=pcp.id,
             nome="Tarefa calendario pcp",
-            prazo=date.today() + timedelta(days=1),
+            prazo=hoje_brasilia() + timedelta(days=1),
             status="PENDENTE",
             liberada=True
         ),

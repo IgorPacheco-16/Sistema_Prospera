@@ -42,7 +42,7 @@ Variaveis principais:
 - `APP_ENV`: ambiente atual. Use `development`, `test` ou `production`.
 - `SECRET_KEY`: chave secreta do Flask. Obrigatoria fora de desenvolvimento.
 - `DATABASE_URL`: URL do banco.
-- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_DEFAULT_SENDER`: configuracoes de envio de email.
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_USE_SSL`, `MAIL_DEFAULT_SENDER`: configuracoes de envio de email.
 
 Em `APP_ENV=production`, `DATABASE_URL` e obrigatoria e deve apontar para PostgreSQL. URLs iniciadas com `postgres://` sao convertidas para `postgresql://`.
 
@@ -88,7 +88,8 @@ Configure as variaveis de ambiente no Render:
 - `APP_ENV=production`
 - `SECRET_KEY` com um valor forte
 - `DATABASE_URL` com a URL PostgreSQL do Supabase
-- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_DEFAULT_SENDER`, se email estiver habilitado
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_USE_TLS`, `MAIL_USE_SSL`, `MAIL_DEFAULT_SENDER`, se email estiver habilitado
+- `APP_BASE_URL`, recomendado para links absolutos nos emails em producao
 
 Depois do primeiro deploy, abra o Shell do Render e rode:
 
@@ -127,4 +128,10 @@ Rode a suite com:
 
 A recuperacao de senha e as notificacoes operacionais usam as variaveis `MAIL_*`. As variaveis antigas `SMTP_*` ainda sao aceitas por compatibilidade local.
 
-Se email nao estiver configurado, o sistema usa fallback apenas para desenvolvimento/teste e registra a mensagem no console. Configure email antes do piloto em producao.
+Se email nao estiver configurado, o sistema usa fallback apenas para desenvolvimento/teste nas notificacoes operacionais e registra erro seguro em producao. Configure email antes do piloto em producao.
+
+Para testar SMTP real sem acionar uma OP ou redefinir senha:
+
+```powershell
+flask testar-email --para email@dominio.com
+```

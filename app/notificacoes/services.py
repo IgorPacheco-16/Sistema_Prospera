@@ -1,7 +1,5 @@
-from datetime import date, timedelta
-from email.message import EmailMessage
+from datetime import timedelta
 import os
-import smtplib
 import sys
 import time
 
@@ -9,6 +7,14 @@ from flask import current_app, has_request_context, request, session
 from sqlalchemy.orm import selectinload
 
 from database.models import db, Notificacao, OP, OPSetor, Tarefa, User
+from email_service import (
+    ambiente_desenvolvimento_ou_teste,
+    enviar_email as enviar_email_smtp,
+    mail_env as mail_env_config,
+    parse_bool,
+    smtp_configurado,
+)
+from tempo import hoje_brasilia
 
 
 EMAILS_OPERACIONAIS = {
@@ -68,25 +74,12 @@ def link_tarefa(op_id, setor_id, tarefa_id):
     return f"/op/{op_id}?setor={setor_id}&tarefa={tarefa_id}"
 
 
-def smtp_configurado():
-    return all([
-        mail_env("MAIL_SERVER", "SMTP_HOST"),
-        mail_env("MAIL_PORT", "SMTP_PORT"),
-        mail_env("MAIL_USERNAME", "SMTP_USER"),
-        mail_env("MAIL_PASSWORD", "SMTP_PASSWORD"),
-        mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
-    ])
-
-
 def mail_env(chave_mail, chave_smtp):
-    return os.environ.get(chave_mail) or os.environ.get(chave_smtp)
+    return mail_env_config(chave_mail) or mail_env_config(chave_smtp)
 
 
 def mail_usa_tls():
-    valor = os.environ.get("MAIL_USE_TLS")
-    if valor is None:
-        return True
-    return valor.strip().lower() in {"1", "true", "yes", "on"}
+    return parse_bool(mail_env_config("MAIL_USE_TLS"), default=True)
 
 
 def url_absoluta(link):
@@ -213,33 +206,20 @@ def enviar_email_operacional(
         f"Link: {link_final}\n"
     )
 
-    if not smtp_ativo:
+    if not smtp_ativo and ambiente_desenvolvimento_ou_teste():
         imprimir_log_email(
             f"[EMAIL OPERACIONAL][DEV] {assunto} -> {', '.join(emails)}\n{texto}"
         )
         return False
 
-    mensagem = EmailMessage()
-    mensagem["Subject"] = assunto
-    mensagem["From"] = mail_env("MAIL_DEFAULT_SENDER", "SMTP_FROM")
-    mensagem["To"] = ", ".join(emails)
-    mensagem.set_content(texto)
-    mensagem.add_alternative(html, subtype="html")
-
-    porta = int(mail_env("MAIL_PORT", "SMTP_PORT") or "587")
-    try:
-        with smtplib.SMTP(mail_env("MAIL_SERVER", "SMTP_HOST"), porta) as servidor:
-            if mail_usa_tls():
-                servidor.starttls()
-            servidor.login(
-                mail_env("MAIL_USERNAME", "SMTP_USER"),
-                mail_env("MAIL_PASSWORD", "SMTP_PASSWORD")
-            )
-            servidor.send_message(mensagem)
-        return True
-    except Exception as erro:
-        imprimir_log_email(f"[ERRO] Falha ao enviar email operacional ({evento}): {erro}")
-        return False
+    resultado = enviar_email_smtp(emails, assunto, texto, html=html)
+    if not resultado.enviado and resultado.erro:
+        current_app.logger.error(
+            "email_operacional_nao_enviado evento=%s erro=%s",
+            evento,
+            resultado.erro,
+        )
+    return resultado.enviado
 
 
 def query_notificacoes_usuario():
@@ -434,7 +414,7 @@ def notificar_op_para_setores(op, tipo_evento, mensagem, chaves_existentes=None)
 
 
 def verificar_atrasos():
-    hoje = date.today()
+    hoje = hoje_brasilia()
     tarefas = (
         Tarefa.query
         .options(selectinload(Tarefa.op))

@@ -1,6 +1,9 @@
 from datetime import date, timedelta
+from pathlib import Path
 
+import app as app_module
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import hoje_brasilia
 
 
 def criar_tarefa_slide(
@@ -97,6 +100,13 @@ def test_slides_versiona_assets_para_evitar_cache_visual(client, login_as):
     assert "js/slides.js?v=" in html
 
 
+def test_slides_js_relogio_usa_timezone_brasilia():
+    js = Path("static/js/slides.js").read_text(encoding="utf-8")
+
+    assert 'toLocaleTimeString("pt-BR"' in js
+    assert 'timeZone: "America/Sao_Paulo"' in js
+
+
 def test_slides_setor_nao_acessa(client, login_as, setores):
     login_as("SETOR", setor_id=setores["Acabamento"].id)
 
@@ -110,7 +120,7 @@ def test_api_slides_retorna_categorias(client, login_as, setores):
         "OP API Slides",
         "Tarefa API Slides",
         setores["Acabamento"],
-        date.today(),
+        hoje_brasilia(),
     )
     login_as("ADMIN")
 
@@ -139,7 +149,7 @@ def test_api_slides_retorna_cliente_da_op_na_tarefa(client, login_as, setores):
         "OP Cliente Slides",
         "Tarefa cliente slides",
         setores["Acabamento"],
-        date.today(),
+        hoje_brasilia(),
         cliente="Cliente Slides",
     )
     login_as("ADMIN")
@@ -158,7 +168,7 @@ def test_api_slides_cliente_vazio_retorna_nao_informado(client, login_as, setore
         "OP Sem Cliente Slides",
         "Tarefa sem cliente slides",
         setores["Acabamento"],
-        date.today(),
+        hoje_brasilia(),
         cliente="",
     )
     login_as("ADMIN")
@@ -173,7 +183,7 @@ def test_api_slides_cliente_vazio_retorna_nao_informado(client, login_as, setore
 
 
 def test_api_slides_nao_exibe_arquivadas_ou_finalizadas(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     criar_tarefa_slide(
         "OP Ativa Slides",
         "Tarefa ativa slides",
@@ -205,7 +215,7 @@ def test_api_slides_nao_exibe_arquivadas_ou_finalizadas(client, login_as, setore
 
 
 def test_api_slides_exibe_entregue_nao_validada_e_oculta_validada(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     _, tarefa_validacao = criar_tarefa_slide(
         "OP Em Validacao",
         "Tarefa aguardando validacao",
@@ -237,7 +247,7 @@ def test_api_slides_exibe_entregue_nao_validada_e_oculta_validada(client, login_
 
 
 def test_api_slides_classifica_atrasada_hoje_amanha_e_15_dias(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     criar_tarefa_slide("OP Atrasada", "Tarefa atrasada", setores["Acabamento"], hoje - timedelta(days=1))
     criar_tarefa_slide("OP Hoje", "Tarefa hoje", setores["Acabamento"], hoje)
     criar_tarefa_slide("OP Amanha", "Tarefa amanha", setores["Acabamento"], hoje + timedelta(days=1))
@@ -259,8 +269,34 @@ def test_api_slides_classifica_atrasada_hoje_amanha_e_15_dias(client, login_as, 
     assert dados["resumo"]["proximas_2_semanas"] == 1
 
 
+def test_api_slides_usa_data_brasilia_para_classificar_prazos(
+    client,
+    login_as,
+    setores,
+    monkeypatch,
+):
+    hoje = date(2026, 5, 21)
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "hoje_brasilia",
+        lambda: hoje,
+    )
+
+    criar_tarefa_slide("OP BSB Atrasada", "BSB atrasada", setores["Acabamento"], hoje - timedelta(days=1))
+    criar_tarefa_slide("OP BSB Hoje", "BSB hoje", setores["Acabamento"], hoje)
+    criar_tarefa_slide("OP BSB Amanha", "BSB amanha", setores["Acabamento"], hoje + timedelta(days=1))
+    login_as("ADMIN")
+
+    dados = client.get("/api/slides").get_json()
+
+    assert dados["atualizado_em"] == "2026-05-21"
+    assert "BSB atrasada" in nomes_itens(dados["categorias"]["atrasadas"])
+    assert "BSB hoje" in nomes_itens(dados["categorias"]["hoje"])
+    assert "BSB amanha" in nomes_itens(dados["categorias"]["amanha"])
+
+
 def test_api_slides_categoria_com_7_tarefas_gera_2_slides(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     for indice in range(7):
         criar_tarefa_slide(
             f"OP Atrasada {indice}",
@@ -280,7 +316,7 @@ def test_api_slides_categoria_com_7_tarefas_gera_2_slides(client, login_as, seto
 
 
 def test_api_slides_lista_tem_no_maximo_5_itens(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     for indice in range(7):
         criar_tarefa_slide(
             f"OP Hoje {indice}",
@@ -329,7 +365,7 @@ def test_api_slides_intervalos_do_painel(client, login_as):
 
 
 def test_api_slides_setor_pagina_corretamente(client, login_as, setores):
-    hoje = date.today()
+    hoje = hoje_brasilia()
     for indice in range(7):
         criar_tarefa_slide(
             f"OP Setor {indice}",

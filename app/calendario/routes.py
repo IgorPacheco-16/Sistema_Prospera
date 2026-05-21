@@ -1,8 +1,9 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from flask import Blueprint, render_template, session
 
 from database.models import OP, Tarefa
+from tempo import hoje_brasilia
 
 
 def create_calendario_blueprint(login_required):
@@ -11,7 +12,7 @@ def create_calendario_blueprint(login_required):
     @calendario_bp.route("/calendario")
     @login_required
     def calendario():
-        hoje = date.today()
+        hoje = hoje_brasilia()
         amanha = hoje + timedelta(days=1)
         semana = hoje + timedelta(days=7)
         mes = hoje + timedelta(days=30)

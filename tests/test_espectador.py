@@ -1,6 +1,7 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import hoje_brasilia
 
 
 def criar_op_com_tarefa(setor, status_tarefa="PENDENTE"):
@@ -8,7 +9,7 @@ def criar_op_com_tarefa(setor, status_tarefa="PENDENTE"):
         nome="OP Visivel Espectador",
         status="EM ANDAMENTO",
         atendente="atendente@teste.com",
-        prazo_final=date.today() + timedelta(days=3),
+        prazo_final=hoje_brasilia() + timedelta(days=3),
     )
     db.session.add(op)
     db.session.flush()
@@ -18,7 +19,7 @@ def criar_op_com_tarefa(setor, status_tarefa="PENDENTE"):
         op_id=op.id,
         setor_id=setor.id,
         nome="Tarefa Visivel Espectador",
-        prazo=date.today() + timedelta(days=1),
+        prazo=hoje_brasilia() + timedelta(days=1),
         status=status_tarefa,
         liberada=True,
     )

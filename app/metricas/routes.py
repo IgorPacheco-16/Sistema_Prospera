@@ -1,8 +1,9 @@
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 
 from flask import Blueprint, render_template, request
 
 from database.models import OP, Setor, Tarefa
+from tempo import hoje_brasilia
 
 
 STATUS_PENDENTE = "PENDENTE"
@@ -593,7 +594,7 @@ def create_metricas_blueprint(tipos_permitidos):
     @metricas_bp.route("/metricas")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP")
     def metricas():
-        hoje = date.today()
+        hoje = hoje_brasilia()
         agora = datetime.combine(hoje, time.max)
         filtros = filtros_metricas()
         tarefa_id = id_querystring("tarefa_id")

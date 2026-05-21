@@ -1,6 +1,7 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import hoje_brasilia
 
 
 def criar_op_com_tarefa(nome_op, setor, nome_tarefa, status="EM ANDAMENTO", **kwargs):
@@ -86,7 +87,7 @@ def test_kanban_oculta_ops_finalizadas_e_arquivadas(client, login_as, setores):
 
 def test_kanban_ordena_atrasadas_prazo_menor_e_sem_prazo_por_ultimo(client, login_as, setores):
     setor = setores["Acabamento"]
-    hoje = date.today()
+    hoje = hoje_brasilia()
 
     criar_op_com_tarefa("OP Sem Prazo", setor, "Tarefa sem prazo", prazo=None)
     criar_op_com_tarefa("OP Prazo Futuro", setor, "Tarefa prazo futuro", prazo=hoje + timedelta(days=2))
@@ -118,7 +119,7 @@ def test_kanban_card_linka_para_op_com_deep_link(client, login_as, setores):
 def test_kanban_combina_busca_status_setor_op_tipo_e_prazo(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
-    hoje = date.today()
+    hoje = hoje_brasilia()
 
     op_alvo, _ = criar_op_com_tarefa(
         "OP Cliente Ouro",
@@ -198,7 +199,7 @@ def test_kanban_setor_nao_consegue_filtrar_outro_setor(client, login_as, setores
 
 def test_kanban_filtra_prazo_sem_prazo_e_vencem_hoje(client, login_as, setores):
     setor = setores["Acabamento"]
-    hoje = date.today()
+    hoje = hoje_brasilia()
 
     criar_op_com_tarefa("OP Sem Prazo", setor, "Tarefa sem prazo", prazo=None)
     criar_op_com_tarefa("OP Hoje", setor, "Tarefa hoje", prazo=hoje)

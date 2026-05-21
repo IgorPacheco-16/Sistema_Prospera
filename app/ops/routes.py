@@ -1,11 +1,11 @@
-from datetime import date, datetime
+from datetime import datetime
 from collections import defaultdict
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
 from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa
-from tempo import agora_brasilia
+from tempo import agora_brasilia, hoje_brasilia
 
 
 def create_ops_blueprint(
@@ -165,7 +165,7 @@ def create_ops_blueprint(
             historico=historico,
             setores=Setor.query.all(),
             tipo=tipo_usuario,
-            today=date.today(),
+            today=hoje_brasilia(),
             focus_setor_id=request.args.get("setor", type=int),
             focus_tarefa_id=request.args.get("tarefa", type=int)
         )

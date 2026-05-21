@@ -60,3 +60,24 @@ def test_configure_app_production_sem_database_url_falha_com_mensagem_objetiva(m
 
     with pytest.raises(RuntimeError, match="DATABASE_URL obrigatoria"):
         app_module.config_module.configure_app(Flask(__name__))
+
+
+def test_configure_app_carrega_variaveis_mail_no_app_config(monkeypatch):
+    import app as app_module
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("SECRET_KEY", "secret")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("MAIL_SERVER", "smtp.example.com")
+    monkeypatch.setenv("MAIL_PORT", "465")
+    monkeypatch.setenv("MAIL_USERNAME", "usuario@example.com")
+    monkeypatch.setenv("MAIL_PASSWORD", "senha")
+    monkeypatch.setenv("MAIL_DEFAULT_SENDER", "sistema@example.com")
+    monkeypatch.setenv("MAIL_USE_SSL", "true")
+
+    flask_app = Flask(__name__)
+    app_module.config_module.configure_app(flask_app)
+
+    assert flask_app.config["MAIL_SERVER"] == "smtp.example.com"
+    assert flask_app.config["MAIL_PORT"] == "465"
+    assert flask_app.config["MAIL_USE_SSL"] == "true"

@@ -1,9 +1,10 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from flask import Blueprint, render_template, request, session
 from sqlalchemy import case, func
 
 from database.models import db, OP, OPSetor, Tarefa
+from tempo import hoje_brasilia
 
 
 def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
@@ -14,7 +15,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
     def dashboard():
         gerar_notificacoes_pendentes()
 
-        hoje = date.today()
+        hoje = hoje_brasilia()
 
         busca = request.args.get("busca", "")
         status = request.args.get("status", "")

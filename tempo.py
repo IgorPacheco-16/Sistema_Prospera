@@ -12,6 +12,10 @@ def agora_brasilia():
     return datetime.now(BRASILIA_TZ).replace(tzinfo=None)
 
 
+def hoje_brasilia():
+    return agora_brasilia().date()
+
+
 def formatar_data_hora_brasilia(valor):
     if not valor:
         return ""
