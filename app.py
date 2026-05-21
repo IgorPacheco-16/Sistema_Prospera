@@ -94,6 +94,7 @@ query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
 criar_notificacao = notificacoes_module.criar_notificacao
 enviar_email_operacional = notificacoes_module.enviar_email_operacional
 gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
+verificar_atrasos = notificacoes_module.verificar_atrasos
 mensagem_op = notificacoes_module.mensagem_op
 mensagem_tarefa = notificacoes_module.mensagem_tarefa
 categoria_notificacao = notificacoes_module.categoria_notificacao
@@ -334,6 +335,29 @@ def testar_email(para):
         raise click.ClickException(resultado.erro or "Email nao enviado.")
 
     click.echo(f"Email de teste enviado para {destinatario}.")
+
+
+@app.cli.command("verificar-atrasos")
+@click.option(
+    "--enviar-email",
+    is_flag=True,
+    help="Tenta enviar emails operacionais pendentes de atraso.",
+)
+def verificar_atrasos_cli(enviar_email):
+    resumo = verificar_atrasos(enviar_emails=enviar_email)
+    db.session.commit()
+
+    click.echo("Verificacao de atrasos concluida.")
+    click.echo(f"Tarefas atrasadas: {resumo['tarefas_atrasadas']}")
+    click.echo(f"OPs atrasadas: {resumo['ops_atrasadas']}")
+    click.echo(f"OPs urgentes: {resumo['ops_urgentes']}")
+    click.echo(f"Notificacoes criadas: {resumo['notificacoes_criadas']}")
+    click.echo(
+        "Emails de tarefas atrasadas enviados: "
+        f"{resumo['emails_tarefa_atrasada_enviados']}"
+    )
+    if not enviar_email:
+        click.echo("Emails nao foram enviados. Use --enviar-email para disparar.")
 
 
 if __name__ == "__main__":

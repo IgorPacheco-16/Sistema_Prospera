@@ -107,10 +107,32 @@ def prioridade_op(op):
     return "Alta prioridade" if getattr(op, "alta_prioridade", False) else "Normal"
 
 
-def emails_unicos(usuarios):
+def email_valido_basico(email):
+    email = (email or "").strip()
+    if "@" not in email:
+        return False
+    dominio = email.rsplit("@", 1)[-1]
+    return "." in dominio and not email.startswith("@") and not email.endswith("@")
+
+
+def emails_unicos(usuarios, contexto=""):
     emails = []
     for usuario in usuarios:
         email = (usuario.email or "").strip().lower()
+        if email and not email_valido_basico(email):
+            current_app.logger.warning(
+                "email_operacional_email_invalido usuario_id=%s contexto=%s",
+                usuario.id,
+                contexto,
+            )
+            continue
+        if not email:
+            current_app.logger.warning(
+                "email_operacional_usuario_sem_email usuario_id=%s contexto=%s",
+                usuario.id,
+                contexto,
+            )
+            continue
         if email and email not in emails:
             emails.append(email)
     return emails
@@ -118,15 +140,25 @@ def emails_unicos(usuarios):
 
 def destinatarios_por_tipo(tipo):
     query = User.query.filter_by(tipo=tipo, ativo=True)
-    return emails_unicos(query.all())
+    return emails_unicos(query.all(), contexto=f"tipo:{tipo}")
 
 
 def destinatarios_por_setor(setor_id):
     if not setor_id:
+        current_app.logger.warning(
+            "email_operacional_tarefa_sem_setor setor_id=%s",
+            setor_id,
+        )
         return []
 
     query = User.query.filter_by(setor_id=setor_id, ativo=True)
-    return emails_unicos(query.all())
+    usuarios = query.all()
+    if not usuarios:
+        current_app.logger.warning(
+            "email_operacional_setor_sem_usuarios_ativos setor_id=%s",
+            setor_id,
+        )
+    return emails_unicos(usuarios, contexto=f"setor:{setor_id}")
 
 
 def destinatarios_email_operacional(evento, op=None, tarefa=None):
@@ -167,17 +199,25 @@ def enviar_email_operacional(
     if not config:
         return False
 
-    if notificacoes is not None and not any(
-        getattr(n, "_foi_criada", False)
-        for n in notificacoes
-    ):
-        return False
+    smtp_ativo = smtp_configurado()
+    if notificacoes is not None:
+        notificacoes_pendentes = [
+            n for n in notificacoes
+            if n is not None and not getattr(n, "email_enviado", False)
+        ]
+        criou_notificacao = any(
+            getattr(n, "_foi_criada", False)
+            for n in notificacoes
+        )
+        if not criou_notificacao and not (smtp_ativo and notificacoes_pendentes):
+            return False
+    else:
+        notificacoes_pendentes = []
 
     notificacoes = notificacoes or []
     emails = destinatarios or destinatarios_email_operacional(evento, op=op, tarefa=tarefa)
     emails = list(dict.fromkeys((email or "").strip().lower() for email in emails if email))
 
-    smtp_ativo = smtp_configurado()
     log_destinatarios_email(evento, emails, smtp_ativo)
 
     if not emails:
@@ -213,13 +253,18 @@ def enviar_email_operacional(
         return False
 
     resultado = enviar_email_smtp(emails, assunto, texto, html=html)
+    if resultado.enviado:
+        for notificacao in notificacoes_pendentes:
+            notificacao.email_enviado = True
+        return True
+
     if not resultado.enviado and resultado.erro:
         current_app.logger.error(
             "email_operacional_nao_enviado evento=%s erro=%s",
             evento,
             resultado.erro,
         )
-    return resultado.enviado
+    return False
 
 
 def query_notificacoes_usuario():
@@ -413,7 +458,25 @@ def notificar_op_para_setores(op, tipo_evento, mensagem, chaves_existentes=None)
     return notificacoes
 
 
-def verificar_atrasos():
+def resumo_atrasos_vazio():
+    return {
+        "tarefas_atrasadas": 0,
+        "ops_atrasadas": 0,
+        "ops_urgentes": 0,
+        "notificacoes_criadas": 0,
+        "emails_tarefa_atrasada_enviados": 0,
+        "emails_op_atrasada_enviados": 0,
+        "emails_op_urgente_enviados": 0,
+        "tarefas_sem_op": 0,
+    }
+
+
+def contar_notificacoes_criadas(notificacoes):
+    return sum(1 for n in notificacoes if getattr(n, "_foi_criada", False))
+
+
+def verificar_atrasos(enviar_emails=True):
+    resumo = resumo_atrasos_vazio()
     hoje = hoje_brasilia()
     tarefas = (
         Tarefa.query
@@ -424,14 +487,12 @@ def verificar_atrasos():
         )
         .all()
     )
-    chaves_tarefas_atrasadas = carregar_chaves_notificacoes(
-        "tarefa_atrasada",
-        tarefa_ids=[t.id for t in tarefas]
-    )
+    resumo["tarefas_atrasadas"] = len(tarefas)
 
     for t in tarefas:
         op = t.op
         if not op:
+            resumo["tarefas_sem_op"] += 1
             continue
 
         mensagem = mensagem_tarefa("tarefa_atrasada", op, t)
@@ -439,8 +500,7 @@ def verificar_atrasos():
         notificacoes = []
 
         for usuario in ["ATENDENTE", "PCP"]:
-            adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
-                chaves_tarefas_atrasadas,
+            adicionar_se_criada(notificacoes, criar_notificacao(
                 usuario=usuario,
                 mensagem=mensagem,
                 link=link,
@@ -450,8 +510,7 @@ def verificar_atrasos():
                 tipo_evento="tarefa_atrasada"
             ))
 
-        adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
-            chaves_tarefas_atrasadas,
+        adicionar_se_criada(notificacoes, criar_notificacao(
             usuario="SETOR",
             mensagem=mensagem,
             link=link,
@@ -460,13 +519,15 @@ def verificar_atrasos():
             setor_id=t.setor_id,
             tipo_evento="tarefa_atrasada"
         ))
-        enviar_email_operacional(
+        resumo["notificacoes_criadas"] += contar_notificacoes_criadas(notificacoes)
+        if enviar_emails and enviar_email_operacional(
             "tarefa_atrasada",
             op=op,
             tarefa=t,
             link=link,
             notificacoes=notificacoes
-        )
+        ):
+            resumo["emails_tarefa_atrasada_enviados"] += 1
 
     ops_atrasadas = (
         OP.query
@@ -477,6 +538,7 @@ def verificar_atrasos():
         )
         .all()
     )
+    resumo["ops_atrasadas"] = len(ops_atrasadas)
     chaves_ops_atrasadas = carregar_chaves_notificacoes(
         "op_atrasada",
         op_ids=[op.id for op in ops_atrasadas]
@@ -496,12 +558,14 @@ def verificar_atrasos():
             mensagem,
             chaves_ops_atrasadas
         ))
-        enviar_email_operacional(
+        resumo["notificacoes_criadas"] += contar_notificacoes_criadas(notificacoes)
+        if enviar_emails and enviar_email_operacional(
             "op_atrasada",
             op=op,
             link=link_op(op.id),
             notificacoes=notificacoes
-        )
+        ):
+            resumo["emails_op_atrasada_enviados"] += 1
 
     ops_urgentes = (
         OP.query
@@ -513,6 +577,7 @@ def verificar_atrasos():
         )
         .all()
     )
+    resumo["ops_urgentes"] = len(ops_urgentes)
     chaves_ops_urgentes = carregar_chaves_notificacoes(
         "op_urgente",
         op_ids=[op.id for op in ops_urgentes]
@@ -532,12 +597,16 @@ def verificar_atrasos():
             mensagem,
             chaves_ops_urgentes
         ))
-        enviar_email_operacional(
+        resumo["notificacoes_criadas"] += contar_notificacoes_criadas(notificacoes)
+        if enviar_emails and enviar_email_operacional(
             "op_urgente",
             op=op,
             link=link_op(op.id),
             notificacoes=notificacoes
-        )
+        ):
+            resumo["emails_op_urgente_enviados"] += 1
+
+    return resumo
 
 
 def intervalo_notificacoes_pendentes():

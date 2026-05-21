@@ -135,6 +135,7 @@ class Notificacao(db.Model):
     tipo_evento = db.Column(db.String(80), nullable=True)
 
     lida = db.Column(db.Boolean, default=False)
+    email_enviado = db.Column(db.Boolean, default=False, nullable=False)
 
     data = db.Column(
         db.DateTime,
