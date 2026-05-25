@@ -139,6 +139,8 @@ def create_ops_blueprint(
                 tarefas_por_setor.get(setor.id, []),
                 key=lambda tarefa: tarefa.id
             )
+            for tarefa in tarefas:
+                tarefa.pode_acionar = usuario_pode_acionar_tarefa(tarefa)
 
             estrutura.append({
                 "setor": setor,

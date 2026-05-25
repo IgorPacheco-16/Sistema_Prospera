@@ -51,8 +51,11 @@ def create_tarefas_blueprint(
 ):
     tarefas_bp = Blueprint("tarefas_bp", __name__)
 
-    def exigir_tarefa_do_setor(tarefa):
-        if is_setor() and not usuario_pode_acionar_tarefa(tarefa):
+    def exigir_permissao_tarefa(tarefa):
+        if not usuario_pode_acionar_tarefa(tarefa):
+            if not is_setor():
+                return "Acesso negado para esta tarefa", 403
+
             return "Setor incorreto", 403
 
         return None
@@ -106,11 +109,11 @@ def create_tarefas_blueprint(
         return redirect(request.referrer)
 
     @tarefas_bp.route("/iniciar_tarefa/<int:id>", methods=["POST"])
-    @tipos_permitidos("SETOR", "ADMIN")
+    @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def iniciar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        acesso_negado = exigir_tarefa_do_setor(tarefa)
+        acesso_negado = exigir_permissao_tarefa(tarefa)
         if acesso_negado:
             return acesso_negado
 
@@ -145,11 +148,11 @@ def create_tarefas_blueprint(
         return redirect(request.referrer)
 
     @tarefas_bp.route("/entregar_tarefa/<int:id>", methods=["POST"])
-    @tipos_permitidos("SETOR", "ADMIN")
+    @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def entregar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        acesso_negado = exigir_tarefa_do_setor(tarefa)
+        acesso_negado = exigir_permissao_tarefa(tarefa)
         if acesso_negado:
             return acesso_negado
 
@@ -201,9 +204,13 @@ def create_tarefas_blueprint(
         return redirect(request.referrer)
 
     @tarefas_bp.route("/validar_tarefa/<int:id>", methods=["POST"])
-    @tipos_permitidos("ATENDENTE", "ADMIN")
+    @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def validar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+
+        acesso_negado = exigir_permissao_tarefa(tarefa)
+        if acesso_negado:
+            return acesso_negado
 
         if status_atual_tarefa(tarefa) != STATUS_EM_VALIDACAO:
             return "A tarefa precisa estar em validação", 400
@@ -284,10 +291,14 @@ def create_tarefas_blueprint(
         return redirect(url_for("ver_op", id=op_id))
 
     @tarefas_bp.route("/recusar_tarefa/<int:id>", methods=["POST"])
-    @tipos_permitidos("ATENDENTE", "ADMIN")
+    @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def recusar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
         motivo_recusa = request.form.get("motivo_recusa", "").strip()
+
+        acesso_negado = exigir_permissao_tarefa(tarefa)
+        if acesso_negado:
+            return acesso_negado
 
         if not motivo_recusa:
             return "Motivo da recusa obrigatório", 400

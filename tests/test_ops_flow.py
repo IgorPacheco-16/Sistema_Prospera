@@ -440,7 +440,7 @@ def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
     tarefa.status = "EM VALIDAÇÃO"
     tarefa.entregue = True
     db.session.commit()
-    login_as("ATENDENTE")
+    login_as("ADMIN")
 
     resposta = client.post(
         f"/validar_tarefa/{tarefa.id}",
@@ -466,7 +466,7 @@ def test_recusa_de_tarefa_reabre_entrega_e_notifica_setor(client, login_as, tare
     tarefa.entregue = True
     tarefa.validado = False
     db.session.commit()
-    login_as("ATENDENTE")
+    login_as("ADMIN")
 
     resposta = client.post(
         f"/recusar_tarefa/{tarefa.id}",
@@ -495,7 +495,7 @@ def test_recusa_de_tarefa_exige_motivo(client, login_as, tarefa):
     tarefa.entregue = True
     tarefa.validado = False
     db.session.commit()
-    login_as("ATENDENTE")
+    login_as("ADMIN")
 
     resposta = client.post(
         f"/recusar_tarefa/{tarefa.id}",
@@ -536,7 +536,7 @@ def test_fluxo_completo_status_tarefa(client, login_as, tarefa):
     assert tarefa.enviada_validacao_em is not None
     assert tarefa.entregue_em is not None
 
-    login_as("ATENDENTE")
+    login_as("ADMIN")
     resposta = client.post(
         f"/recusar_tarefa/{tarefa.id}",
         data={"motivo_recusa": "Refazer acabamento"},
@@ -563,7 +563,7 @@ def test_fluxo_completo_status_tarefa(client, login_as, tarefa):
     assert resposta.status_code == 302
     assert tarefa.status == "EM VALIDAÇÃO"
 
-    login_as("ATENDENTE")
+    login_as("SETOR", setor_id=tarefa.setor_id)
     resposta = client.post(
         f"/validar_tarefa/{tarefa.id}",
         headers={"Referer": f"/op/{tarefa.op_id}"}

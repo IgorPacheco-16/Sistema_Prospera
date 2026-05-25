@@ -202,7 +202,7 @@
                                 </button>
                                 {% endif %}
 
-                                {% if tipo == "SETOR" and item.pode_acionar and t.status == "PENDENTE" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                {% if t.pode_acionar and t.status == "PENDENTE" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
                                 <form method="POST" action="{{ url_for('iniciar_tarefa', id=t.id) }}">
                                     <button class="btn btn-primary btn-sm"
                                             type="submit"
@@ -212,7 +212,7 @@
                                 </form>
                                 {% endif %}
 
-                                {% if tipo == "SETOR" and item.pode_acionar and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                {% if t.pode_acionar and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
                                 <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}">
                                     <button class="btn btn-entregar btn-sm"
                                             type="submit"
@@ -222,7 +222,7 @@
                                 </form>
                                 {% endif %}
 
-                                {% if tipo in ["ATENDENTE", "ADMIN"] and t.entregue and not t.validado %}
+                                {% if t.pode_acionar and t.entregue and not t.validado %}
                                 <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
                                     <button class="btn btn-validar btn-sm"
                                             type="submit"
@@ -231,6 +231,7 @@
                                     </button>
                                 </form>
 
+                                {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                                 <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}" class="task-refusal-form">
                                     <input type="text"
                                            name="motivo_recusa"
@@ -243,6 +244,7 @@
                                         Recusar
                                     </button>
                                 </form>
+                                {% endif %}
                                 {% endif %}
                             </div>
 

@@ -4,6 +4,60 @@ from database.models import db, OP, OPSetor, Tarefa
 from tempo import hoje_brasilia
 
 
+def criar_tarefa_para_setor(setor, status="PENDENTE", entregue=False, validado=False):
+    op = OP(
+        nome=f"OP Permissao {setor.nome}",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com"
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+    tarefa = Tarefa(
+        op_id=op.id,
+        setor_id=setor.id,
+        nome=f"Tarefa {setor.nome}",
+        status=status,
+        entregue=entregue,
+        validado=validado,
+        liberada=True
+    )
+    db.session.add(tarefa)
+    db.session.commit()
+
+    return op, tarefa
+
+
+def executar_fluxo_operacional(client, tarefa, login_as, tipo):
+    login_as(tipo)
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
+
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.validado is True
+
+
 def test_setor_nao_pode_criar_op(client, login_as, setores):
     login_as("SETOR", setor_id=setores["Acabamento"].id)
 
@@ -198,3 +252,73 @@ def test_calendario_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, o
     assert resposta.status_code == 200
     assert "OP Calendario Acabamento" in html
     assert "OP Calendario PCP" not in html
+
+
+def test_pcp_ve_e_movimenta_tarefa_do_setor_pcp(client, login_as, setores):
+    op, tarefa = criar_tarefa_para_setor(setores["PCP"])
+
+    login_as("PCP")
+    html = client.get(f"/op/{op.id}").get_data(as_text=True)
+
+    assert f'action="/iniciar_tarefa/{tarefa.id}"' in html
+
+    executar_fluxo_operacional(client, tarefa, login_as, "PCP")
+
+
+def test_atendente_ve_e_movimenta_tarefa_do_setor_atendimento(client, login_as, setores):
+    op, tarefa = criar_tarefa_para_setor(setores["Atendimento"])
+
+    login_as("ATENDENTE")
+    html = client.get(f"/op/{op.id}").get_data(as_text=True)
+
+    assert f'action="/iniciar_tarefa/{tarefa.id}"' in html
+
+    executar_fluxo_operacional(client, tarefa, login_as, "ATENDENTE")
+
+
+def test_pcp_nao_movimenta_tarefa_de_outro_setor(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.status == "PENDENTE"
+
+
+def test_atendente_nao_movimenta_tarefa_de_outro_setor(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.status == "PENDENTE"
+
+
+def test_espectador_nao_movimenta_tarefa(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(setores["Atendimento"])
+    login_as("ESPECTADOR")
+
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.status == "PENDENTE"
+
+
+def test_admin_movimenta_tarefa_de_qualquer_setor(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
+
+    executar_fluxo_operacional(client, tarefa, login_as, "ADMIN")

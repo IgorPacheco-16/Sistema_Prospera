@@ -29,11 +29,34 @@ def setor_id_logado():
         return None
 
 
+def nome_setor_tarefa(tarefa):
+    setor = getattr(tarefa, "setor", None)
+    return (getattr(setor, "nome", "") or "").strip().lower()
+
+
 def usuario_pode_acionar_tarefa(tarefa):
-    if not is_setor():
+    tipo = session.get("tipo")
+
+    if tipo == "ADMIN":
         return True
 
-    return setor_id_logado() == tarefa.setor_id
+    if tipo == "ESPECTADOR":
+        return False
+
+    setor_id = setor_id_logado()
+    if setor_id is not None:
+        return setor_id == tarefa.setor_id
+
+    setores_padrao = {
+        "PCP": "pcp",
+        "ATENDENTE": "atendimento",
+    }
+
+    setor_padrao = setores_padrao.get(tipo)
+    if setor_padrao:
+        return nome_setor_tarefa(tarefa) == setor_padrao
+
+    return False
 
 
 def login_required(func):
