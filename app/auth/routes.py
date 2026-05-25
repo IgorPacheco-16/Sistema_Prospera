@@ -3,15 +3,19 @@ from datetime import timedelta
 from flask import Blueprint, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database.models import db, PasswordResetToken, User
+from database.models import CadastroPendente, db, PasswordResetToken, Setor, User
 from tempo import agora_brasilia
+
+
+MAX_TENTATIVAS_CADASTRO = 5
 
 
 def create_auth_blueprint(
     login_required,
     normalizar_email,
     gerar_codigo_recuperacao,
-    enviar_email_recuperacao
+    enviar_email_recuperacao,
+    enviar_email_cadastro
 ):
     auth_bp = Blueprint("auth", __name__)
 
@@ -93,6 +97,190 @@ def create_auth_blueprint(
             )
 
         return render_template("auth/esqueci_senha.html")
+
+    def cadastro_pendente_da_sessao():
+        email = session.get("cadastro_email")
+        if not email:
+            return None
+
+        return CadastroPendente.query.filter_by(email=email).first()
+
+    def cadastro_valido_para_finalizar():
+        cadastro = cadastro_pendente_da_sessao()
+        if not cadastro or not cadastro.verificado:
+            return None
+
+        if cadastro.expira_em < agora_brasilia():
+            db.session.delete(cadastro)
+            db.session.commit()
+            session.pop("cadastro_email", None)
+            session.pop("cadastro_verificado", None)
+            return None
+
+        return cadastro
+
+    @auth_bp.route("/criar_conta", methods=["GET", "POST"])
+    def criar_conta():
+        if request.method == "POST":
+            email = normalizar_email(request.form.get("email"))
+
+            if not email:
+                return render_template(
+                    "auth/criar_conta_email.html",
+                    erro="Informe o e-mail."
+                )
+
+            if User.query.filter_by(email=email).first():
+                return render_template(
+                    "auth/criar_conta_email.html",
+                    erro="Este e-mail já está cadastrado."
+                )
+
+            codigo = gerar_codigo_recuperacao()
+            cadastro = CadastroPendente.query.filter_by(email=email).first()
+            if not cadastro:
+                cadastro = CadastroPendente(email=email)
+                db.session.add(cadastro)
+
+            cadastro.codigo_hash = generate_password_hash(codigo)
+            cadastro.expira_em = agora_brasilia() + timedelta(minutes=15)
+            cadastro.tentativas = 0
+            cadastro.verificado = False
+            cadastro.criado_em = agora_brasilia()
+
+            if not enviar_email_cadastro(email, codigo):
+                db.session.rollback()
+                return render_template(
+                    "auth/criar_conta_email.html",
+                    erro=(
+                        "Não foi possível enviar o código agora. "
+                        "Tente novamente mais tarde."
+                    )
+                )
+
+            db.session.commit()
+            session["cadastro_email"] = email
+            session.pop("cadastro_verificado", None)
+            return redirect(url_for("auth.validar_codigo_cadastro"))
+
+        return render_template("auth/criar_conta_email.html")
+
+    @auth_bp.route("/criar_conta/codigo", methods=["GET", "POST"])
+    def validar_codigo_cadastro():
+        cadastro = cadastro_pendente_da_sessao()
+        if not cadastro:
+            return redirect(url_for("auth.criar_conta"))
+
+        if request.method == "POST":
+            codigo = (request.form.get("codigo") or "").strip()
+
+            if cadastro.expira_em < agora_brasilia():
+                db.session.delete(cadastro)
+                db.session.commit()
+                session.pop("cadastro_email", None)
+                session.pop("cadastro_verificado", None)
+                return render_template(
+                    "auth/criar_conta_codigo.html",
+                    erro="Código inválido ou expirado."
+                )
+
+            if cadastro.tentativas >= MAX_TENTATIVAS_CADASTRO:
+                return render_template(
+                    "auth/criar_conta_codigo.html",
+                    erro="Muitas tentativas incorretas. Solicite um novo código."
+                )
+
+            if not codigo or not check_password_hash(cadastro.codigo_hash, codigo):
+                cadastro.tentativas += 1
+                db.session.commit()
+                if cadastro.tentativas >= MAX_TENTATIVAS_CADASTRO:
+                    erro = "Muitas tentativas incorretas. Solicite um novo código."
+                else:
+                    erro = "Código inválido ou expirado."
+                return render_template("auth/criar_conta_codigo.html", erro=erro)
+
+            cadastro.verificado = True
+            cadastro.tentativas = 0
+            db.session.commit()
+            session["cadastro_verificado"] = True
+            return redirect(url_for("auth.finalizar_cadastro"))
+
+        return render_template("auth/criar_conta_codigo.html")
+
+    @auth_bp.route("/criar_conta/finalizar", methods=["GET", "POST"])
+    def finalizar_cadastro():
+        cadastro = cadastro_valido_para_finalizar()
+        if not cadastro:
+            return redirect(url_for("auth.criar_conta"))
+
+        setores = Setor.query.order_by(Setor.nome).all()
+
+        if request.method == "POST":
+            nome = (request.form.get("nome") or "").strip()
+            senha = request.form.get("senha")
+            confirmar_senha = request.form.get("confirmar_senha")
+            setor_id = request.form.get("setor")
+
+            if User.query.filter_by(email=cadastro.email).first():
+                db.session.delete(cadastro)
+                db.session.commit()
+                session.pop("cadastro_email", None)
+                session.pop("cadastro_verificado", None)
+                return render_template(
+                    "auth/criar_conta_email.html",
+                    erro="Este e-mail já está cadastrado."
+                )
+
+            if not nome:
+                return render_template(
+                    "auth/criar_conta_finalizar.html",
+                    setores=setores,
+                    erro="Informe o nome."
+                )
+
+            if not (senha or "").strip() or not (confirmar_senha or "").strip():
+                return render_template(
+                    "auth/criar_conta_finalizar.html",
+                    setores=setores,
+                    erro="Informe a senha e a confirmação."
+                )
+
+            if senha != confirmar_senha:
+                return render_template(
+                    "auth/criar_conta_finalizar.html",
+                    setores=setores,
+                    erro="A senha e a confirmação não conferem."
+                )
+
+            try:
+                setor_id_convertido = int(setor_id) if setor_id else None
+            except ValueError:
+                setor_id_convertido = None
+
+            setor = db.session.get(Setor, setor_id_convertido) if setor_id_convertido else None
+            if not setor:
+                return render_template(
+                    "auth/criar_conta_finalizar.html",
+                    setores=setores,
+                    erro="Informe um setor válido."
+                )
+
+            db.session.add(User(
+                nome=nome,
+                email=cadastro.email,
+                senha=generate_password_hash(senha),
+                tipo="SETOR",
+                setor_id=setor.id,
+                ativo=True
+            ))
+            db.session.delete(cadastro)
+            db.session.commit()
+            session.pop("cadastro_email", None)
+            session.pop("cadastro_verificado", None)
+            session["mensagem_login"] = "Conta criada com sucesso. Faça login."
+            return redirect(url_for("login"))
+
+        return render_template("auth/criar_conta_finalizar.html", setores=setores)
 
     @auth_bp.route("/redefinir_senha", methods=["GET", "POST"])
     def redefinir_senha():

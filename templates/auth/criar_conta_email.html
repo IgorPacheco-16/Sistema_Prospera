@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Criar conta</title>
+
+    <script>
+    (function() {
+        const theme = localStorage.getItem("theme");
+        if (theme === "dark") {
+            document.documentElement.classList.add("dark-mode");
+        }
+    })();
+    </script>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+</head>
+
+<body>
+
+<div class="d-flex justify-content-center align-items-center vh-100">
+    <div class="card shadow-lg p-4" style="width: 420px;">
+        <h3 class="text-center mb-4">Criar conta</h3>
+
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label" for="email">E-mail</label>
+                <input type="email" id="email" name="email" class="form-control" required>
+            </div>
+
+            <button class="btn btn-primary w-100">
+                Enviar código
+            </button>
+        </form>
+
+        {% if erro %}
+            <div class="alert alert-danger mt-3 text-center">
+                {{ erro }}
+            </div>
+        {% endif %}
+
+        <div class="text-center mt-3">
+            <a href="{{ url_for('login') }}" class="small">Voltar ao login</a>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

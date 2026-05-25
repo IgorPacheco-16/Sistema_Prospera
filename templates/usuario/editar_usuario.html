@@ -61,7 +61,14 @@
 
                     <div>
                         <label class="form-label" for="nova_senha">Nova senha inicial</label>
-                        <input type="password" id="nova_senha" name="nova_senha" class="form-control">
+                        <div class="input-group">
+                            <input type="password" id="nova_senha" name="nova_senha" class="form-control">
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    data-password-toggle="nova_senha">
+                                Mostrar
+                            </button>
+                        </div>
                         <div class="form-text">Deixe em branco para manter a senha atual.</div>
                     </div>
 

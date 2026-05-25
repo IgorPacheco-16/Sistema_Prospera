@@ -38,12 +38,26 @@
 
             <div class="mb-3">
                 <label class="form-label" for="nova_senha">Nova senha</label>
-                <input type="password" id="nova_senha" name="nova_senha" class="form-control" required>
+                <div class="input-group">
+                    <input type="password" id="nova_senha" name="nova_senha" class="form-control" required>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            data-password-toggle="nova_senha">
+                        Mostrar
+                    </button>
+                </div>
             </div>
 
             <div class="mb-3">
                 <label class="form-label" for="confirmar_senha">Confirmar nova senha</label>
-                <input type="password" id="confirmar_senha" name="confirmar_senha" class="form-control" required>
+                <div class="input-group">
+                    <input type="password" id="confirmar_senha" name="confirmar_senha" class="form-control" required>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            data-password-toggle="confirmar_senha">
+                        Mostrar
+                    </button>
+                </div>
             </div>
 
             <button class="btn btn-primary w-100">
@@ -63,5 +77,6 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/password_toggle.js') }}"></script>
 </body>
 </html>

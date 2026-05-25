@@ -101,3 +101,15 @@ def enviar_email_recuperacao(destinatario, codigo):
         "Se voce nao solicitou esta alteracao, ignore este email.",
     )
     return resultado.enviado
+
+
+def enviar_email_cadastro(destinatario, codigo):
+    resultado = enviar_email(
+        [destinatario],
+        "Codigo de verificacao - Sistema OP",
+        "Use o codigo abaixo para continuar a criacao da sua conta. "
+        "Ele expira em 15 minutos.\n\n"
+        f"Codigo: {codigo}\n\n"
+        "Se voce nao solicitou este cadastro, ignore este email.",
+    )
+    return resultado.enviado

@@ -85,6 +85,7 @@ tipos_permitidos = security_module.tipos_permitidos
 normalizar_email = security_module.normalizar_email
 gerar_codigo_recuperacao = security_module.gerar_codigo_recuperacao
 enviar_email_recuperacao = security_module.enviar_email_recuperacao
+enviar_email_cadastro = security_module.enviar_email_cadastro
 
 registrar_historico = historico_module.registrar_historico
 
@@ -116,6 +117,9 @@ BUILD_ONLY_ALIASES = [
     ("/esqueci_senha", "esqueci_senha"),
     ("/redefinir_senha", "redefinir_senha"),
     ("/definir_senha", "definir_senha"),
+    ("/criar_conta", "criar_conta"),
+    ("/criar_conta/codigo", "validar_codigo_cadastro"),
+    ("/criar_conta/finalizar", "finalizar_cadastro"),
     ("/criar_usuario", "criar_usuario"),
     ("/usuarios", "listar_usuarios"),
     ("/usuarios/<int:id>/editar", "editar_usuario"),
@@ -168,7 +172,8 @@ auth_bp = create_auth_blueprint(
     login_required=login_required,
     normalizar_email=normalizar_email,
     gerar_codigo_recuperacao=gerar_codigo_recuperacao,
-    enviar_email_recuperacao=enviar_email_recuperacao
+    enviar_email_recuperacao=enviar_email_recuperacao,
+    enviar_email_cadastro=enviar_email_cadastro
 )
 app.register_blueprint(auth_bp)
 

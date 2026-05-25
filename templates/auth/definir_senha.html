@@ -15,12 +15,26 @@
                 <form method="POST" class="d-grid gap-3">
                     <div>
                         <label class="form-label" for="senha">Senha</label>
-                        <input type="password" id="senha" name="senha" class="form-control" required>
+                        <div class="input-group">
+                            <input type="password" id="senha" name="senha" class="form-control" required>
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    data-password-toggle="senha">
+                                Mostrar
+                            </button>
+                        </div>
                     </div>
 
                     <div>
                         <label class="form-label" for="confirmar_senha">Confirmar senha</label>
-                        <input type="password" id="confirmar_senha" name="confirmar_senha" class="form-control" required>
+                        <div class="input-group">
+                            <input type="password" id="confirmar_senha" name="confirmar_senha" class="form-control" required>
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    data-password-toggle="confirmar_senha">
+                                Mostrar
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary">Salvar</button>

@@ -38,6 +38,22 @@ class PasswordResetToken(db.Model):
     user = db.relationship("User")
 
 
+class CadastroPendente(db.Model):
+    __tablename__ = "cadastros_pendentes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    codigo_hash = db.Column(db.String(255), nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    tentativas = db.Column(db.Integer, default=0, nullable=False)
+    verificado = db.Column(db.Boolean, default=False, nullable=False)
+    criado_em = db.Column(
+        db.DateTime,
+        default=agora_brasilia,
+        nullable=False
+    )
+
+
 #ORDEM DE PRODUÇÃO
 class OP(db.Model):
     __tablename__ = "ops"
