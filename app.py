@@ -173,7 +173,8 @@ auth_bp = create_auth_blueprint(
     normalizar_email=normalizar_email,
     gerar_codigo_recuperacao=gerar_codigo_recuperacao,
     enviar_email_recuperacao=enviar_email_recuperacao,
-    enviar_email_cadastro=enviar_email_cadastro
+    enviar_email_cadastro=enviar_email_cadastro,
+    criar_notificacao=criar_notificacao
 )
 app.register_blueprint(auth_bp)
 

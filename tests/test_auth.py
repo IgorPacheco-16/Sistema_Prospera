@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database.models import CadastroPendente, db, PasswordResetToken, User
+from database.models import CadastroPendente, db, Notificacao, PasswordResetToken, User
 from tempo import agora_brasilia
 
 
@@ -180,7 +180,7 @@ def test_codigo_errado_incrementa_tentativas_e_bloqueia(client):
     assert "Muitas tentativas incorretas. Solicite um novo código." in html
 
 
-def test_usuario_criado_por_cadastro_fica_setor_ativo_e_senha_hasheada(
+def test_usuario_criado_por_cadastro_fica_setor_pendente_e_senha_hasheada(
     client,
     monkeypatch,
     setores,
@@ -205,9 +205,95 @@ def test_usuario_criado_por_cadastro_fica_setor_ativo_e_senha_hasheada(
     assert usuario.tipo == "SETOR"
     assert usuario.tipo not in {"ADMIN", "PCP", "ATENDENTE", "ESPECTADOR"}
     assert usuario.setor_id == setores["Acabamento"].id
-    assert usuario.ativo is True
+    assert usuario.ativo is False
     assert usuario.senha != "senha-segura"
     assert check_password_hash(usuario.senha, "senha-segura")
+
+    notificacao = Notificacao.query.filter_by(usuario="ADMIN").first()
+    assert notificacao is not None
+    assert "Novo cadastro aguardando aprovação: setor.novo@teste.com" in notificacao.mensagem
+
+
+def test_login_usuario_pendente_bloqueia_com_mensagem(client, setores):
+    usuario = User(
+        nome="Setor Pendente",
+        email="pendente@teste.com",
+        senha=generate_password_hash("senha-segura"),
+        tipo="SETOR",
+        setor_id=setores["Acabamento"].id,
+        ativo=False,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+
+    resposta = client.post("/", data={
+        "email": "pendente@teste.com",
+        "senha": "senha-segura",
+    })
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Sua conta foi criada e está aguardando aprovação de um administrador." in html
+
+    with client.session_transaction() as sess:
+        assert "usuario" not in sess
+
+
+def test_usuario_pendente_nao_acessa_dashboard_mesmo_com_sessao(client, setores):
+    usuario = User(
+        nome="Setor Pendente",
+        email="pendente@teste.com",
+        senha=generate_password_hash("senha-segura"),
+        tipo="SETOR",
+        setor_id=setores["Acabamento"].id,
+        ativo=False,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["usuario"] = usuario.email
+        sess["tipo"] = usuario.tipo
+        sess["setor_id"] = usuario.setor_id
+
+    resposta = client.get("/dashboard")
+
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith("/")
+
+    with client.session_transaction() as sess:
+        assert "usuario" not in sess
+
+
+def test_admin_aprova_usuario_pendente_e_usuario_consegue_logar(client, login_as, setores):
+    usuario = User(
+        nome="Setor Pendente",
+        email="pendente@teste.com",
+        senha=generate_password_hash("senha-segura"),
+        tipo="SETOR",
+        setor_id=setores["Acabamento"].id,
+        ativo=False,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta_aprovacao = client.post(f"/usuarios/{usuario.id}/alternar_status")
+    db.session.refresh(usuario)
+
+    assert resposta_aprovacao.status_code == 302
+    assert usuario.ativo is True
+
+    with client.session_transaction() as sess:
+        sess.clear()
+
+    resposta_login = client.post("/", data={
+        "email": "pendente@teste.com",
+        "senha": "senha-segura",
+    })
+
+    assert resposta_login.status_code == 302
+    assert resposta_login.headers["Location"].endswith("/dashboard")
 
 
 def test_cadastro_nao_permite_finalizar_sem_setor_existente(client, monkeypatch):

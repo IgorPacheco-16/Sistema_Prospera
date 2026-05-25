@@ -18,6 +18,7 @@ def test_criar_usuario_pcp_pode_ter_setor_vinculado(client, login_as, setores):
     assert usuario is not None
     assert usuario.tipo == "PCP"
     assert usuario.setor_id == setores["PCP"].id
+    assert usuario.ativo is True
 
 
 def test_criar_usuario_atendente_pode_ficar_sem_setor(client, login_as):
@@ -81,6 +82,46 @@ def test_admin_lista_usuarios(client, login_as):
     assert resposta.status_code == 200
     assert "admin@teste.com" in html
     assert "pcp@teste.com" in html
+
+
+def test_admin_lista_usuarios_pendentes_com_acao_de_aprovar(client, login_as, setores):
+    usuario = User(
+        email="pendente@teste.com",
+        senha=generate_password_hash("123"),
+        tipo="SETOR",
+        setor_id=setores["Acabamento"].id,
+        ativo=False,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/usuarios")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Usuarios aguardando aprovacao" in html
+    assert "Aguardando aprovacao / inativo" in html
+    assert "Aprovar cadastro" in html
+
+
+def test_nao_admin_nao_aprova_usuario_pendente(client, login_as, setores):
+    usuario = User(
+        email="pendente@teste.com",
+        senha=generate_password_hash("123"),
+        tipo="SETOR",
+        setor_id=setores["Acabamento"].id,
+        ativo=False,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+    login_as("PCP")
+
+    resposta = client.post(f"/usuarios/{usuario.id}/alternar_status")
+    db.session.refresh(usuario)
+
+    assert resposta.status_code == 403
+    assert usuario.ativo is False
 
 
 def test_nao_admin_nao_acessa_gestao_de_usuarios(client, login_as):
@@ -158,7 +199,7 @@ def test_desativar_usuario_bloqueia_login(client, login_as):
     html = resposta_login.get_data(as_text=True)
 
     assert resposta_login.status_code == 200
-    assert "Usuario inativo. Procure um administrador." in html
+    assert "Sua conta foi criada e está aguardando aprovação de um administrador." in html
 
 
 def test_excluir_usuario_desativa_sem_apagar(client, login_as):

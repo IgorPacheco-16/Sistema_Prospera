@@ -3,6 +3,7 @@ import secrets
 
 from flask import redirect, session, url_for
 
+from database.models import User
 from email_service import enviar_email
 
 
@@ -59,11 +60,24 @@ def usuario_pode_acionar_tarefa(tarefa):
     return False
 
 
+def usuario_logado_ativo():
+    email = session.get("usuario")
+    if not email:
+        return None
+
+    return User.query.filter_by(email=email, ativo=True).first()
+
+
+def redirecionar_login_por_sessao_invalida():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 def login_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if "usuario" not in session:
-            return redirect(url_for("login"))
+        if not usuario_logado_ativo():
+            return redirecionar_login_por_sessao_invalida()
         return func(*args, **kwargs)
     return wrapper
 
@@ -72,8 +86,8 @@ def tipos_permitidos(*tipos):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if "usuario" not in session:
-                return redirect(url_for("login"))
+            if not usuario_logado_ativo():
+                return redirecionar_login_por_sessao_invalida()
 
             if session.get("tipo") not in tipos:
                 return "Acesso negado", 403

@@ -15,7 +15,8 @@ def create_auth_blueprint(
     normalizar_email,
     gerar_codigo_recuperacao,
     enviar_email_recuperacao,
-    enviar_email_cadastro
+    enviar_email_cadastro,
+    criar_notificacao=None
 ):
     auth_bp = Blueprint("auth", __name__)
 
@@ -31,9 +32,10 @@ def create_auth_blueprint(
                 return render_template("auth/login.html", erro="Email ou senha invalidos")
 
             if not user.ativo:
+                session.clear()
                 return render_template(
                     "auth/login.html",
-                    erro="Usuario inativo. Procure um administrador."
+                    erro="Sua conta foi criada e está aguardando aprovação de um administrador."
                 )
 
             if not user.senha:
@@ -271,13 +273,23 @@ def create_auth_blueprint(
                 senha=generate_password_hash(senha),
                 tipo="SETOR",
                 setor_id=setor.id,
-                ativo=True
+                ativo=False
             ))
+
+            if criar_notificacao:
+                criar_notificacao(
+                    usuario="ADMIN",
+                    mensagem=f"Novo cadastro aguardando aprovação: {cadastro.email}",
+                    link=url_for("listar_usuarios")
+                )
+
             db.session.delete(cadastro)
             db.session.commit()
             session.pop("cadastro_email", None)
             session.pop("cadastro_verificado", None)
-            session["mensagem_login"] = "Conta criada com sucesso. Faça login."
+            session["mensagem_login"] = (
+                "Conta criada com sucesso. Aguarde aprovação de um administrador."
+            )
             return redirect(url_for("login"))
 
         return render_template("auth/criar_conta_finalizar.html", setores=setores)

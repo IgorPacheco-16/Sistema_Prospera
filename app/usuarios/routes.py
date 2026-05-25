@@ -91,8 +91,13 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
     @usuarios_bp.route("/usuarios")
     @tipos_permitidos("ADMIN")
     def listar_usuarios():
-        usuarios = User.query.order_by(User.email).all()
-        return render_template("usuario/listar_usuarios.html", usuarios=usuarios)
+        usuarios = User.query.order_by(User.ativo.asc(), User.email).all()
+        usuarios_pendentes = [usuario for usuario in usuarios if not usuario.ativo]
+        return render_template(
+            "usuario/listar_usuarios.html",
+            usuarios=usuarios,
+            usuarios_pendentes=usuarios_pendentes
+        )
 
     @usuarios_bp.route("/usuarios/<int:id>/editar", methods=["GET", "POST"])
     @tipos_permitidos("ADMIN")
