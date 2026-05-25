@@ -35,15 +35,7 @@ def nome_setor_tarefa(tarefa):
     return (getattr(setor, "nome", "") or "").strip().lower()
 
 
-def usuario_pode_acionar_tarefa(tarefa):
-    tipo = session.get("tipo")
-
-    if tipo == "ADMIN":
-        return True
-
-    if tipo == "ESPECTADOR":
-        return False
-
+def usuario_pode_acionar_tarefa_por_setor(tarefa, tipo):
     setor_id = setor_id_logado()
     if setor_id is not None:
         return setor_id == tarefa.setor_id
@@ -58,6 +50,29 @@ def usuario_pode_acionar_tarefa(tarefa):
         return nome_setor_tarefa(tarefa) == setor_padrao
 
     return False
+
+
+def usuario_pode_acionar_tarefa(tarefa):
+    tipo = session.get("tipo")
+
+    if tipo == "ADMIN":
+        return True
+
+    if tipo == "ESPECTADOR":
+        return False
+
+    responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
+    if responsaveis:
+        usuario = usuario_logado_ativo()
+        if usuario and any(responsavel.id == usuario.id for responsavel in responsaveis):
+            return True
+
+        if tipo in {"PCP", "ATENDENTE"}:
+            return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
+
+        return False
+
+    return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
 
 
 def usuario_logado_ativo():

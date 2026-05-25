@@ -230,6 +230,7 @@ def create_kanban_blueprint(login_required):
             .options(
                 selectinload(Tarefa.op),
                 selectinload(Tarefa.setor),
+                selectinload(Tarefa.responsaveis),
             )
             .join(OP, Tarefa.op_id == OP.id)
             .filter(OP.status.notin_(["FINALIZADA", "ARQUIVADA"]))

@@ -86,6 +86,7 @@
                 <div class="tv-task-name">
                     <strong>${escapeHtml(item.tarefa)}</strong>
                     <span>${escapeHtml(item.setor)}</span>
+                    <span>${escapeHtml(item.responsavel || "Geral do setor")}</span>
                 </div>
                 <div class="tv-task-meta">
                     <span>Prazo</span>

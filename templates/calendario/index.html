@@ -42,6 +42,14 @@
             ">
 
                 <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
+                Responsáveis:
+                {% if t.responsaveis %}
+                    {% for responsavel in t.responsaveis %}
+                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    Geral do setor
+                {% endif %} -
 
                 {% if t.prazo %}
                     {{ t.prazo.strftime('%d/%m/%Y') }}
@@ -80,6 +88,14 @@
             ">
 
                 <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
+                Responsáveis:
+                {% if t.responsaveis %}
+                    {% for responsavel in t.responsaveis %}
+                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    Geral do setor
+                {% endif %} -
 
                 {% if t.prazo %}
                     {{ t.prazo.strftime('%d/%m/%Y') }}
@@ -116,6 +132,14 @@
             ">
 
                 <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
+                Responsáveis:
+                {% if t.responsaveis %}
+                    {% for responsavel in t.responsaveis %}
+                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    Geral do setor
+                {% endif %} -
 
                 {% if t.prazo %}
                     {{ t.prazo.strftime('%d/%m/%Y') }}

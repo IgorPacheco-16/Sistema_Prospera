@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from flask import Blueprint, render_template, session
+from sqlalchemy.orm import selectinload
 
 from database.models import OP, Tarefa
 from tempo import hoje_brasilia
@@ -17,7 +18,10 @@ def create_calendario_blueprint(login_required):
         semana = hoje + timedelta(days=7)
         mes = hoje + timedelta(days=30)
 
-        tarefas = Tarefa.query.join(OP, Tarefa.op_id == OP.id).filter(
+        tarefas = Tarefa.query.options(
+            selectinload(Tarefa.responsaveis),
+            selectinload(Tarefa.setor),
+        ).join(OP, Tarefa.op_id == OP.id).filter(
             Tarefa.prazo.isnot(None),
             Tarefa.validado.is_(False),
             OP.status == "EM ANDAMENTO"

@@ -254,6 +254,16 @@
                         <span>OP: {{ item.op.nome }}</span>
                         <span>Setor: {{ item.setor.nome if item.setor else "Sem setor" }}</span>
                         <span>
+                            Responsáveis:
+                            {% if item.tarefa.responsaveis %}
+                                {% for responsavel in item.tarefa.responsaveis %}
+                                    {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                Geral do setor
+                            {% endif %}
+                        </span>
+                        <span>
                             Prazo:
                             {% if item.tarefa.prazo %}
                                 {{ item.tarefa.prazo.strftime('%d/%m/%Y') }}

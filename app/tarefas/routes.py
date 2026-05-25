@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from flask import Blueprint, redirect, request, session, url_for
+from flask import Blueprint, current_app, jsonify, redirect, request, url_for
 
-from database.models import db, OP, OPSetor, Tarefa
+from database.models import db, OP, OPSetor, Tarefa, User
 from tempo import agora_brasilia
 
 
@@ -10,6 +10,7 @@ STATUS_PENDENTE = "PENDENTE"
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDAÇÃO"
 STATUS_ENTREGUE = "ENTREGUE"
+MAX_RESPONSAVEIS_TAREFA = 4
 
 
 def status_atual_tarefa(tarefa):
@@ -39,6 +40,108 @@ def preencher_data_se_vazia(objeto, atributo, valor):
         setattr(objeto, atributo, valor)
 
 
+def usuarios_ativos_do_setor(setor_id):
+    return (
+        User.query
+        .filter_by(setor_id=setor_id, ativo=True)
+        .order_by(User.nome, User.email)
+        .all()
+    )
+
+
+def ids_responsaveis_formulario():
+    valores = request.form.getlist("responsaveis")
+    valores.extend(request.form.getlist("responsaveis[]"))
+
+    ids = []
+    for valor in valores:
+        valor = (valor or "").strip()
+        if not valor:
+            continue
+        try:
+            usuario_id = int(valor)
+        except (TypeError, ValueError):
+            return None, ("Responsavel invalido para este setor", 400)
+        if usuario_id not in ids:
+            ids.append(usuario_id)
+
+    return ids, None
+
+
+def validar_responsaveis_formulario(setor_id):
+    usuario_ids, erro = ids_responsaveis_formulario()
+    if erro:
+        return [], erro
+
+    if len(usuario_ids) > MAX_RESPONSAVEIS_TAREFA:
+        return [], ("Selecione no maximo 4 responsaveis por tarefa", 400)
+
+    if not usuario_ids:
+        return [], None
+
+    responsaveis = (
+        User.query
+        .filter(
+            User.id.in_(usuario_ids),
+            User.ativo.is_(True),
+            User.setor_id == setor_id,
+        )
+        .order_by(User.nome, User.email)
+        .all()
+    )
+
+    if {usuario.id for usuario in responsaveis} != set(usuario_ids):
+        return [], ("Responsavel invalido para este setor", 400)
+
+    return responsaveis, None
+
+
+def responsaveis_ordenados(tarefa):
+    return sorted(
+        list(getattr(tarefa, "responsaveis", []) or []),
+        key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),
+    )
+
+
+def usuarios_notificacao_tarefa(tarefa):
+    responsaveis = [
+        responsavel
+        for responsavel in responsaveis_ordenados(tarefa)
+        if responsavel.ativo
+    ]
+    if responsaveis:
+        emails = []
+        for responsavel in responsaveis:
+            email = (responsavel.email or "").strip().lower()
+            if not email or "@" not in email:
+                current_app.logger.warning(
+                    "notificacao_tarefa_responsavel_sem_email_valido tarefa_id=%s usuario_id=%s",
+                    tarefa.id,
+                    responsavel.id,
+                )
+                continue
+            if email not in emails:
+                emails.append(email)
+        return emails
+    return ["SETOR"]
+
+
+def criar_notificacoes_tarefa(criar_notificacao, tarefa, mensagem, link, tipo_evento):
+    notificacoes = []
+    for usuario in usuarios_notificacao_tarefa(tarefa):
+        notificacao = criar_notificacao(
+            usuario,
+            mensagem,
+            link=link,
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento=tipo_evento
+        )
+        notificacoes.append(notificacao)
+    return notificacoes
+
+
 def create_tarefas_blueprint(
     tipos_permitidos,
     is_setor,
@@ -60,6 +163,21 @@ def create_tarefas_blueprint(
 
         return None
 
+    @tarefas_bp.route("/api/setores/<int:setor_id>/usuarios")
+    @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
+    def usuarios_ativos_setor(setor_id):
+        usuarios = usuarios_ativos_do_setor(setor_id)
+        return jsonify({
+            "usuarios": [
+                {
+                    "id": usuario.id,
+                    "nome": usuario.nome or usuario.email,
+                    "email": usuario.email,
+                }
+                for usuario in usuarios
+            ]
+        })
+
     @tarefas_bp.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def criar_tarefa(op_id, setor_id):
@@ -73,6 +191,9 @@ def create_tarefas_blueprint(
 
         nome = request.form.get("nome")
         prazo = request.form.get("prazo")
+        responsaveis, erro_responsavel = validar_responsaveis_formulario(setor_id)
+        if erro_responsavel:
+            return erro_responsavel
 
         nova = Tarefa(
             op_id=op_id,
@@ -86,17 +207,16 @@ def create_tarefas_blueprint(
 
         db.session.add(nova)
         db.session.flush()
+        nova.responsaveis = responsaveis
 
         op = db.session.get(OP, op_id)
         if op:
-            criar_notificacao(
-                "SETOR",
+            criar_notificacoes_tarefa(
+                criar_notificacao,
+                nova,
                 mensagem_tarefa("tarefa_criada", op, nova),
-                link=link_tarefa(op.id, setor_id, nova.id),
-                op_id=op.id,
-                tarefa_id=nova.id,
-                setor_id=setor_id,
-                tipo_evento="tarefa_criada"
+                link_tarefa(op.id, setor_id, nova.id),
+                "tarefa_criada"
             )
             registrar_historico(
                 op.id,
@@ -128,7 +248,10 @@ def create_tarefas_blueprint(
         if op:
             mensagem = mensagem_tarefa("tarefa_em_andamento", op, tarefa)
             link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-            for usuario in ["ATENDENTE", "PCP"]:
+            usuarios_notificacao = usuarios_notificacao_tarefa(tarefa)
+            if usuarios_notificacao == ["SETOR"]:
+                usuarios_notificacao = ["ATENDENTE", "PCP"]
+            for usuario in usuarios_notificacao:
                 criar_notificacao(
                     usuario,
                     mensagem,
@@ -168,30 +291,41 @@ def create_tarefas_blueprint(
         if op:
             mensagem = mensagem_tarefa("tarefa_aguardando_validacao", op, tarefa)
             link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-            notificacao_atendente = criar_notificacao(
-                "ATENDENTE",
-                mensagem,
-                link=link,
-                op_id=op.id,
-                tarefa_id=tarefa.id,
-                setor_id=tarefa.setor_id,
-                tipo_evento="tarefa_aguardando_validacao"
-            )
-            notificacao_pcp = criar_notificacao(
-                "PCP",
-                mensagem,
-                link=link,
-                op_id=op.id,
-                tarefa_id=tarefa.id,
-                setor_id=tarefa.setor_id,
-                tipo_evento="tarefa_aguardando_validacao"
-            )
+            if responsaveis_ordenados(tarefa):
+                notificacoes = criar_notificacoes_tarefa(
+                    criar_notificacao,
+                    tarefa,
+                    mensagem,
+                    link,
+                    "tarefa_aguardando_validacao"
+                )
+            else:
+                notificacoes = [
+                    criar_notificacao(
+                        "ATENDENTE",
+                        mensagem,
+                        link=link,
+                        op_id=op.id,
+                        tarefa_id=tarefa.id,
+                        setor_id=tarefa.setor_id,
+                        tipo_evento="tarefa_aguardando_validacao"
+                    ),
+                    criar_notificacao(
+                        "PCP",
+                        mensagem,
+                        link=link,
+                        op_id=op.id,
+                        tarefa_id=tarefa.id,
+                        setor_id=tarefa.setor_id,
+                        tipo_evento="tarefa_aguardando_validacao"
+                    ),
+                ]
             enviar_email_operacional(
                 "tarefa_aguardando_validacao",
                 op=op,
                 tarefa=tarefa,
                 link=link,
-                notificacoes=[notificacao_atendente, notificacao_pcp]
+                notificacoes=notificacoes
             )
             registrar_historico(
                 op.id,
@@ -222,14 +356,12 @@ def create_tarefas_blueprint(
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
-            criar_notificacao(
-                "SETOR",
+            criar_notificacoes_tarefa(
+                criar_notificacao,
+                tarefa,
                 mensagem_tarefa("entrega_validada", op, tarefa),
-                link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
-                op_id=op.id,
-                tarefa_id=tarefa.id,
-                setor_id=tarefa.setor_id,
-                tipo_evento="entrega_validada"
+                link_tarefa(op.id, tarefa.setor_id, tarefa.id),
+                "entrega_validada"
             )
             registrar_historico(
                 op.id,
@@ -247,8 +379,13 @@ def create_tarefas_blueprint(
         tarefa = Tarefa.query.get_or_404(id)
         nome_anterior = tarefa.nome
         prazo_anterior = tarefa.prazo
+        responsaveis_anteriores_ids = {usuario.id for usuario in tarefa.responsaveis}
+        responsaveis, erro_responsavel = validar_responsaveis_formulario(tarefa.setor_id)
+        if erro_responsavel:
+            return erro_responsavel
 
         tarefa.nome = request.form.get("nome")
+        tarefa.responsaveis = responsaveis
 
         prazo = request.form.get("prazo")
         if prazo:
@@ -261,6 +398,8 @@ def create_tarefas_blueprint(
             mudancas.append("nome")
         if prazo_anterior != tarefa.prazo:
             mudancas.append("prazo")
+        if responsaveis_anteriores_ids != {usuario.id for usuario in responsaveis}:
+            mudancas.append("responsaveis")
 
         if mudancas:
             registrar_historico(
@@ -317,14 +456,12 @@ def create_tarefas_blueprint(
                 mensagem_tarefa("entrega_recusada", op, tarefa)
                 + f"\nMotivo: {motivo_recusa}"
             )
-            criar_notificacao(
-                "SETOR",
+            criar_notificacoes_tarefa(
+                criar_notificacao,
+                tarefa,
                 mensagem,
-                link=link_tarefa(op.id, tarefa.setor_id, tarefa.id),
-                op_id=op.id,
-                tarefa_id=tarefa.id,
-                setor_id=tarefa.setor_id,
-                tipo_evento="entrega_recusada"
+                link_tarefa(op.id, tarefa.setor_id, tarefa.id),
+                "entrega_recusada"
             )
             registrar_historico(
                 op.id,

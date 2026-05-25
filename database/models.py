@@ -4,6 +4,23 @@ from tempo import agora_brasilia
 db = SQLAlchemy()
 
 
+tarefa_responsaveis = db.Table(
+    "tarefa_responsaveis",
+    db.Column(
+        "tarefa_id",
+        db.Integer,
+        db.ForeignKey("tarefas.id", ondelete="CASCADE"),
+        primary_key=True
+    ),
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True
+    ),
+)
+
+
 #USUÁRIOS
 class User(db.Model):
     __tablename__ = "users"
@@ -132,8 +149,13 @@ class Tarefa(db.Model):
     entregue_em = db.Column(db.DateTime, nullable=True)
     concluida_em = db.Column(db.DateTime, nullable=True)
     motivo_recusa = db.Column(db.String(255), nullable=True)
-
     setor = db.relationship('Setor')
+    responsaveis = db.relationship(
+        'User',
+        secondary=tarefa_responsaveis,
+        backref=db.backref('tarefas_responsaveis', lazy='dynamic'),
+        order_by='User.nome',
+    )
 
 
 #NOTIFICAÇÕES

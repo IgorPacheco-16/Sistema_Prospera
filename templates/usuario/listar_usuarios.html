@@ -31,6 +31,7 @@
             <table class="table align-middle mb-0">
                 <thead>
                     <tr>
+                        <th>Nome</th>
                         <th>Email</th>
                         <th>Tipo/permissao</th>
                         <th>Setor vinculado</th>
@@ -41,6 +42,7 @@
                 <tbody>
                     {% for usuario in usuarios %}
                     <tr>
+                        <td>{{ usuario.nome or usuario.email }}</td>
                         <td>{{ usuario.email }}</td>
                         <td>{{ usuario.tipo }}</td>
                         <td>{{ usuario.setor.nome if usuario.setor else "Sem setor" }}</td>
@@ -81,7 +83,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">
+                        <td colspan="6" class="text-center text-muted py-4">
                             Nenhum usuario cadastrado.
                         </td>
                     </tr>

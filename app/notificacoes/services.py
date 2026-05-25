@@ -4,6 +4,7 @@ import sys
 import time
 
 from flask import current_app, has_request_context, request, session
+from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
 from database.models import db, Notificacao, OP, OPSetor, Tarefa, User
@@ -161,14 +162,51 @@ def destinatarios_por_setor(setor_id):
     return emails_unicos(usuarios, contexto=f"setor:{setor_id}")
 
 
+def responsaveis_ativos_ordenados(tarefa):
+    return sorted(
+        [
+            responsavel
+            for responsavel in (getattr(tarefa, "responsaveis", []) or [])
+            if responsavel.ativo
+        ],
+        key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),
+    )
+
+
+def destinatarios_por_responsaveis(tarefa, contexto):
+    responsaveis = responsaveis_ativos_ordenados(tarefa) if tarefa else []
+    if not responsaveis:
+        current_app.logger.warning(
+            "email_operacional_tarefa_sem_responsaveis tarefa_id=%s contexto=%s",
+            getattr(tarefa, "id", None),
+            contexto,
+        )
+        return []
+    return emails_unicos(responsaveis, contexto=contexto)
+
+
 def destinatarios_email_operacional(evento, op=None, tarefa=None):
     if evento == "op_criada":
         return destinatarios_por_tipo("PCP")
 
-    if evento in ("op_urgente", "op_atrasada", "tarefa_aguardando_validacao"):
+    if evento in ("op_urgente", "op_atrasada"):
+        return destinatarios_por_tipo("ATENDENTE") + destinatarios_por_tipo("PCP")
+
+    if evento == "tarefa_aguardando_validacao":
+        if responsaveis_ativos_ordenados(tarefa):
+            return destinatarios_por_responsaveis(
+                tarefa,
+                contexto=f"responsaveis:tarefa:{tarefa.id}",
+            )
         return destinatarios_por_tipo("ATENDENTE") + destinatarios_por_tipo("PCP")
 
     if evento == "tarefa_atrasada":
+        if responsaveis_ativos_ordenados(tarefa):
+            return destinatarios_por_responsaveis(
+                tarefa,
+                contexto=f"responsaveis:tarefa:{tarefa.id}",
+            )
+
         setor_id = tarefa.setor_id if tarefa else None
         return (
             destinatarios_por_setor(setor_id)
@@ -268,10 +306,19 @@ def enviar_email_operacional(
 
 
 def query_notificacoes_usuario():
-    query = Notificacao.query.filter_by(usuario=session.get("tipo"))
+    tipo = session.get("tipo")
+    email = session.get("usuario")
+    filtros_usuario = [Notificacao.usuario == tipo]
+    if email:
+        filtros_usuario.append(Notificacao.usuario == email)
 
-    if session.get("tipo") == "SETOR":
-        query = query.filter_by(setor_id=session.get("setor_id"))
+    query = Notificacao.query.filter(or_(*filtros_usuario))
+
+    if tipo == "SETOR":
+        query = query.filter(or_(
+            Notificacao.usuario == email,
+            Notificacao.setor_id == session.get("setor_id"),
+        ))
 
     return query
 
@@ -422,6 +469,16 @@ def adicionar_se_criada(notificacoes, notificacao):
         notificacoes.append(notificacao)
 
 
+def usuarios_notificacao_tarefa(tarefa):
+    responsaveis = responsaveis_ativos_ordenados(tarefa)
+    if responsaveis:
+        return emails_unicos(
+            responsaveis,
+            contexto=f"notificacao-responsaveis:tarefa:{getattr(tarefa, 'id', None)}",
+        )
+    return ["SETOR"]
+
+
 def notificar_op_para_gestao(op, tipo_evento, mensagem, chaves_existentes=None):
     notificacoes = []
     adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
@@ -480,7 +537,7 @@ def verificar_atrasos(enviar_emails=True):
     hoje = hoje_brasilia()
     tarefas = (
         Tarefa.query
-        .options(selectinload(Tarefa.op))
+        .options(selectinload(Tarefa.op), selectinload(Tarefa.responsaveis))
         .filter(
             Tarefa.prazo < hoje,
             Tarefa.validado == False
@@ -499,9 +556,32 @@ def verificar_atrasos(enviar_emails=True):
         link = link_tarefa(op.id, t.setor_id, t.id)
         notificacoes = []
 
-        for usuario in ["ATENDENTE", "PCP"]:
+        usuarios_tarefa = usuarios_notificacao_tarefa(t)
+        if usuarios_tarefa != ["SETOR"]:
+            for usuario in usuarios_tarefa:
+                adicionar_se_criada(notificacoes, criar_notificacao(
+                    usuario=usuario,
+                    mensagem=mensagem,
+                    link=link,
+                    op_id=op.id,
+                    tarefa_id=t.id,
+                    setor_id=t.setor_id,
+                    tipo_evento="tarefa_atrasada"
+                ))
+        else:
+            for usuario in ["ATENDENTE", "PCP"]:
+                adicionar_se_criada(notificacoes, criar_notificacao(
+                    usuario=usuario,
+                    mensagem=mensagem,
+                    link=link,
+                    op_id=op.id,
+                    tarefa_id=t.id,
+                    setor_id=t.setor_id,
+                    tipo_evento="tarefa_atrasada"
+                ))
+
             adicionar_se_criada(notificacoes, criar_notificacao(
-                usuario=usuario,
+                usuario="SETOR",
                 mensagem=mensagem,
                 link=link,
                 op_id=op.id,
@@ -509,16 +589,6 @@ def verificar_atrasos(enviar_emails=True):
                 setor_id=t.setor_id,
                 tipo_evento="tarefa_atrasada"
             ))
-
-        adicionar_se_criada(notificacoes, criar_notificacao(
-            usuario="SETOR",
-            mensagem=mensagem,
-            link=link,
-            op_id=op.id,
-            tarefa_id=t.id,
-            setor_id=t.setor_id,
-            tipo_evento="tarefa_atrasada"
-        ))
         resumo["notificacoes_criadas"] += contar_notificacoes_criadas(notificacoes)
         if enviar_emails and enviar_email_operacional(
             "tarefa_atrasada",
@@ -642,7 +712,7 @@ def gerar_notificacoes_pendentes(forcar=False):
 
     tarefas_entregues = (
         Tarefa.query
-        .options(selectinload(Tarefa.op))
+        .options(selectinload(Tarefa.op), selectinload(Tarefa.responsaveis))
         .filter_by(
             entregue=True,
             validado=False
@@ -663,7 +733,11 @@ def gerar_notificacoes_pendentes(forcar=False):
         link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
         notificacoes = []
 
-        for usuario in ["ATENDENTE", "PCP"]:
+        usuarios_notificacao = usuarios_notificacao_tarefa(tarefa)
+        if usuarios_notificacao == ["SETOR"]:
+            usuarios_notificacao = ["ATENDENTE", "PCP"]
+
+        for usuario in usuarios_notificacao:
             adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
                 chaves_validacao,
                 usuario=usuario,

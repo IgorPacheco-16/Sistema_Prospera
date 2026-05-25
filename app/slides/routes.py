@@ -72,6 +72,19 @@ def cliente_op(op):
     return cliente or "Não informado"
 
 
+def nomes_responsaveis(tarefa):
+    responsaveis = sorted(
+        list(getattr(tarefa, "responsaveis", []) or []),
+        key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),
+    )
+    if not responsaveis:
+        return "Geral do setor"
+    return ", ".join(
+        responsavel.nome or responsavel.email
+        for responsavel in responsaveis
+    )
+
+
 def item_tarefa(tarefa, hoje):
     urgencia = urgencia_tarefa(tarefa, hoje)
     op = tarefa.op
@@ -85,6 +98,8 @@ def item_tarefa(tarefa, hoje):
         "cliente": cliente_op(op),
         "tarefa": tarefa.nome or "Tarefa sem nome",
         "setor": setor.nome if setor else "Sem setor",
+        "responsavel": nomes_responsaveis(tarefa),
+        "responsaveis": nomes_responsaveis(tarefa),
         "prazo": data_iso(tarefa.prazo),
         "prazo_formatado": data_br(tarefa.prazo),
         "status": status_visual_tarefa(tarefa),
@@ -107,6 +122,7 @@ def tarefas_ativas():
         .options(
             selectinload(Tarefa.op),
             selectinload(Tarefa.setor),
+            selectinload(Tarefa.responsaveis),
         )
         .join(OP, Tarefa.op_id == OP.id)
         .filter(

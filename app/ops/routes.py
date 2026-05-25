@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa
+from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, User
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -89,7 +89,7 @@ def create_ops_blueprint(
 
             return redirect(url_for("ver_op", id=nova_op.id))
 
-        return render_template("op/criar.html", setores=Setor.query.all())
+        return render_template("op/criar.html", setores=Setor.query.order_by(Setor.nome).all())
 
     @ops_bp.route("/op/<int:id>")
     @login_required
@@ -98,7 +98,7 @@ def create_ops_blueprint(
             OP.query
             .options(
                 selectinload(OP.op_setores).selectinload(OPSetor.setor),
-                selectinload(OP.tarefas),
+                selectinload(OP.tarefas).selectinload(Tarefa.responsaveis),
             )
             .filter(OP.id == id)
             .first()
@@ -117,8 +117,15 @@ def create_ops_blueprint(
                 abort(403)
 
         estrutura = []
+        usuarios_por_setor = {
+            setor_id: usuarios
+            for setor_id, usuarios in agrupar_usuarios_ativos_por_setor().items()
+        }
 
-        op_setores = op.op_setores
+        op_setores = sorted(
+            op.op_setores,
+            key=lambda op_setor: (op_setor.setor.nome if op_setor.setor else "").casefold()
+        )
         if tipo_usuario == "SETOR":
             op_setores = [
                 op_setor
@@ -141,10 +148,15 @@ def create_ops_blueprint(
             )
             for tarefa in tarefas:
                 tarefa.pode_acionar = usuario_pode_acionar_tarefa(tarefa)
+                tarefa.responsaveis_ordenados = sorted(
+                    list(getattr(tarefa, "responsaveis", []) or []),
+                    key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),
+                )
 
             estrutura.append({
                 "setor": setor,
                 "tarefas": tarefas,
+                "usuarios": usuarios_por_setor.get(setor.id, []),
                 "total": len(tarefas),
                 "validadas": sum(1 for t in tarefas if t.validado),
                 "pode_acionar": all(
@@ -165,7 +177,7 @@ def create_ops_blueprint(
             op=op,
             estrutura=estrutura,
             historico=historico,
-            setores=Setor.query.all(),
+            setores=Setor.query.order_by(Setor.nome).all(),
             tipo=tipo_usuario,
             today=hoje_brasilia(),
             focus_setor_id=request.args.get("setor", type=int),
@@ -231,7 +243,7 @@ def create_ops_blueprint(
         if not op:
             abort(404)
 
-        setores = Setor.query.all()
+        setores = Setor.query.order_by(Setor.nome).all()
 
         if request.method == "POST":
             nome_anterior = op.nome
@@ -342,3 +354,16 @@ def create_ops_blueprint(
         return redirect(url_for("ver_op", id=op.id))
 
     return ops_bp
+
+
+def agrupar_usuarios_ativos_por_setor():
+    usuarios_por_setor = defaultdict(list)
+    usuarios = (
+        User.query
+        .filter(User.ativo.is_(True), User.setor_id.isnot(None))
+        .order_by(User.nome, User.email)
+        .all()
+    )
+    for usuario in usuarios:
+        usuarios_por_setor[usuario.setor_id].append(usuario)
+    return usuarios_por_setor

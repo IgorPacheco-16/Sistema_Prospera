@@ -16,7 +16,10 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
         contexto.update(extra)
         return contexto
 
-    def validar_dados_usuario(email, tipo, setor_id):
+    def validar_dados_usuario(nome, email, tipo, setor_id):
+        if not nome:
+            return None, "Informe o nome."
+
         if not email:
             return None, "Informe o email."
 
@@ -46,12 +49,13 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
     @tipos_permitidos("ADMIN")
     def criar_usuario():
         if request.method == "POST":
+            nome = (request.form.get("nome") or "").strip()
             email = normalizar_email(request.form.get("email"))
             tipo = request.form.get("tipo")
             setor_id = request.form.get("setor")
             senha = request.form.get("senha")
 
-            setor_id_convertido, erro = validar_dados_usuario(email, tipo, setor_id)
+            setor_id_convertido, erro = validar_dados_usuario(nome, email, tipo, setor_id)
             if erro:
                 return render_template(
                     "usuario/criar_usuario.html",
@@ -71,6 +75,7 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
                 )
 
             novo_usuario = User(
+                nome=nome,
                 email=email,
                 tipo=tipo,
                 setor_id=setor_id_convertido,
@@ -106,13 +111,14 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
 
         if request.method == "POST":
             usuario_atual_logado = usuario.email == usuario_logado_email()
+            nome = (request.form.get("nome") or "").strip()
             email = normalizar_email(request.form.get("email"))
             tipo = request.form.get("tipo")
             setor_id = request.form.get("setor")
             ativo = request.form.get("ativo") == "on"
             nova_senha = request.form.get("nova_senha")
 
-            setor_id_convertido, erro = validar_dados_usuario(email, tipo, setor_id)
+            setor_id_convertido, erro = validar_dados_usuario(nome, email, tipo, setor_id)
             if erro:
                 return render_template(
                     "usuario/editar_usuario.html",
@@ -132,6 +138,7 @@ def create_usuarios_blueprint(login_required, tipos_permitidos, normalizar_email
                     )
                 )
 
+            usuario.nome = nome
             usuario.email = email
             usuario.tipo = tipo
             usuario.setor_id = setor_id_convertido

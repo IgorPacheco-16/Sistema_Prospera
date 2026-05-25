@@ -151,6 +151,25 @@
                     <form method="POST" action="{{ url_for('criar_tarefa', op_id=op.id, setor_id=item.setor.id) }}" class="form-tarefa modal-add-task">
                         <input type="text" name="nome" class="form-control" placeholder="Nome da tarefa" required>
                         <input type="date" name="prazo" class="form-control">
+                        <div class="task-responsavel-field">
+                            <label class="form-label visually-hidden" for="responsaveisNova{{ item.setor.id }}">Responsáveis</label>
+                            <input type="search"
+                                   class="form-control form-control-sm task-responsavel-search"
+                                   placeholder="Filtrar responsáveis"
+                                   data-task-responsavel-search="responsaveisNova{{ item.setor.id }}">
+                            <select id="responsaveisNova{{ item.setor.id }}"
+                                    name="responsaveis"
+                                    class="form-select task-responsavel-select"
+                                    multiple
+                                    size="5">
+                                <option value="" selected>Geral do setor</option>
+                                {% for usuario in item.usuarios %}
+                                <option value="{{ usuario.id }}">
+                                    {{ usuario.nome or usuario.email }}{% if usuario.email %} ({{ usuario.email }}){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-primary-custom">Adicionar</button>
                     </form>
                     {% endif %}
@@ -173,6 +192,16 @@
                                     {% else %}
                                         <div class="prazo">Prazo não definido</div>
                                     {% endif %}
+                                    <div class="prazo">
+                                        Responsáveis:
+                                        {% if t.responsaveis %}
+                                            {% for responsavel in t.responsaveis_ordenados %}
+                                                {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            Geral do setor
+                                        {% endif %}
+                                    </div>
                                 </div>
 
                                 <div class="task-status-area">
@@ -262,6 +291,26 @@
                                            class="form-control"
                                            value="{{ t.prazo.strftime('%Y-%m-%d') if t.prazo else '' }}">
 
+                                    <div class="task-responsavel-field">
+                                        <label class="form-label visually-hidden" for="responsaveisTarefa{{ t.id }}">Responsáveis</label>
+                                        <input type="search"
+                                               class="form-control form-control-sm task-responsavel-search"
+                                               placeholder="Filtrar responsáveis"
+                                               data-task-responsavel-search="responsaveisTarefa{{ t.id }}">
+                                        <select id="responsaveisTarefa{{ t.id }}"
+                                                name="responsaveis"
+                                                class="form-select task-responsavel-select"
+                                                multiple
+                                                size="5">
+                                            <option value="" {% if not t.responsaveis %}selected{% endif %}>Geral do setor</option>
+                                            {% for usuario in item.usuarios %}
+                                            <option value="{{ usuario.id }}" {% if usuario in t.responsaveis %}selected{% endif %}>
+                                                {{ usuario.nome or usuario.email }}{% if usuario.email %} ({{ usuario.email }}){% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
                                     <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
                                 </form>
 
@@ -325,6 +374,186 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll("[data-task-responsavel-search]").forEach(function(input) {
+        const select = document.getElementById(input.dataset.taskResponsavelSearch);
+        const field = input.closest(".task-responsavel-field");
+        const max = 4;
+
+        if (!select || !field) {
+            return;
+        }
+
+        field.classList.add("task-assignee-picker");
+        input.placeholder = "Responsaveis";
+        input.setAttribute("autocomplete", "off");
+
+        const control = document.createElement("div");
+        control.className = "task-assignee-control";
+        field.insertBefore(control, input);
+        control.appendChild(input);
+
+        const count = document.createElement("span");
+        count.className = "task-assignee-count";
+        control.appendChild(count);
+
+        const dropdown = document.createElement("div");
+        dropdown.className = "task-assignee-dropdown";
+        field.insertBefore(dropdown, select);
+
+        const chips = document.createElement("div");
+        chips.className = "task-assignee-chips";
+        field.appendChild(chips);
+
+        const options = Array.from(select.options).sort(function(a, b) {
+            if (!a.value) {
+                return -1;
+            }
+            if (!b.value) {
+                return 1;
+            }
+            return a.textContent.trim().localeCompare(
+                b.textContent.trim(),
+                "pt-BR",
+                { sensitivity: "base" }
+            );
+        });
+
+        options.forEach(function(option) {
+            const label = document.createElement("label");
+            label.className = "task-assignee-option";
+            label.dataset.assigneeText = option.textContent.toLowerCase();
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = option.selected;
+            checkbox.dataset.optionValue = option.value;
+            checkbox.dataset.optionLabel = option.textContent.trim().replace(/\s*\([^)]*\)\s*$/, "");
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(option.textContent.trim()));
+            dropdown.appendChild(label);
+
+            checkbox.addEventListener("change", function() {
+                if (!option.value && checkbox.checked) {
+                    options.forEach(function(item) {
+                        if (item.value) {
+                            item.selected = false;
+                        }
+                    });
+                    dropdown.querySelectorAll("input[data-option-value]:not([data-option-value=''])").forEach(function(item) {
+                        item.checked = false;
+                    });
+                } else if (option.value) {
+                    const selectedUserOptions = options.filter(function(item) {
+                        return item.value && item.selected;
+                    });
+
+                    if (checkbox.checked && selectedUserOptions.length >= max) {
+                        checkbox.checked = false;
+                        return;
+                    }
+
+                    option.selected = checkbox.checked;
+                    const generalOption = options.find(function(item) {
+                        return !item.value;
+                    });
+                    if (generalOption) {
+                        generalOption.selected = !options.some(function(item) {
+                            return item.value && item.selected;
+                        });
+                    }
+                }
+
+                updatePicker();
+            });
+        });
+
+        function selectedUserOptions() {
+            return options.filter(function(option) {
+                return option.value && option.selected;
+            });
+        }
+
+        function updatePicker() {
+            const selected = selectedUserOptions();
+            const hasSelected = selected.length > 0;
+
+            options.forEach(function(option) {
+                if (!option.value) {
+                    option.selected = !hasSelected;
+                }
+            });
+
+            dropdown.querySelectorAll("input").forEach(function(checkbox) {
+                const option = options.find(function(item) {
+                    return item.value === checkbox.dataset.optionValue;
+                });
+                if (!option) {
+                    return;
+                }
+                checkbox.checked = option.selected;
+                checkbox.disabled = Boolean(option.value) && !option.selected && selected.length >= max;
+            });
+
+            count.textContent = selected.length + "/" + max;
+            chips.innerHTML = "";
+
+            if (!hasSelected) {
+                const chip = document.createElement("span");
+                chip.className = "task-assignee-chip task-assignee-general-chip";
+                chip.textContent = "Geral do setor";
+                chips.appendChild(chip);
+                return;
+            }
+
+            selected
+                .map(function(option) {
+                    return option.textContent.trim().replace(/\s*\([^)]*\)\s*$/, "");
+                })
+                .sort(function(a, b) {
+                    return a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+                })
+                .forEach(function(text) {
+                    const chip = document.createElement("span");
+                    chip.className = "task-assignee-chip";
+                    chip.textContent = text;
+                    chips.appendChild(chip);
+                });
+        }
+
+        function filterOptions() {
+            const termo = input.value.trim().toLowerCase();
+            dropdown.querySelectorAll(".task-assignee-option").forEach(function(option) {
+                const checkbox = option.querySelector("input");
+                option.hidden = Boolean(checkbox.dataset.optionValue) && termo && !option.dataset.assigneeText.includes(termo);
+            });
+        }
+
+        input.addEventListener("focus", function() {
+            field.classList.add("is-open");
+        });
+
+        input.addEventListener("input", function() {
+            filterOptions();
+            field.classList.add("is-open");
+        });
+
+        dropdown.addEventListener("mousedown", function(event) {
+            event.preventDefault();
+        });
+
+        document.addEventListener("click", function(event) {
+            if (!field.contains(event.target)) {
+                field.classList.remove("is-open");
+            }
+        });
+
+        updatePicker();
+    });
+});
+</script>
 {% if op.caminho_pasta %}
 <script>
 document.addEventListener("DOMContentLoaded", function() {

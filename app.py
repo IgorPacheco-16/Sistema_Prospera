@@ -130,6 +130,7 @@ BUILD_ONLY_ALIASES = [
     ("/ler_notificacao/<int:id>", "ler_notificacao"),
     ("/notificacoes/marcar_todas_lidas", "marcar_todas_notificacoes_lidas"),
     ("/api/notificacoes", "api_notificacoes"),
+    ("/api/setores/<int:setor_id>/usuarios", "usuarios_ativos_setor"),
     ("/teste_notificacao", "teste_notificacao"),
     ("/dashboard", "dashboard"),
     ("/calendario", "calendario"),
