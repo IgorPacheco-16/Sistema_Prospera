@@ -128,6 +128,7 @@ BUILD_ONLY_ALIASES = [
     ("/minha_conta", "minha_conta"),
     ("/notificacoes", "notificacoes"),
     ("/ler_notificacao/<int:id>", "ler_notificacao"),
+    ("/notificacoes/marcar_todas_lidas", "marcar_todas_notificacoes_lidas"),
     ("/api/notificacoes", "api_notificacoes"),
     ("/teste_notificacao", "teste_notificacao"),
     ("/dashboard", "dashboard"),

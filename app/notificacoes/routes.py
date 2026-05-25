@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 from database.models import db, Notificacao
 from tempo import formatar_data_hora_brasilia
@@ -50,6 +50,27 @@ def create_notificacoes_blueprint(
             })
 
         return redirect(request.referrer or url_for("dashboard"))
+
+    @notificacoes_bp.route("/notificacoes/marcar_todas_lidas", methods=["POST"])
+    @login_required
+    def marcar_todas_notificacoes_lidas():
+        query_notificacoes_usuario().filter_by(lida=False).update(
+            {"lida": True},
+            synchronize_session=False
+        )
+        db.session.commit()
+
+        mensagem = "Todas as notificações foram marcadas como lidas."
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "ok": True,
+                "total": 0,
+                "mensagem": mensagem
+            })
+
+        flash(mensagem, "success")
+        return redirect(request.referrer or url_for("notificacoes"))
 
     @notificacoes_bp.route("/api/notificacoes")
     @login_required

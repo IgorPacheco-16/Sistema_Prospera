@@ -69,6 +69,16 @@
                         <span class="notification-count-label text-muted small">{{ total_notificacoes }} não lida(s)</span>
                     </div>
 
+                    <div class="notifications-feedback alert alert-success py-2 px-3 m-2 d-none" role="alert"></div>
+
+                    <form method="POST"
+                          action="{{ url_for('marcar_todas_notificacoes_lidas') }}"
+                          class="notification-read-all-form px-2 pb-2 {% if total_notificacoes == 0 %}d-none{% endif %}">
+                        <button class="btn btn-sm btn-outline-success w-100" type="submit">
+                            Marcar todas como lidas
+                        </button>
+                    </form>
+
                     <div class="notifications-list">
                         {% for n in notificacoes_recentes %}
                         <div class="notification-item notif-{{ n.tipo_evento|categoria_notificacao }} {% if not n.lida %}is-unread{% endif %}" data-notification-id="{{ n.id }}">
@@ -157,6 +167,7 @@ document.addEventListener("submit", function(event) {
         const total = Number(data.total || 0);
         const countBadge = document.querySelector(".notification-count");
         const countLabel = document.querySelector(".notification-count-label");
+        const readAllForm = document.querySelector(".notification-read-all-form");
 
         if (countBadge) {
             countBadge.textContent = total;
@@ -167,12 +178,71 @@ document.addEventListener("submit", function(event) {
             countLabel.textContent = total + " não lida(s)";
         }
 
+        if (readAllForm) {
+            readAllForm.classList.toggle("d-none", total === 0);
+        }
+
         const list = document.querySelector(".notifications-list");
         if (list && !list.querySelector(".notification-item")) {
             const empty = document.createElement("div");
             empty.className = "notification-empty";
             empty.textContent = "Sem notificações recentes";
             list.appendChild(empty);
+        }
+    })
+    .catch(function() {
+        form.submit();
+    });
+});
+
+document.addEventListener("submit", function(event) {
+    const form = event.target.closest(".notification-read-all-form");
+    if (!form) {
+        return;
+    }
+
+    event.preventDefault();
+
+    fetch(form.action, {
+        method: "POST",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest"
+        }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Falha ao marcar notificacoes");
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        const total = Number(data.total || 0);
+        const countBadge = document.querySelector(".notification-count");
+        const countLabel = document.querySelector(".notification-count-label");
+        const feedback = document.querySelector(".notifications-feedback");
+
+        if (countBadge) {
+            countBadge.textContent = total;
+            countBadge.classList.toggle("d-none", total === 0);
+        }
+
+        if (countLabel) {
+            countLabel.textContent = total + " não lida(s)";
+        }
+
+        document.querySelectorAll(".notification-item.is-unread").forEach(function(item) {
+            item.classList.remove("is-unread");
+        });
+
+        document.querySelectorAll(".notification-read-form").forEach(function(readForm) {
+            readForm.remove();
+        });
+
+        form.classList.toggle("d-none", total === 0);
+
+        if (feedback) {
+            feedback.textContent = data.mensagem || "Todas as notificações foram marcadas como lidas.";
+            feedback.classList.remove("d-none");
         }
     })
     .catch(function() {

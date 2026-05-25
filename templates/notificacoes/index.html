@@ -5,6 +5,22 @@
 <div class="container mt-4">
     <h2 class="mb-3">Histórico de notificações</h2>
 
+    <div class="d-flex justify-content-end mb-3">
+        <form method="POST"
+              action="{{ url_for('marcar_todas_notificacoes_lidas') }}"
+              class="{% if total_notificacoes == 0 %}d-none{% endif %}">
+            <button class="btn btn-sm btn-outline-success" type="submit">
+                Marcar todas como lidas
+            </button>
+        </form>
+    </div>
+
+    {% for categoria, mensagem in get_flashed_messages(with_categories=True) %}
+        <div class="alert {% if categoria == 'success' %}alert-success{% else %}alert-warning{% endif %}">
+            {{ mensagem }}
+        </div>
+    {% endfor %}
+
     <div class="list-group">
         {% for n in notificacoes %}
             <div class="list-group-item notification-history-item notif-{{ n.tipo_evento|categoria_notificacao }} d-flex justify-content-between gap-3 {% if not n.lida %}list-group-item-light{% endif %}">

@@ -621,6 +621,103 @@ def test_api_notificacoes_lista_notificacoes_do_usuario(client, login_as, notifi
     assert dados["notificacoes"][0]["id"] == notificacao.id
 
 
+def test_marcar_todas_notificacoes_lidas_altera_apenas_usuario_logado(client, login_as, tarefa):
+    notificacoes = [
+        Notificacao(
+            usuario="ATENDENTE",
+            mensagem="Notificacao atendente 1",
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="tarefa_aguardando_validacao"
+        ),
+        Notificacao(
+            usuario="ATENDENTE",
+            mensagem="Notificacao atendente 2",
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="tarefa_aguardando_validacao"
+        ),
+        Notificacao(
+            usuario="PCP",
+            mensagem="Notificacao PCP",
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento="tarefa_aguardando_validacao"
+        ),
+    ]
+    db.session.add_all(notificacoes)
+    db.session.commit()
+
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        "/notificacoes/marcar_todas_lidas",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+    dados = resposta.get_json()
+
+    assert resposta.status_code == 200
+    assert dados["total"] == 0
+    assert dados["mensagem"] == "Todas as notificações foram marcadas como lidas."
+    assert Notificacao.query.filter_by(usuario="ATENDENTE", lida=False).count() == 0
+    assert Notificacao.query.filter_by(usuario="PCP", lida=False).count() == 1
+
+
+def test_marcar_todas_notificacoes_lidas_zerando_contador_api(client, login_as, notificacao):
+    login_as("ATENDENTE")
+
+    resposta = client.post("/notificacoes/marcar_todas_lidas")
+
+    assert resposta.status_code == 302
+    db.session.refresh(notificacao)
+    assert notificacao.lida is True
+
+    resposta_api = client.get("/api/notificacoes")
+    dados = resposta_api.get_json()
+    assert dados["total"] == 0
+
+
+def test_historico_notificacoes_exibe_feedback_apos_marcar_todas(client, login_as, notificacao):
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        "/notificacoes/marcar_todas_lidas",
+        headers={"Referer": "/notificacoes"},
+        follow_redirects=True
+    )
+    html = resposta.get_data(as_text=True)
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 200
+    assert notificacao.lida is True
+    assert "Todas as notificações foram marcadas como lidas." in html
+    assert 'class="d-none"' in html
+    assert "OK" not in html
+
+
+def test_historico_notificacoes_oculta_botao_sem_nao_lidas(client, login_as, notificacao):
+    notificacao.lida = True
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.get("/notificacoes")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Marcar todas como lidas" in html
+    assert 'class="d-none"' in html
+
+
+def test_marcar_todas_notificacoes_lidas_requer_login(client):
+    resposta = client.post("/notificacoes/marcar_todas_lidas")
+
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith("/")
+
+
 def test_teste_notificacao_bloqueia_production(client, login_as, monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     login_as("ADMIN")
