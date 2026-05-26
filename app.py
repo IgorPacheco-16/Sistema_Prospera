@@ -161,6 +161,14 @@ def registrar_aliases_build_only(app):
         app.add_url_rule(rule, endpoint=endpoint, build_only=True)
 
 
+def asset_version(filename):
+    caminho = BASE_DIR / "static" / filename
+    if not caminho.is_file():
+        return "1"
+
+    return str(int(caminho.stat().st_mtime))
+
+
 app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
@@ -279,6 +287,11 @@ def inject_notificacoes():
         )
 
     return {}
+
+
+@app.context_processor
+def inject_asset_version():
+    return dict(asset_version=asset_version)
 
 
 @app.cli.command("criar-admin")
