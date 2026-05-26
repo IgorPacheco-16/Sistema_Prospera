@@ -2,8 +2,10 @@ from datetime import datetime
 
 from flask import Blueprint, render_template, request, session
 from sqlalchemy import case, func
+from sqlalchemy.orm import selectinload
 
-from database.models import db, OP, OPSetor, Tarefa
+from database.models import db, OP, OPSetor, Tarefa, User
+from metricas_responsaveis import metricas_usuario
 from tempo import hoje_brasilia
 
 
@@ -47,6 +49,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         query = OP.query.filter(OP.status != "ARQUIVADA")
         tipo_usuario = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
+        usuario_logado = User.query.filter_by(email=session.get("usuario")).first()
 
         if tipo_usuario == "SETOR":
             query = query.join(OPSetor).filter(OPSetor.setor_id == setor_usuario_id)
@@ -137,10 +140,25 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             )
         )
 
+        tarefas_individuais = []
+        if usuario_logado:
+            tarefas_individuais = (
+                Tarefa.query
+                .options(selectinload(Tarefa.responsaveis), selectinload(Tarefa.op))
+                .filter(Tarefa.responsaveis.any(User.id == usuario_logado.id))
+                .all()
+            )
+            tarefas_individuais = [
+                tarefa
+                for tarefa in tarefas_individuais
+                if tarefa.op and tarefa.op.status != "ARQUIVADA" and not tarefa.op.arquivada_em
+            ]
+
         return render_template(
             "dashboard/index.html",
             usuario=session.get("usuario"),
             tipo=tipo_usuario,
+            minhas_metricas=metricas_usuario(tarefas_individuais, usuario_logado, hoje),
             ops=lista_ops,
             total=total,
             atrasadas=atrasadas,

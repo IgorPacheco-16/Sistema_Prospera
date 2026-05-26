@@ -6,23 +6,25 @@
     <div class="metricas-header">
         <div>
             <p class="metricas-eyebrow">Operacional</p>
-            <h1>Métricas</h1>
-            <p class="metricas-subtitle">Análise de gargalos por tarefa, setor e OP.</p>
+            <h1>M&eacute;tricas</h1>
+            <p class="metricas-subtitle">An&aacute;lise operacional de tarefas, setores, respons&aacute;veis e OPs.</p>
         </div>
     </div>
 
     {% set filtros_ativos = namespace(total=0) %}
     {% if filtros.setores %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.setores|length) %}{% endif %}
     {% if filtros.ops %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.ops|length) %}{% endif %}
+    {% if filtros.responsaveis %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.responsaveis|length) %}{% endif %}
     {% if filtros.status %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.status|length) %}{% endif %}
     {% if filtros.tipo_op != "todas" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
     {% if filtros.periodo != "todos" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+    {% if filtros.cliente %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
 
     <form method="get" action="{{ url_for('metricas') }}" class="metricas-filter-shell" id="metricasFilterForm">
         <div class="metricas-filter-bar">
             <div class="metricas-filter-summary">
-                <strong>Filtros de análise</strong>
-                <span>Combine filtros para investigar gargalos operacionais.</span>
+                <strong>Filtros de an&aacute;lise</strong>
+                <span>Per&iacute;odo, setor, usu&aacute;rio, status, cliente e OP afetam todos os blocos abaixo.</span>
             </div>
 
             <button class="btn btn-primary kanban-filter-open"
@@ -43,7 +45,7 @@
             <div class="offcanvas-header">
                 <div>
                     <h2 class="offcanvas-title" id="metricasFiltersPanelTitle">Filtros</h2>
-                    <p class="kanban-filter-drawer-subtitle">Refine os dados usados nas métricas.</p>
+                    <p class="kanban-filter-drawer-subtitle">Refine os dados usados nas m&eacute;tricas.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
             </div>
@@ -55,21 +57,29 @@
                             <span>Setores</span>
                             {% if filtros.setores %}<strong>{{ filtros.setores|length }}</strong>{% endif %}
                         </button>
-                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="ops">
-                            <span>OPs</span>
-                            {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="responsaveis">
+                            <span>Usu&aacute;rios</span>
+                            {% if filtros.responsaveis %}<strong>{{ filtros.responsaveis|length }}</strong>{% endif %}
                         </button>
                         <button type="button" class="kanban-filter-category" data-metricas-filter-tab="status">
                             <span>Status</span>
                             {% if filtros.status %}<strong>{{ filtros.status|length }}</strong>{% endif %}
                         </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="periodo">
+                            <span>Per&iacute;odo</span>
+                            {% if filtros.periodo != "todos" %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="cliente">
+                            <span>Cliente</span>
+                            {% if filtros.cliente %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="ops">
+                            <span>OPs</span>
+                            {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        </button>
                         <button type="button" class="kanban-filter-category" data-metricas-filter-tab="tipo-op">
                             <span>Tipo de OP</span>
                             {% if filtros.tipo_op != "todas" %}<strong>1</strong>{% endif %}
-                        </button>
-                        <button type="button" class="kanban-filter-category" data-metricas-filter-tab="periodo">
-                            <span>Período</span>
-                            {% if filtros.periodo != "todos" %}<strong>1</strong>{% endif %}
                         </button>
                     </div>
 
@@ -94,32 +104,35 @@
                                     <span class="kanban-check-label">{{ setor.nome }}</span>
                                 </label>
                                 {% else %}
-                                <div class="kanban-filter-empty">Nenhum setor disponível.</div>
+                                <div class="kanban-filter-empty">Nenhum setor dispon&iacute;vel.</div>
                                 {% endfor %}
                             </div>
                         </section>
 
-                        <section class="kanban-filter-panel" data-metricas-filter-panel="ops" hidden>
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="responsaveis" hidden>
                             <div class="kanban-filter-panel-head">
-                                <h3>OPs</h3>
-                                <p>Filtre por uma ou mais OPs.</p>
+                                <h3>Usu&aacute;rio / respons&aacute;vel</h3>
+                                <p>Filtre tarefas atribu&iacute;das a um ou mais usu&aacute;rios.</p>
                             </div>
                             <input type="search"
                                    class="form-control kanban-list-search"
-                                   placeholder="Buscar OP"
-                                   data-metricas-list-search="ops">
-                            <div class="kanban-check-list" data-metricas-list="ops">
-                                {% for op in ops_disponiveis %}
+                                   placeholder="Buscar usu&aacute;rio"
+                                   data-metricas-list-search="responsaveis">
+                            <div class="kanban-check-list" data-metricas-list="responsaveis">
+                                {% for usuario in usuarios_disponiveis %}
                                 <label class="kanban-check-row" data-metricas-list-item>
                                     <input type="checkbox"
-                                           name="ops"
-                                           value="{{ op.id }}"
-                                           {{ 'checked' if op.id in filtros.ops else '' }}>
+                                           name="responsaveis"
+                                           value="{{ usuario.id }}"
+                                           {{ 'checked' if usuario.id in filtros.responsaveis else '' }}>
                                     <span class="kanban-check-box"></span>
-                                    <span class="kanban-check-label">{{ op.nome }}</span>
+                                    <span class="kanban-check-label">
+                                        {{ usuario.nome or usuario.email }}
+                                        {% if usuario.setor %}<small>{{ usuario.setor.nome }}</small>{% endif %}
+                                    </span>
                                 </label>
                                 {% else %}
-                                <div class="kanban-filter-empty">Nenhuma OP disponível.</div>
+                                <div class="kanban-filter-empty">Nenhum respons&aacute;vel ativo dispon&iacute;vel.</div>
                                 {% endfor %}
                             </div>
                         </section>
@@ -142,28 +155,10 @@
                             </div>
                         </section>
 
-                        <section class="kanban-filter-panel" data-metricas-filter-panel="tipo-op" hidden>
-                            <div class="kanban-filter-panel-head">
-                                <h3>Tipo de OP</h3>
-                                <p>Escolha uma característica principal da OP.</p>
-                            </div>
-                            <div class="kanban-chip-group">
-                                {% for valor, rotulo in tipos_op_filtro %}
-                                <label class="kanban-chip">
-                                    <input type="radio"
-                                           name="tipo_op"
-                                           value="{{ valor }}"
-                                           {{ 'checked' if filtros.tipo_op == valor else '' }}>
-                                    <span>{{ rotulo }}</span>
-                                </label>
-                                {% endfor %}
-                            </div>
-                        </section>
-
                         <section class="kanban-filter-panel" data-metricas-filter-panel="periodo" hidden>
                             <div class="kanban-filter-panel-head">
-                                <h3>Período</h3>
-                                <p>O filtro usa a data de criação da tarefa.</p>
+                                <h3>Per&iacute;odo</h3>
+                                <p>O filtro usa a data de cria&ccedil;&atilde;o da tarefa.</p>
                             </div>
                             <div class="kanban-chip-group">
                                 {% for valor, rotulo in periodos_filtro %}
@@ -178,7 +173,7 @@
                             </div>
                             <div class="metricas-date-range">
                                 <label>
-                                    <span>Início</span>
+                                    <span>In&iacute;cio</span>
                                     <input type="date"
                                            name="data_inicio"
                                            class="form-control"
@@ -193,6 +188,61 @@
                                 </label>
                             </div>
                         </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="cliente" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Cliente</h3>
+                                <p>Busca simples pelo nome do cliente registrado na OP.</p>
+                            </div>
+                            <input type="search"
+                                   name="cliente"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar cliente"
+                                   value="{{ filtros.cliente }}">
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="ops" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>OPs</h3>
+                                <p>Filtre por uma ou mais OPs.</p>
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar OP"
+                                   data-metricas-list-search="ops">
+                            <div class="kanban-check-list" data-metricas-list="ops">
+                                {% for op in ops_disponiveis %}
+                                <label class="kanban-check-row" data-metricas-list-item>
+                                    <input type="checkbox"
+                                           name="ops"
+                                           value="{{ op.id }}"
+                                           {{ 'checked' if op.id in filtros.ops else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ op.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhuma OP dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-metricas-filter-panel="tipo-op" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Tipo de OP</h3>
+                                <p>Escolha uma caracter&iacute;stica principal da OP.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in tipos_op_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="radio"
+                                           name="tipo_op"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if filtros.tipo_op == valor else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -205,7 +255,53 @@
     </form>
 
     <section class="metricas-section">
-        <h2>Visão geral</h2>
+        <div class="metricas-section-head">
+            <div>
+                <p class="metricas-section-kicker">Vis&atilde;o geral</p>
+                <h2>Panorama das tarefas</h2>
+            </div>
+            <p>Indicadores principais calculados com os filtros atuais.</p>
+        </div>
+
+        <div class="metricas-kpi-grid" data-metricas-kpis>
+            <div class="metricas-kpi-card metricas-kpi-card-primary" data-metricas-kpi="total">
+                <span>Total de tarefas</span>
+                <strong>{{ resumo_tarefas.total }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="pendentes">
+                <span>Pendentes</span>
+                <strong>{{ resumo_tarefas.pendentes }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="em-andamento">
+                <span>Em andamento</span>
+                <strong>{{ resumo_tarefas.em_andamento }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="entregues">
+                <span>Entregues</span>
+                <strong>{{ resumo_tarefas.entregues }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="concluidas">
+                <span>Conclu&iacute;das</span>
+                <strong>{{ resumo_tarefas.concluidas }}</strong>
+            </div>
+            <div class="metricas-kpi-card metricas-kpi-card-warning" data-metricas-kpi="atrasadas">
+                <span>Atrasadas</span>
+                <strong>{{ resumo_tarefas.atrasadas }}</strong>
+            </div>
+            <div class="metricas-kpi-card metricas-kpi-card-danger" data-metricas-kpi="recusadas">
+                <span>Recusadas</span>
+                <strong>{{ resumo_tarefas.recusadas }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="taxa-atraso">
+                <span>Taxa de atraso</span>
+                <strong>{{ formatar_percentual(resumo_tarefas.taxa_atraso) }}</strong>
+            </div>
+            <div class="metricas-kpi-card" data-metricas-kpi="taxa-recusa">
+                <span>Taxa de recusa</span>
+                <strong>{{ formatar_percentual(resumo_tarefas.taxa_recusa) }}</strong>
+            </div>
+        </div>
+
         <div class="metricas-overview-grid">
             <div class="metricas-panel metricas-status-panel">
                 <h3>Tarefas por status</h3>
@@ -227,29 +323,33 @@
                 </div>
             </div>
 
-            <div class="metricas-panel">
-                <h3>Tempo médio por etapa</h3>
-                <div class="metricas-mini-grid">
+            <div class="metricas-panel metricas-time-panel">
+                <h3>Tempo m&eacute;dio por etapa</h3>
+                {% if tempos.ate_iniciar is not none or tempos.em_producao is not none or tempos.total is not none %}
+                <div class="metricas-mini-grid metricas-mini-grid-wide">
                     <div>
-                        <span>Até iniciar</span>
+                        <span>Para iniciar</span>
                         <strong>{{ formatar_dias(tempos.ate_iniciar) }}</strong>
                     </div>
                     <div>
-                        <span>Em produção</span>
+                        <span>Em execu&ccedil;&atilde;o</span>
                         <strong>{{ formatar_dias(tempos.em_producao) }}</strong>
                     </div>
                     <div>
-                        <span>Aguardando validação</span>
-                        <strong>{{ formatar_dias(tempos.aguardando_validacao) }}</strong>
-                    </div>
-                    <div>
-                        <span>Total da tarefa</span>
+                        <span>Para concluir</span>
                         <strong>{{ formatar_dias(tempos.total) }}</strong>
                     </div>
+                    <div>
+                        <span>Aguardando valida&ccedil;&atilde;o</span>
+                        <strong>{{ formatar_dias(tempos.aguardando_validacao) }}</strong>
+                    </div>
                 </div>
+                {% else %}
+                <p class="metricas-soft-empty">Ainda n&atilde;o h&aacute; datas suficientes para calcular os tempos m&eacute;dios.</p>
+                {% endif %}
             </div>
 
-            <div class="metricas-panel">
+            <div class="metricas-panel metricas-op-panel">
                 <h3>OPs</h3>
                 <div class="metricas-mini-grid">
                     <div>
@@ -261,7 +361,7 @@
                         <strong>{{ ops.finalizadas }}</strong>
                     </div>
                     <div>
-                        <span>Tempo médio de conclusão</span>
+                        <span>Tempo m&eacute;dio de conclus&atilde;o</span>
                         <strong>{{ formatar_dias(ops.tempo_medio_conclusao) }}</strong>
                     </div>
                 </div>
@@ -270,7 +370,14 @@
     </section>
 
     <section class="metricas-section">
-        <h2>Gráficos</h2>
+        <div class="metricas-section-head">
+            <div>
+                <p class="metricas-section-kicker">Gr&aacute;ficos</p>
+                <h2>Distribui&ccedil;&atilde;o operacional</h2>
+            </div>
+            <p>Status e setores tamb&eacute;m respeitam o filtro por respons&aacute;vel.</p>
+        </div>
+
         <div class="metricas-chart-grid">
             <div class="metricas-panel metricas-chart-panel">
                 <h3>Tarefas por status</h3>
@@ -289,225 +396,185 @@
                 <div class="metricas-empty-chart">Sem tarefas nos filtros atuais.</div>
                 {% endif %}
             </div>
+        </div>
+    </section>
 
-            <div class="metricas-panel metricas-chart-panel metricas-chart-panel-wide">
-                <h3>Tempo médio por etapa</h3>
-                {% if graficos.tempos.data %}
-                <div class="metricas-chart-frame">
-                    <canvas id="metricasTemposChart"></canvas>
-                </div>
-                {% else %}
-                <div class="metricas-empty-chart">Sem timestamps suficientes para montar este gráfico.</div>
-                {% endif %}
+    <section class="metricas-section metricas-responsaveis-section">
+        <div class="metricas-section-head">
+            <div>
+                <p class="metricas-section-kicker">M&eacute;tricas por respons&aacute;vel</p>
+                <h2>Ranking de produtividade</h2>
+            </div>
+            <p>Ordenado por entregas em ordem decrescente e, em empate, por nome.</p>
+        </div>
+
+        <div class="metricas-panel">
+            <div class="metricas-table-wrap metricas-table-wrap-embedded">
+                <table class="table metricas-table align-middle" data-metricas-ranking-principal>
+                    <thead>
+                        <tr>
+                            <th>Usu&aacute;rio</th>
+                            <th>Setor</th>
+                            <th>Total</th>
+                            <th>Entregues</th>
+                            <th>Recusadas</th>
+                            <th>Atrasadas</th>
+                            <th>Taxa de atraso</th>
+                            <th>Taxa de recusa</th>
+                            <th>Tempo m&eacute;dio de conclus&atilde;o</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in ranking_responsaveis %}
+                        <tr>
+                            <td>{{ linha.nome }}</td>
+                            <td>{{ linha.setor }}</td>
+                            <td>{{ linha.total_atribuidas }}</td>
+                            <td>{{ linha.entregues_total }}</td>
+                            <td>{{ linha.recusadas }}</td>
+                            <td>{{ linha.atrasadas }}</td>
+                            <td>{{ formatar_percentual(linha.taxa_atraso) }}</td>
+                            <td>{{ formatar_percentual(linha.taxa_recusa) }}</td>
+                            <td>{{ formatar_dias(linha.media_conclusao) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-muted text-center">
+                                Nenhuma tarefa com respons&aacute;vel nos filtros atuais.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </section>
 
     <section class="metricas-section">
-        <h2>Analisar tarefa específica</h2>
-        <form method="get" action="{{ url_for('metricas') }}" class="metricas-task-form">
-            {% for setor_id in filtros.setores %}
-            <input type="hidden" name="setores" value="{{ setor_id }}">
-            {% endfor %}
-            {% for op_id in filtros.ops %}
-            <input type="hidden" name="ops" value="{{ op_id }}">
-            {% endfor %}
-            {% for status in filtros.status %}
-            <input type="hidden" name="status" value="{{ status }}">
-            {% endfor %}
-            <input type="hidden" name="tipo_op" value="{{ filtros.tipo_op }}">
-            <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
-            {% if filtros.data_inicio %}
-            <input type="hidden" name="data_inicio" value="{{ filtros.data_inicio.isoformat() }}">
-            {% endif %}
-            {% if filtros.data_fim %}
-            <input type="hidden" name="data_fim" value="{{ filtros.data_fim.isoformat() }}">
-            {% endif %}
-
-            <label for="metricasTarefaSelect">Tarefa</label>
-            <div class="metricas-task-select-row">
-                <select id="metricasTarefaSelect" name="tarefa_id" class="form-select">
-                    <option value="">Selecione uma tarefa</option>
-                    {% for tarefa in tarefas_opcoes %}
-                    <option value="{{ tarefa.id }}" {{ 'selected' if tarefa.id == tarefa_selecionada_id else '' }}>
-                        {{ tarefa.op.nome if tarefa.op else 'OP sem nome' }} - {{ tarefa.nome }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-primary">Analisar</button>
+        <div class="metricas-section-head">
+            <div>
+                <p class="metricas-section-kicker">Rankings operacionais</p>
+                <h2>Principais sinais de produ&ccedil;&atilde;o</h2>
             </div>
-            {% if not tarefas_opcoes %}
-            <p class="metricas-form-hint">Nenhuma tarefa encontrada com os filtros atuais.</p>
-            {% endif %}
-        </form>
-
-        {% if analise_tarefa %}
-        <div class="metricas-task-detail">
-            <div class="metricas-task-detail-head">
-                <div>
-                    <span>Tarefa selecionada</span>
-                    <strong>{{ analise_tarefa.tarefa.nome }}</strong>
-                </div>
-                {% if analise_tarefa.tarefa.op %}
-                <a href="{{ url_for('ver_op', id=analise_tarefa.tarefa.op.id) }}" class="btn btn-outline-primary btn-sm">
-                    Abrir OP
-                </a>
-                {% endif %}
-            </div>
-
-            <dl class="metricas-task-detail-grid">
-                <div>
-                    <dt>OP</dt>
-                    <dd>{{ analise_tarefa.tarefa.op.nome if analise_tarefa.tarefa.op else '-' }}</dd>
-                </div>
-                <div>
-                    <dt>Setor</dt>
-                    <dd>{{ analise_tarefa.tarefa.setor.nome if analise_tarefa.tarefa.setor else '-' }}</dd>
-                </div>
-                <div>
-                    <dt>Status</dt>
-                    <dd>{{ analise_tarefa.status }}</dd>
-                </div>
-                <div>
-                    <dt>Prazo</dt>
-                    <dd>{{ formatar_data(analise_tarefa.tarefa.prazo) }}</dd>
-                </div>
-                <div>
-                    <dt>Criada em</dt>
-                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.criada_em) }}</dd>
-                </div>
-                <div>
-                    <dt>Iniciada em</dt>
-                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.iniciada_em) }}</dd>
-                </div>
-                <div>
-                    <dt>Enviada para validação em</dt>
-                    <dd>{{ formatar_data_hora(analise_tarefa.tarefa.enviada_validacao_em) }}</dd>
-                </div>
-                <div>
-                    <dt>Validada/concluída em</dt>
-                    <dd>{{ formatar_data_hora(analise_tarefa.validada_concluida_em) }}</dd>
-                </div>
-                <div>
-                    <dt>Tempo até iniciar</dt>
-                    <dd>{{ formatar_dias(analise_tarefa.tempo_ate_iniciar) }}</dd>
-                </div>
-                <div>
-                    <dt>Tempo em produção</dt>
-                    <dd>{{ formatar_dias(analise_tarefa.tempo_em_producao) }}</dd>
-                </div>
-                <div>
-                    <dt>Tempo aguardando validação</dt>
-                    <dd>{{ formatar_dias(analise_tarefa.tempo_aguardando_validacao) }}</dd>
-                </div>
-                <div>
-                    <dt>Tempo total</dt>
-                    <dd>{{ formatar_dias(analise_tarefa.tempo_total) }}</dd>
-                </div>
-            </dl>
+            <p>Listas curtas para comparar entrega, atraso, recusa, carga e velocidade.</p>
         </div>
-        {% elif tarefa_selecionada_id %}
-        <p class="metricas-form-hint">A tarefa selecionada não está disponível nos filtros atuais.</p>
-        {% endif %}
+
+        <div class="metricas-ranking-grid metricas-operational-grid">
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="quem-mais-entrega">
+                <h3>Quem mais entrega</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.produtividade.mais_entregas[:5] %}
+                    <li>
+                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <strong>{{ linha.entregues_total }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem entregas nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="quem-mais-atrasa">
+                <h3>Quem mais atrasa</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.carga.mais_atrasadas[:5] %}
+                    <li>
+                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <strong>{{ linha.atrasadas }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem atrasos nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="quem-mais-recusas">
+                <h3>Quem mais tem recusas</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.qualidade.mais_recusadas[:5] %}
+                    <li>
+                        <span>{{ linha.nome }} <small>{{ formatar_percentual(linha.taxa_recusa) }} de recusa</small></span>
+                        <strong>{{ linha.recusadas }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Nenhuma recusa nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="tarefas-abertas">
+                <h3>Quem tem mais tarefas em aberto</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.carga.mais_abertas[:5] %}
+                    <li>
+                        <span>{{ linha.nome }} <small>{{ linha.atrasadas }} atrasadas</small></span>
+                        <strong>{{ linha.abertas }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem tarefas abertas atribu&iacute;das.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="conclui-mais-rapido">
+                <h3>Quem conclui mais r&aacute;pido</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.velocidade.mais_rapidos[:5] %}
+                    <li>
+                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <strong>{{ formatar_dias(linha.media_conclusao) }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem datas suficientes.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <div class="metricas-panel metricas-ranking-card" data-metricas-ranking-panel="setores-sobrecarregados">
+                <h3>Setores mais sobrecarregados</h3>
+                <ol class="metricas-ranking-list">
+                    {% for linha in metricas_responsaveis.carga.setores_sobrecarregados[:5] %}
+                    <li>
+                        <span>{{ linha.setor }} <small>{{ linha.atrasadas }} atrasadas | {{ linha.sem_responsavel }} sem respons&aacute;vel</small></span>
+                        <strong>{{ linha.abertas }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="metricas-empty">Sem tarefas abertas nos filtros atuais.</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
     </section>
 
-    <section class="metricas-section">
-        <h2>Rankings operacionais</h2>
-        <div class="metricas-panel metricas-ranking-carousel" data-metricas-ranking-carousel>
-            <div class="metricas-ranking-head">
-                <div>
-                    <h3 data-metricas-ranking-title>Setores que mais seguram OPs</h3>
-                    <p data-metricas-ranking-description>Maior tempo medio para concluir tarefas, usando inicio ou criacao ate conclusao/validacao.</p>
-                </div>
-                <div class="metricas-ranking-controls" aria-label="Alternar rankings">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-metricas-ranking-prev aria-label="Ranking anterior">&larr;</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-metricas-ranking-next aria-label="Proximo ranking">&rarr;</button>
-                </div>
+    <section class="metricas-section metricas-secondary-section">
+        <div class="metricas-section-head">
+            <div>
+                <p class="metricas-section-kicker">Se&ccedil;&atilde;o secund&aacute;ria</p>
+                <h2>Dados complementares</h2>
             </div>
+            <p>Leituras auxiliares para investiga&ccedil;&atilde;o e confer&ecirc;ncia.</p>
+        </div>
 
-            <div class="metricas-ranking-tabs" role="tablist" aria-label="Rankings operacionais">
-                <button type="button" class="active" data-metricas-ranking-tab="gargalo">Gargalos</button>
-                <button type="button" data-metricas-ranking-tab="rapidos">Mais rapidos</button>
-                <button type="button" data-metricas-ranking-tab="recusadas">Recusas</button>
-                <button type="button" data-metricas-ranking-tab="concluidas">Concluidas</button>
-                <button type="button" data-metricas-ranking-tab="ops">OPs abertas</button>
-                <button type="button" data-metricas-ranking-tab="tarefas">Tarefas lentas</button>
-                <button type="button" data-metricas-ranking-tab="pendentes">Pendentes</button>
-                <button type="button" data-metricas-ranking-tab="producao">Em producao</button>
-            </div>
-
-            <div class="metricas-ranking-panel active" data-metricas-ranking-panel="gargalo" data-title="Setores que mais seguram OPs" data-description="Maior tempo medio para concluir tarefas, usando inicio ou criacao ate conclusao/validacao.">
+        <div class="metricas-responsaveis-grid">
+            <div class="metricas-panel">
+                <h3>Tarefas sem respons&aacute;vel</h3>
                 <ol class="metricas-ranking-list metricas-ranking-list-detailed">
-                    {% for linha in ranking_setores_gargalo[:8] %}
+                    {% for linha in metricas_responsaveis.carga.tarefas_sem_responsavel[:8] %}
                     <li>
                         <span>
-                            <strong class="metricas-ranking-name">{{ linha.setor.nome }}</strong>
-                            <small>{{ linha.quantidade }} tarefas consideradas | maior atraso: {{ formatar_dias(linha.maior_atraso) }}</small>
+                            <strong class="metricas-ranking-name">{{ linha.nome }}</strong>
+                            <small>{{ linha.setor }} | {{ linha.op }}</small>
                         </span>
-                        <strong>{{ formatar_dias(linha.media) }}</strong>
+                        <strong>{{ 'Atrasada' if linha.atrasada else linha.status }}</strong>
                     </li>
                     {% else %}
-                    <li class="metricas-empty">Sem datas suficientes para medir gargalos.</li>
+                    <li class="metricas-empty">Nenhuma tarefa sem respons&aacute;vel nos filtros atuais.</li>
                     {% endfor %}
                 </ol>
             </div>
 
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="rapidos" data-title="Setores que entregam mais rapido" data-description="Menor tempo medio entre inicio e conclusao/validacao, ignorando tarefas sem essas datas.">
-                <ol class="metricas-ranking-list metricas-ranking-list-detailed">
-                    {% for linha in ranking_setores_rapidos[:8] %}
-                    <li>
-                        <span>
-                            <strong class="metricas-ranking-name">{{ linha.setor.nome }}</strong>
-                            <small>{{ linha.quantidade }} tarefas consideradas | maior atraso: {{ formatar_dias(linha.maior_atraso) }}</small>
-                        </span>
-                        <strong>{{ formatar_dias(linha.media) }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Sem datas suficientes para calcular velocidade.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="recusadas" data-title="Setores com mais tarefas recusadas" data-description="Conta tarefas com recusada_em ou motivo de recusa preenchido.">
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_setores_recusadas[:8] %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ linha.total }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Nenhuma tarefa recusada nos filtros atuais.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="concluidas" data-title="Setores com mais tarefas concluidas" data-description="Conta tarefas concluidas, validadas ou marcadas como entregues.">
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_setores_concluidas[:8] %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ linha.total }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Nenhuma tarefa concluida nos filtros atuais.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="ops" data-title="OPs abertas ha mais tempo" data-description="Mostra OPs em aberto ordenadas pelo tempo desde a criacao.">
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_ops[:8] %}
-                    <li>
-                        <span>{{ linha.op.nome }}</span>
-                        <strong>{{ formatar_dias(linha.tempo_aberta) }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Nenhuma OP aberta nos filtros atuais.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="tarefas" data-title="Tarefas que mais demoraram" data-description="Usa inicio ou criacao ate conclusao/validacao, ignorando tarefas sem datas suficientes.">
+            <div class="metricas-panel">
+                <h3>Tarefas que mais demoraram</h3>
                 <ol class="metricas-ranking-list metricas-ranking-list-detailed">
                     {% for linha in ranking_tarefas_demoradas[:8] %}
                     <li>
@@ -523,65 +590,10 @@
                 </ol>
             </div>
 
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="pendentes" data-title="Setores com mais tarefas pendentes" data-description="Ranking ja existente, mantido para acompanhar volume parado.">
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_pendentes[:8] %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ linha.pendentes }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Sem pendencias nos filtros atuais.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-ranking-panel" data-metricas-ranking-panel="producao" data-title="Maior tempo medio em producao" data-description="Ranking ja existente com tempo medio entre inicio e envio para validacao.">
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_producao[:8] %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ formatar_dias(linha.media_producao) }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Sem timestamps suficientes.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-        </div>
-        <div class="metricas-ranking-grid metricas-ranking-legacy">
             <div class="metricas-panel">
-                <h3>Setores com mais tarefas pendentes</h3>
+                <h3>OPs abertas h&aacute; mais tempo</h3>
                 <ol class="metricas-ranking-list">
-                    {% for linha in ranking_pendentes %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ linha.pendentes }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Sem pendências nos filtros atuais.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-panel">
-                <h3>Maior tempo médio em produção</h3>
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_producao %}
-                    <li>
-                        <span>{{ linha.setor.nome }}</span>
-                        <strong>{{ formatar_dias(linha.media_producao) }}</strong>
-                    </li>
-                    {% else %}
-                    <li class="metricas-empty">Sem timestamps suficientes.</li>
-                    {% endfor %}
-                </ol>
-            </div>
-
-            <div class="metricas-panel">
-                <h3>OPs abertas há mais tempo</h3>
-                <ol class="metricas-ranking-list">
-                    {% for linha in ranking_ops %}
+                    {% for linha in ranking_ops[:8] %}
                     <li>
                         <span>{{ linha.op.nome }}</span>
                         <strong>{{ formatar_dias(linha.tempo_aberta) }}</strong>
@@ -591,44 +603,168 @@
                     {% endfor %}
                 </ol>
             </div>
-        </div>
-    </section>
 
-    <section class="metricas-section">
-        <h2>Gargalos por setor</h2>
-        <div class="metricas-table-wrap">
-            <table class="table metricas-table align-middle">
-                <thead>
-                    <tr>
-                        <th>Setor</th>
-                        <th>Total</th>
-                        <th>Pendentes</th>
-                        <th>Em andamento</th>
-                        <th>Em validação</th>
-                        <th>Entregues</th>
-                        <th>Média em produção</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for linha in gargalos %}
-                    <tr>
-                        <td>{{ linha.setor.nome }}</td>
-                        <td>{{ linha.total }}</td>
-                        <td>{{ linha.pendentes }}</td>
-                        <td>{{ linha.em_andamento }}</td>
-                        <td>{{ linha.em_validacao }}</td>
-                        <td>{{ linha.entregues }}</td>
-                        <td>{{ formatar_dias(linha.media_producao) }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-muted text-center">
-                            Nenhum setor cadastrado
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="metricas-panel">
+                <h3>Observa&ccedil;&otilde;es dos dados</h3>
+                <p class="metricas-note">{{ metricas_responsaveis.qualidade.nota_retrabalho }}</p>
+                <p class="metricas-note">Tempos m&eacute;dios dependem do preenchimento das datas de cria&ccedil;&atilde;o, in&iacute;cio, envio para valida&ccedil;&atilde;o e conclus&atilde;o.</p>
+                <div class="metricas-mini-grid">
+                    <div><span>Geral do setor</span><strong>{{ geral_setor_responsaveis.total_atribuidas if geral_setor_responsaveis else 0 }}</strong></div>
+                    <div><span>Sem respons&aacute;vel</span><strong>{{ metricas_responsaveis.totais.sem_responsavel }}</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="metricas-panel">
+            <h3>Analisar tarefa espec&iacute;fica</h3>
+            <form method="get" action="{{ url_for('metricas') }}" class="metricas-task-form metricas-task-form-embedded">
+                {% for setor_id in filtros.setores %}
+                <input type="hidden" name="setores" value="{{ setor_id }}">
+                {% endfor %}
+                {% for op_id in filtros.ops %}
+                <input type="hidden" name="ops" value="{{ op_id }}">
+                {% endfor %}
+                {% for responsavel_id in filtros.responsaveis %}
+                <input type="hidden" name="responsaveis" value="{{ responsavel_id }}">
+                {% endfor %}
+                {% for status in filtros.status %}
+                <input type="hidden" name="status" value="{{ status }}">
+                {% endfor %}
+                <input type="hidden" name="tipo_op" value="{{ filtros.tipo_op }}">
+                <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+                {% if filtros.cliente %}
+                <input type="hidden" name="cliente" value="{{ filtros.cliente }}">
+                {% endif %}
+                {% if filtros.data_inicio %}
+                <input type="hidden" name="data_inicio" value="{{ filtros.data_inicio.isoformat() }}">
+                {% endif %}
+                {% if filtros.data_fim %}
+                <input type="hidden" name="data_fim" value="{{ filtros.data_fim.isoformat() }}">
+                {% endif %}
+
+                <label for="metricasTarefaSelect">Tarefa</label>
+                <div class="metricas-task-select-row">
+                    <select id="metricasTarefaSelect" name="tarefa_id" class="form-select">
+                        <option value="">Selecione uma tarefa</option>
+                        {% for tarefa in tarefas_opcoes %}
+                        <option value="{{ tarefa.id }}" {{ 'selected' if tarefa.id == tarefa_selecionada_id else '' }}>
+                            {{ tarefa.op.nome if tarefa.op else 'OP sem nome' }} - {{ tarefa.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-primary">Analisar</button>
+                </div>
+                {% if not tarefas_opcoes %}
+                <p class="metricas-form-hint">Nenhuma tarefa encontrada com os filtros atuais.</p>
+                {% endif %}
+            </form>
+
+            {% if analise_tarefa %}
+            <div class="metricas-task-detail">
+                <div class="metricas-task-detail-head">
+                    <div>
+                        <span>Tarefa selecionada</span>
+                        <strong>{{ analise_tarefa.tarefa.nome }}</strong>
+                    </div>
+                    {% if analise_tarefa.tarefa.op %}
+                    <a href="{{ url_for('ver_op', id=analise_tarefa.tarefa.op.id) }}" class="btn btn-outline-primary btn-sm">
+                        Abrir OP
+                    </a>
+                    {% endif %}
+                </div>
+
+                <dl class="metricas-task-detail-grid">
+                    <div>
+                        <dt>OP</dt>
+                        <dd>{{ analise_tarefa.tarefa.op.nome if analise_tarefa.tarefa.op else '-' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Setor</dt>
+                        <dd>{{ analise_tarefa.tarefa.setor.nome if analise_tarefa.tarefa.setor else '-' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd>{{ analise_tarefa.status }}</dd>
+                    </div>
+                    <div>
+                        <dt>Prazo</dt>
+                        <dd>{{ formatar_data(analise_tarefa.tarefa.prazo) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Criada em</dt>
+                        <dd>{{ formatar_data_hora(analise_tarefa.tarefa.criada_em) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Iniciada em</dt>
+                        <dd>{{ formatar_data_hora(analise_tarefa.tarefa.iniciada_em) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Enviada para valida&ccedil;&atilde;o em</dt>
+                        <dd>{{ formatar_data_hora(analise_tarefa.tarefa.enviada_validacao_em) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Validada/conclu&iacute;da em</dt>
+                        <dd>{{ formatar_data_hora(analise_tarefa.validada_concluida_em) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Tempo at&eacute; iniciar</dt>
+                        <dd>{{ formatar_dias(analise_tarefa.tempo_ate_iniciar) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Tempo em produ&ccedil;&atilde;o</dt>
+                        <dd>{{ formatar_dias(analise_tarefa.tempo_em_producao) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Tempo aguardando valida&ccedil;&atilde;o</dt>
+                        <dd>{{ formatar_dias(analise_tarefa.tempo_aguardando_validacao) }}</dd>
+                    </div>
+                    <div>
+                        <dt>Tempo total</dt>
+                        <dd>{{ formatar_dias(analise_tarefa.tempo_total) }}</dd>
+                    </div>
+                </dl>
+            </div>
+            {% elif tarefa_selecionada_id %}
+            <p class="metricas-form-hint">A tarefa selecionada n&atilde;o est&aacute; dispon&iacute;vel nos filtros atuais.</p>
+            {% endif %}
+        </div>
+
+        <div class="metricas-panel">
+            <h3>Gargalos por setor</h3>
+            <div class="metricas-table-wrap metricas-table-wrap-embedded">
+                <table class="table metricas-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Setor</th>
+                            <th>Total</th>
+                            <th>Pendentes</th>
+                            <th>Em andamento</th>
+                            <th>Em valida&ccedil;&atilde;o</th>
+                            <th>Entregues</th>
+                            <th>M&eacute;dia em produ&ccedil;&atilde;o</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in gargalos %}
+                        <tr>
+                            <td>{{ linha.setor.nome }}</td>
+                            <td>{{ linha.total }}</td>
+                            <td>{{ linha.pendentes }}</td>
+                            <td>{{ linha.em_andamento }}</td>
+                            <td>{{ linha.em_validacao }}</td>
+                            <td>{{ linha.entregues }}</td>
+                            <td>{{ formatar_dias(linha.media_producao) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-muted text-center">
+                                Nenhum setor cadastrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 </div>
@@ -758,7 +894,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
     renderChart("metricasStatusChart", "doughnut", graficos.status, "Tarefas");
     renderChart("metricasSetoresChart", "bar", graficos.setores, "Tarefas", "y");
-    renderChart("metricasTemposChart", "bar", graficos.tempos, "Dias");
 
     const themeObserver = new MutationObserver(function(mutations) {
         const themeChanged = mutations.some(function(mutation) {
@@ -807,70 +942,6 @@ document.addEventListener("DOMContentLoaded", function() {
                 item.hidden = !item.textContent.toLowerCase().includes(term);
             });
         });
-    });
-
-    document.querySelectorAll("[data-metricas-ranking-carousel]").forEach(function(carousel) {
-        const title = carousel.querySelector("[data-metricas-ranking-title]");
-        const description = carousel.querySelector("[data-metricas-ranking-description]");
-        const tabs = Array.from(carousel.querySelectorAll("[data-metricas-ranking-tab]"));
-        const rankingPanels = Array.from(carousel.querySelectorAll("[data-metricas-ranking-panel]"));
-        const previousButton = carousel.querySelector("[data-metricas-ranking-prev]");
-        const nextButton = carousel.querySelector("[data-metricas-ranking-next]");
-        let activeIndex = Math.max(0, rankingPanels.findIndex(function(panel) {
-            return panel.classList.contains("active");
-        }));
-
-        function activateRanking(index) {
-            if (!rankingPanels.length) {
-                return;
-            }
-
-            activeIndex = (index + rankingPanels.length) % rankingPanels.length;
-            const activePanel = rankingPanels[activeIndex];
-            const activeName = activePanel.dataset.metricasRankingPanel;
-
-            rankingPanels.forEach(function(panel) {
-                const active = panel === activePanel;
-                panel.classList.toggle("active", active);
-                panel.hidden = !active;
-            });
-
-            tabs.forEach(function(tab) {
-                const active = tab.dataset.metricasRankingTab === activeName;
-                tab.classList.toggle("active", active);
-                tab.setAttribute("aria-selected", active ? "true" : "false");
-            });
-
-            if (title) {
-                title.textContent = activePanel.dataset.title || "";
-            }
-            if (description) {
-                description.textContent = activePanel.dataset.description || "";
-            }
-        }
-
-        tabs.forEach(function(tab) {
-            tab.addEventListener("click", function() {
-                const panelIndex = rankingPanels.findIndex(function(panel) {
-                    return panel.dataset.metricasRankingPanel === tab.dataset.metricasRankingTab;
-                });
-                activateRanking(panelIndex);
-            });
-        });
-
-        if (previousButton) {
-            previousButton.addEventListener("click", function() {
-                activateRanking(activeIndex - 1);
-            });
-        }
-
-        if (nextButton) {
-            nextButton.addEventListener("click", function() {
-                activateRanking(activeIndex + 1);
-            });
-        }
-
-        activateRanking(activeIndex);
     });
 });
 </script>

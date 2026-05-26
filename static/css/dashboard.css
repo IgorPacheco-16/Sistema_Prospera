@@ -37,6 +37,50 @@
     color: var(--bs-primary);
 }
 
+.dashboard-my-metrics {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.dashboard-my-metrics h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0 0 10px;
+}
+
+.dashboard-my-metrics-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-my-metric-card {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    min-height: 72px;
+    padding: 10px 12px;
+}
+
+.dashboard-my-metric-card span {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.dashboard-my-metric-card strong {
+    color: var(--text-light);
+    font-size: 1.45rem;
+    line-height: 1;
+}
+
+.dashboard-my-metric-card-danger strong {
+    color: var(--danger);
+}
+
 /* Dark */
 html.dark-mode .resumo-card:hover {
     box-shadow: 0 12px 30px rgba(0,0,0,0.5);
@@ -52,6 +96,27 @@ html.dark-mode .resumo-card.active-filter {
 html.dark-mode .resumo-card.active-filter h6,
 html.dark-mode .resumo-card.active-filter h3 {
     color: #8ab4ff;
+}
+
+html.dark-mode .dashboard-my-metrics {
+    background: var(--card-dark);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .dashboard-my-metric-card {
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .dashboard-my-metric-card span {
+    color: var(--muted-dark);
+}
+
+html.dark-mode .dashboard-my-metric-card strong {
+    color: var(--text-dark);
+}
+
+html.dark-mode .dashboard-my-metric-card-danger strong {
+    color: #ff9aa6;
 }
 
 /* Título */
@@ -84,4 +149,10 @@ html.dark-mode .dashboard-filters {
 @keyframes focusList {
     0% { transform: translateY(10px); opacity: 0.55; }
     100% { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+    .dashboard-my-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }

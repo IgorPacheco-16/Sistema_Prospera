@@ -1,8 +1,10 @@
 from datetime import datetime, time, timedelta
 
 from flask import Blueprint, render_template, request
+from sqlalchemy.orm import selectinload
 
-from database.models import OP, Setor, Tarefa
+from database.models import OP, Setor, Tarefa, User
+from metricas_responsaveis import ranking_metricas_responsaveis
 from tempo import hoje_brasilia
 
 
@@ -80,11 +82,13 @@ def filtros_metricas():
     return {
         "setores": ids_querystring("setores"),
         "ops": ids_querystring("ops"),
+        "responsaveis": ids_querystring("responsaveis"),
         "status": status,
         "tipo_op": tipo_op,
         "periodo": periodo,
         "data_inicio": data_querystring("data_inicio"),
         "data_fim": data_querystring("data_fim"),
+        "cliente": request.args.get("cliente", "").strip(),
     }
 
 
@@ -118,6 +122,12 @@ def formatar_dias(valor):
         horas = valor * 24
         return f"{horas:.1f} h"
     return f"{valor:.1f} dias"
+
+
+def formatar_percentual(valor):
+    if valor is None:
+        return "-"
+    return f"{valor:.1f}%"
 
 
 def intervalo_periodo(filtros, hoje):
@@ -184,14 +194,24 @@ def aplicar_filtros_tarefas(tarefas, filtros, hoje):
     tarefas_filtradas = []
 
     for tarefa in tarefas:
+        responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
         if filtros["setores"] and tarefa.setor_id not in filtros["setores"]:
             continue
         if filtros["ops"] and tarefa.op_id not in filtros["ops"]:
+            continue
+        if filtros["responsaveis"] and not any(
+            responsavel.id in filtros["responsaveis"]
+            for responsavel in responsaveis
+        ):
             continue
         if filtros["status"] and status_visual_tarefa(tarefa) not in filtros["status"]:
             continue
         if tarefa.op and not op_no_filtro_tipo(tarefa.op, filtros["tipo_op"], hoje):
             continue
+        if filtros["cliente"]:
+            cliente = (getattr(tarefa.op, "cliente", "") or "").lower()
+            if filtros["cliente"].lower() not in cliente:
+                continue
         if not data_no_intervalo(tarefa.criada_em, inicio, fim):
             continue
 
@@ -209,6 +229,8 @@ def aplicar_filtros_ops(ops, filtros, hoje):
             continue
         if not op_no_filtro_tipo(op, filtros["tipo_op"], hoje):
             continue
+        if filtros["cliente"] and filtros["cliente"].lower() not in (op.cliente or "").lower():
+            continue
         if not data_no_intervalo(op.criada_em, inicio, fim):
             continue
         ops_filtradas.append(op)
@@ -216,14 +238,33 @@ def aplicar_filtros_ops(ops, filtros, hoje):
     return ops_filtradas
 
 
-def metricas_tarefas(tarefas):
+def metricas_tarefas(tarefas, hoje):
     totais_por_status = {
         status: 0
         for status in STATUS_TAREFAS
     }
+    atrasadas = 0
+    recusadas = 0
 
     for tarefa in tarefas:
         totais_por_status[status_visual_tarefa(tarefa)] += 1
+        if tarefa.prazo and tarefa.prazo < hoje and not tarefa_concluida(tarefa):
+            atrasadas += 1
+        if tarefa_recusada(tarefa):
+            recusadas += 1
+
+    total_tarefas = len(tarefas)
+    resumo = {
+        "total": total_tarefas,
+        "pendentes": totais_por_status[STATUS_PENDENTE],
+        "em_andamento": totais_por_status[STATUS_EM_ANDAMENTO],
+        "entregues": totais_por_status[STATUS_EM_VALIDACAO],
+        "concluidas": totais_por_status[STATUS_ENTREGUE],
+        "atrasadas": atrasadas,
+        "recusadas": recusadas,
+        "taxa_atraso": (atrasadas / total_tarefas * 100) if total_tarefas else 0.0,
+        "taxa_recusa": (recusadas / total_tarefas * 100) if total_tarefas else 0.0,
+    }
 
     tempos = {
         "ate_iniciar": media_dias(
@@ -245,6 +286,7 @@ def metricas_tarefas(tarefas):
     }
 
     return {
+        "resumo": resumo,
         "totais_por_status": totais_por_status,
         "tempos": tempos,
     }
@@ -493,7 +535,9 @@ def ranking_tarefas_demoradas(tarefas):
 def filtros_restringem_tarefas(filtros):
     return bool(
         filtros["setores"]
+        or filtros["responsaveis"]
         or filtros["status"]
+        or filtros["cliente"]
         or filtros["periodo"] != "todos"
     )
 
@@ -599,9 +643,21 @@ def create_metricas_blueprint(tipos_permitidos):
         filtros = filtros_metricas()
         tarefa_id = id_querystring("tarefa_id")
 
-        tarefas = Tarefa.query.all()
+        tarefas = (
+            Tarefa.query
+            .options(
+                selectinload(Tarefa.op),
+                selectinload(Tarefa.setor),
+                selectinload(Tarefa.responsaveis).selectinload(User.setor),
+            )
+            .all()
+        )
         setores = Setor.query.order_by(Setor.nome).all()
         ops = OP.query.all()
+        usuarios_disponiveis = sorted(
+            User.query.filter(User.ativo.is_(True), User.setor_id.isnot(None)).all(),
+            key=lambda usuario: ((usuario.nome or usuario.email or "").lower(), usuario.id),
+        )
 
         tarefas = aplicar_filtros_tarefas(tarefas, filtros, hoje)
         ops_filtradas = aplicar_filtros_ops(ops, filtros, hoje)
@@ -613,8 +669,9 @@ def create_metricas_blueprint(tipos_permitidos):
                 if op.id in op_ids_tarefas
             ]
 
-        tarefas_metricas = metricas_tarefas(tarefas)
+        tarefas_metricas = metricas_tarefas(tarefas, hoje)
         gargalos = gargalos_por_setor(setores, tarefas)
+        metricas_responsaveis = ranking_metricas_responsaveis(tarefas, hoje)
         tarefas_rankings = tarefas_ops_nao_arquivadas(tarefas)
         tarefas_opcoes = tarefas_para_analise(tarefas)
         tarefa_selecionada = next(
@@ -629,7 +686,9 @@ def create_metricas_blueprint(tipos_permitidos):
             periodos_filtro=PERIODOS_FILTRO,
             filtros=filtros,
             setores_disponiveis=setores,
+            usuarios_disponiveis=usuarios_disponiveis,
             ops_disponiveis=OP.query.order_by(OP.nome).all(),
+            resumo_tarefas=tarefas_metricas["resumo"],
             totais_por_status=tarefas_metricas["totais_por_status"],
             tempos=tarefas_metricas["tempos"],
             gargalos=gargalos,
@@ -648,6 +707,9 @@ def create_metricas_blueprint(tipos_permitidos):
             ),
             ranking_setores_recusadas=ranking_setores_recusadas(setores, tarefas_rankings),
             ranking_setores_concluidas=ranking_setores_concluidas(setores, tarefas_rankings),
+            ranking_responsaveis=metricas_responsaveis["usuarios"],
+            geral_setor_responsaveis=metricas_responsaveis["geral_setor"],
+            metricas_responsaveis=metricas_responsaveis,
             ranking_tarefas_demoradas=ranking_tarefas_demoradas(tarefas_rankings),
             ops=metricas_ops(ops_filtradas),
             graficos={
@@ -659,6 +721,7 @@ def create_metricas_blueprint(tipos_permitidos):
             tarefa_selecionada_id=tarefa_id,
             analise_tarefa=analise_tarefa(tarefa_selecionada),
             formatar_dias=formatar_dias,
+            formatar_percentual=formatar_percentual,
             formatar_data=formatar_data,
             formatar_data_hora=formatar_data_hora,
         )

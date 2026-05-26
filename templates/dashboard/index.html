@@ -68,6 +68,28 @@
 
     </div>
 
+    <section class="dashboard-my-metrics mb-4">
+        <h3>Minhas m&eacute;tricas</h3>
+        <div class="dashboard-my-metrics-grid">
+            <div class="dashboard-my-metric-card">
+                <span>Pendentes</span>
+                <strong>{{ minhas_metricas.pendentes }}</strong>
+            </div>
+            <div class="dashboard-my-metric-card">
+                <span>Em andamento</span>
+                <strong>{{ minhas_metricas.em_andamento }}</strong>
+            </div>
+            <div class="dashboard-my-metric-card">
+                <span>Conclu&iacute;das</span>
+                <strong>{{ minhas_metricas.concluidas }}</strong>
+            </div>
+            <div class="dashboard-my-metric-card dashboard-my-metric-card-danger">
+                <span>Atrasadas</span>
+                <strong>{{ minhas_metricas.atrasadas }}</strong>
+            </div>
+        </div>
+    </section>
+
     <!-- BOTÕES -->
     <div class="d-flex justify-content-center gap-2 mb-4 flex-wrap">
 

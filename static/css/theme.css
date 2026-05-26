@@ -70,6 +70,29 @@
     font-weight: 700;
 }
 
+.metricas-section-head {
+    align-items: end;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.metricas-section-head p {
+    color: var(--muted-light);
+    font-size: 0.9rem;
+    margin: 0;
+    max-width: 520px;
+}
+
+.metricas-section-kicker {
+    color: var(--primary) !important;
+    font-size: 0.78rem !important;
+    font-weight: 800;
+    letter-spacing: 0;
+    margin: 0 0 3px !important;
+    text-transform: uppercase;
+}
+
 .metricas-filter-shell {
     margin-bottom: 2px;
 }
@@ -160,6 +183,49 @@
     line-height: 1;
 }
 
+.metricas-kpi-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+}
+
+.metricas-kpi-card {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    min-height: 98px;
+    padding: 14px;
+}
+
+.metricas-kpi-card span {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.metricas-kpi-card strong {
+    color: var(--text-light);
+    font-size: 1.65rem;
+    line-height: 1;
+}
+
+.metricas-kpi-card-primary {
+    border-color: rgba(13, 110, 253, 0.36);
+    box-shadow: inset 0 3px 0 var(--primary);
+}
+
+.metricas-kpi-card-warning {
+    border-color: rgba(255, 193, 7, 0.42);
+    box-shadow: inset 0 3px 0 var(--warning);
+}
+
+.metricas-kpi-card-danger {
+    border-color: rgba(220, 53, 69, 0.36);
+    box-shadow: inset 0 3px 0 var(--danger);
+}
+
 .metricas-table-wrap {
     overflow-x: auto;
     border: 1px solid var(--border-light);
@@ -224,7 +290,7 @@
 .metricas-overview-grid {
     display: grid;
     gap: 12px;
-    grid-template-columns: minmax(280px, 1.25fr) repeat(2, minmax(220px, 1fr));
+    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(220px, 0.75fr);
 }
 
 .metricas-status-list,
@@ -279,6 +345,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.metricas-mini-grid-wide {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metricas-mini-grid > div {
     border: 1px solid var(--border-light);
     border-radius: 8px;
@@ -286,6 +356,56 @@
     gap: 4px;
     min-height: 76px;
     padding: 12px;
+}
+
+.metricas-soft-empty {
+    align-items: center;
+    color: var(--muted-light);
+    display: flex;
+    font-weight: 700;
+    justify-content: center;
+    margin: 0;
+    min-height: 110px;
+    text-align: center;
+}
+
+.metricas-general-owner {
+    margin-top: 2px;
+}
+
+.metricas-owner-cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.metricas-responsaveis-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metricas-table-wrap-embedded {
+    border-radius: 8px;
+    max-height: 460px;
+}
+
+.metricas-table-wrap-embedded .metricas-table th,
+.metricas-table-wrap-embedded .metricas-table td {
+    white-space: nowrap;
+}
+
+.metricas-note {
+    color: var(--muted-light);
+    font-size: 0.84rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.kanban-check-label small {
+    color: var(--muted-light);
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-top: 2px;
 }
 
 .metricas-chart-grid {
@@ -505,8 +625,26 @@
     font-weight: 700;
 }
 
+.metricas-operational-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metricas-ranking-card {
+    align-content: start;
+}
+
+.metricas-secondary-section {
+    opacity: 0.96;
+}
+
+.metricas-task-form-embedded {
+    border: 0;
+    padding: 0;
+}
+
 html.dark-mode .metricas-eyebrow,
 html.dark-mode .metricas-subtitle,
+html.dark-mode .metricas-section-head p,
 html.dark-mode .metricas-filter-summary span,
 html.dark-mode .metricas-date-range span,
 html.dark-mode .metricas-status-row span,
@@ -521,11 +659,16 @@ html.dark-mode .metricas-table th,
 html.dark-mode .metricas-ranking-list .metricas-empty,
 html.dark-mode .metricas-ranking-head p,
 html.dark-mode .metricas-ranking-tabs button,
-html.dark-mode .metricas-ranking-list small {
+html.dark-mode .metricas-ranking-list small,
+html.dark-mode .metricas-note,
+html.dark-mode .metricas-soft-empty,
+html.dark-mode .metricas-kpi-card span,
+html.dark-mode .kanban-check-label small {
     color: var(--muted-dark);
 }
 
 html.dark-mode .metricas-card,
+html.dark-mode .metricas-kpi-card,
 html.dark-mode .metricas-panel,
 html.dark-mode .metricas-task-form,
 html.dark-mode .metricas-task-detail,
@@ -541,6 +684,7 @@ html.dark-mode .metricas-filter-bar {
 }
 
 html.dark-mode .metricas-card strong,
+html.dark-mode .metricas-kpi-card strong,
 html.dark-mode .metricas-panel h3,
 html.dark-mode .metricas-status-row strong,
 html.dark-mode .metricas-mini-grid strong,
@@ -556,6 +700,18 @@ html.dark-mode .metricas-table {
 html.dark-mode .metricas-mini-grid > div,
 html.dark-mode .metricas-task-detail-grid div {
     border-color: var(--border-dark);
+}
+
+html.dark-mode .metricas-kpi-card-primary {
+    border-color: rgba(103, 160, 255, 0.38);
+}
+
+html.dark-mode .metricas-kpi-card-warning {
+    border-color: rgba(255, 193, 7, 0.34);
+}
+
+html.dark-mode .metricas-kpi-card-danger {
+    border-color: rgba(220, 53, 69, 0.40);
 }
 
 html.dark-mode .metricas-status-bar {
@@ -2464,6 +2620,11 @@ html.dark-mode .kanban-empty {
         grid-template-columns: 1fr;
     }
 
+    .metricas-section-head {
+        align-items: start;
+        flex-direction: column;
+    }
+
     .kanban-filter-open,
     .kanban-clear-link {
         width: 100%;
@@ -2472,7 +2633,9 @@ html.dark-mode .kanban-empty {
     .metricas-date-range,
     .metricas-overview-grid,
     .metricas-chart-grid,
+    .metricas-responsaveis-grid,
     .metricas-ranking-grid,
+    .metricas-operational-grid,
     .metricas-task-detail-grid {
         grid-template-columns: 1fr;
     }
@@ -2539,7 +2702,8 @@ html.dark-mode .kanban-empty {
     }
 
     .metricas-overview-grid,
-    .metricas-chart-grid {
+    .metricas-chart-grid,
+    .metricas-operational-grid {
         grid-template-columns: 1fr;
     }
 
@@ -2558,6 +2722,7 @@ html.dark-mode .kanban-empty {
     }
 
     .metricas-mini-grid,
+    .metricas-mini-grid-wide,
     .metricas-task-detail-grid {
         grid-template-columns: 1fr;
     }

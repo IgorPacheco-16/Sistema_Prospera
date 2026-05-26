@@ -127,11 +127,21 @@ def test_metricas_renderiza_contagens_tempos_e_gargalos(client, login_as, setore
     assert "PCP" in html
     assert "Tarefas travadas por etapa" not in html
     assert "Rankings operacionais" in html
+    assert "Panorama das tarefas" in html
+    assert 'data-metricas-kpi="total"' in html
+    assert 'data-metricas-kpi="taxa-atraso"' in html
     assert "metricasStatusChart" in html
     assert "metricasSetoresChart" in html
-    assert "metricasTemposChart" in html
     assert "2.0 dias" in html
     assert "3.0 dias" in html
+    total_kpi = html[html.index('data-metricas-kpi="total"'):html.index('data-metricas-kpi="pendentes"')]
+    pendentes_kpi = html[html.index('data-metricas-kpi="pendentes"'):html.index('data-metricas-kpi="em-andamento"')]
+    andamento_kpi = html[html.index('data-metricas-kpi="em-andamento"'):html.index('data-metricas-kpi="entregues"')]
+    concluidas_kpi = html[html.index('data-metricas-kpi="concluidas"'):html.index('data-metricas-kpi="atrasadas"')]
+    assert "<strong>4</strong>" in total_kpi
+    assert "<strong>1</strong>" in pendentes_kpi
+    assert "<strong>1</strong>" in andamento_kpi
+    assert "<strong>1</strong>" in concluidas_kpi
 
 
 def test_metricas_rankings_operacionais_ignoram_ops_arquivadas_e_datas_incompletas(client, login_as, setores):
@@ -198,13 +208,16 @@ def test_metricas_rankings_operacionais_ignoram_ops_arquivadas_e_datas_incomplet
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert "Setores que mais seguram OPs" in html
-    assert "Setores que entregam mais rapido" in html
-    assert "Setores com mais tarefas recusadas" in html
+    assert "Quem mais entrega" in html
+    assert "Quem mais atrasa" in html
+    assert "Quem mais tem recusas" in html
+    assert "Quem tem mais tarefas em aberto" in html
+    assert "Quem conclui mais r&aacute;pido" in html
+    assert "Setores mais sobrecarregados" in html
     assert "Tarefa lenta ranking" in html
 
-    inicio_ranking_tarefas = html.index('data-metricas-ranking-panel="tarefas"')
-    fim_ranking_tarefas = html.index('data-metricas-ranking-panel="pendentes"')
+    inicio_ranking_tarefas = html.index("Tarefas que mais demoraram")
+    fim_ranking_tarefas = html.index("OPs abertas h&aacute; mais tempo")
     ranking_tarefas_html = html[inicio_ranking_tarefas:fim_ranking_tarefas]
     assert "Tarefa arquivada ranking" not in ranking_tarefas_html
 
@@ -327,7 +340,7 @@ def test_metricas_analisa_tarefa_especifica_respeitando_filtros(client, login_as
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert "Analisar tarefa específica" in html
+    assert "Analisar tarefa espec&iacute;fica" in html
     assert "Tarefa selecionada" in html
     assert "OP Analise Tarefa" in html
     assert "Tarefa detalhada" in html
@@ -348,4 +361,4 @@ def test_metricas_analisa_tarefa_especifica_respeitando_filtros(client, login_as
 
     assert resposta_fora.status_code == 200
     assert "Tarefa selecionada" not in html_fora
-    assert "não está disponível nos filtros atuais" in html_fora
+    assert "n&atilde;o est&aacute; dispon&iacute;vel nos filtros atuais" in html_fora
