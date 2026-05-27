@@ -126,9 +126,19 @@
                                            value="{{ usuario.id }}"
                                            {{ 'checked' if usuario.id in filtros.responsaveis else '' }}>
                                     <span class="kanban-check-box"></span>
-                                    <span class="kanban-check-label">
-                                        {{ usuario.nome or usuario.email }}
-                                        {% if usuario.setor %}<small>{{ usuario.setor.nome }}</small>{% endif %}
+                                    <span class="kanban-check-label metricas-user-filter-label">
+                                        <strong title="{{ usuario.nome or usuario.email }}">
+                                            {{ usuario.nome or usuario.email }}
+                                        </strong>
+                                        <small title="{{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}">
+                                            {% if usuario.email and usuario.email != (usuario.nome or usuario.email) %}
+                                                {{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}
+                                            {% elif usuario.setor %}
+                                                {{ usuario.setor.nome }}
+                                            {% else %}
+                                                Sem setor
+                                            {% endif %}
+                                        </small>
                                     </span>
                                 </label>
                                 {% else %}
@@ -465,7 +475,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.produtividade.mais_entregas[:5] %}
                     <li>
-                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.nome }}{% if linha.setor %} | {{ linha.setor }}{% endif %}">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.nome }}</span>
+                            <small class="metricas-text-clamp-1">{{ linha.setor }}</small>
+                        </span>
                         <strong>{{ linha.entregues_total }}</strong>
                     </li>
                     {% else %}
@@ -479,7 +492,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.carga.mais_atrasadas[:5] %}
                     <li>
-                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.nome }}{% if linha.setor %} | {{ linha.setor }}{% endif %}">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.nome }}</span>
+                            <small class="metricas-text-clamp-1">{{ linha.setor }}</small>
+                        </span>
                         <strong>{{ linha.atrasadas }}</strong>
                     </li>
                     {% else %}
@@ -493,7 +509,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.qualidade.mais_recusadas[:5] %}
                     <li>
-                        <span>{{ linha.nome }} <small>{{ formatar_percentual(linha.taxa_recusa) }} de recusa</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.nome }} | {{ formatar_percentual(linha.taxa_recusa) }} de recusa">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.nome }}</span>
+                            <small class="metricas-text-clamp-1">{{ formatar_percentual(linha.taxa_recusa) }} de recusa</small>
+                        </span>
                         <strong>{{ linha.recusadas }}</strong>
                     </li>
                     {% else %}
@@ -507,7 +526,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.carga.mais_abertas[:5] %}
                     <li>
-                        <span>{{ linha.nome }} <small>{{ linha.atrasadas }} atrasadas</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.nome }} | {{ linha.atrasadas }} atrasadas">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.nome }}</span>
+                            <small class="metricas-text-clamp-1">{{ linha.atrasadas }} atrasadas</small>
+                        </span>
                         <strong>{{ linha.abertas }}</strong>
                     </li>
                     {% else %}
@@ -521,7 +543,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.velocidade.mais_rapidos[:5] %}
                     <li>
-                        <span>{{ linha.nome }} <small>{{ linha.setor }}</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.nome }}{% if linha.setor %} | {{ linha.setor }}{% endif %}">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.nome }}</span>
+                            <small class="metricas-text-clamp-1">{{ linha.setor }}</small>
+                        </span>
                         <strong>{{ formatar_dias(linha.media_conclusao) }}</strong>
                     </li>
                     {% else %}
@@ -535,7 +560,10 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in metricas_responsaveis.carga.setores_sobrecarregados[:5] %}
                     <li>
-                        <span>{{ linha.setor }} <small>{{ linha.atrasadas }} atrasadas | {{ linha.sem_responsavel }} sem respons&aacute;vel</small></span>
+                        <span class="metricas-ranking-text" title="{{ linha.setor }} | {{ linha.atrasadas }} atrasadas | {{ linha.sem_responsavel }} sem responsável">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.setor }}</span>
+                            <small class="metricas-text-clamp-1">{{ linha.atrasadas }} atrasadas | {{ linha.sem_responsavel }} sem respons&aacute;vel</small>
+                        </span>
                         <strong>{{ linha.abertas }}</strong>
                     </li>
                     {% else %}
@@ -562,8 +590,8 @@
                     {% for linha in metricas_responsaveis.carga.tarefas_sem_responsavel[:8] %}
                     <li>
                         <span>
-                            <strong class="metricas-ranking-name">{{ linha.nome }}</strong>
-                            <small>{{ linha.setor }} | {{ linha.op }}</small>
+                            <strong class="metricas-ranking-name metricas-text-clamp-2" title="{{ linha.nome }}">{{ linha.nome }}</strong>
+                            <small class="metricas-text-clamp-1" title="{{ linha.setor }} | {{ linha.op }}">{{ linha.setor }} | {{ linha.op }}</small>
                         </span>
                         <strong>{{ 'Atrasada' if linha.atrasada else linha.status }}</strong>
                     </li>
@@ -579,8 +607,8 @@
                     {% for linha in ranking_tarefas_demoradas[:8] %}
                     <li>
                         <span>
-                            <strong class="metricas-ranking-name">{{ linha.tarefa.nome }}</strong>
-                            <small>{{ linha.tarefa.op.nome if linha.tarefa.op else 'OP sem nome' }} | {{ linha.tarefa.setor.nome if linha.tarefa.setor else 'Sem setor' }}</small>
+                            <strong class="metricas-ranking-name metricas-text-clamp-2" title="{{ linha.tarefa.nome }}">{{ linha.tarefa.nome }}</strong>
+                            <small class="metricas-text-clamp-1" title="{{ linha.tarefa.op.nome if linha.tarefa.op else 'OP sem nome' }} | {{ linha.tarefa.setor.nome if linha.tarefa.setor else 'Sem setor' }}">{{ linha.tarefa.op.nome if linha.tarefa.op else 'OP sem nome' }} | {{ linha.tarefa.setor.nome if linha.tarefa.setor else 'Sem setor' }}</small>
                         </span>
                         <strong>{{ formatar_dias(linha.tempo) }}</strong>
                     </li>
@@ -595,7 +623,9 @@
                 <ol class="metricas-ranking-list">
                     {% for linha in ranking_ops[:8] %}
                     <li>
-                        <span>{{ linha.op.nome }}</span>
+                        <span class="metricas-ranking-text" title="{{ linha.op.nome }}">
+                            <span class="metricas-ranking-title metricas-text-clamp-2">{{ linha.op.nome }}</span>
+                        </span>
                         <strong>{{ formatar_dias(linha.tempo_aberta) }}</strong>
                     </li>
                     {% else %}

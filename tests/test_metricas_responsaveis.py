@@ -302,6 +302,9 @@ def test_metricas_renderiza_nova_area_e_mantem_metricas_antigas(client, login_as
     assert "Quem conclui mais r&aacute;pido" in html
     assert "Setores mais sobrecarregados" in html
     assert "Gargalos por setor" in html
+    assert "Tarefas sem respons&aacute;vel" in html
+    assert "Tarefas que mais demoraram" in html
+    assert "OPs abertas h&aacute; mais tempo" in html
     assert "Tarefas por status" in html
     inicio_tabela = html.index("data-metricas-ranking-principal")
     fim_tabela = html.index("</table>", inicio_tabela)

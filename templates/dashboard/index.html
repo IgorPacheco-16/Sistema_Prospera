@@ -188,9 +188,13 @@
                     <!-- INFO -->
                     <div>
 
-                        <h5 class="fw-bold mb-1">
+                        <h5 class="fw-bold mb-1 dashboard-op-title" title="{{ item.op.nome }}">
                             {{ item.op.nome }}
                         </h5>
+
+                        <p class="text-muted small mb-1 dashboard-op-client" title="{{ item.op.cliente or 'Não informado' }}">
+                            Cliente: {{ item.op.cliente or "Não informado" }}
+                        </p>
 
                         <p class="text-muted small mb-2">
                             Status: {{ item.op.status }}

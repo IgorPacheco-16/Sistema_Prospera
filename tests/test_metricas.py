@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from database.models import db, OP, OPSetor, Setor, Tarefa
+from database.models import db, OP, OPSetor, Setor, Tarefa, User
 
 
 def criar_tarefa_metricas(op, setor, nome, status, criada_em, **kwargs):
@@ -36,6 +36,30 @@ def test_metricas_bloqueia_setor(client, login_as, setores):
 
     assert resposta.status_code == 403
     assert b"Acesso negado" in resposta.data
+
+
+def test_metricas_renderiza_filtro_de_usuarios(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    usuario = User(
+        email="ana.filtro.metricas@teste.com",
+        nome="Ana Filtro Metricas",
+        tipo="SETOR",
+        setor_id=acabamento.id,
+        ativo=True,
+    )
+    db.session.add(usuario)
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/metricas")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert 'data-metricas-list="responsaveis"' in html
+    assert "metricas-user-filter-label" in html
+    assert "Ana Filtro Metricas" in html
+    assert "ana.filtro.metricas@teste.com" in html
+    assert "Acabamento" in html
 
 
 def test_navbar_esconde_metricas_para_setor(client, login_as, setores):

@@ -523,16 +523,41 @@
     gap: 10px;
     justify-content: space-between;
     min-height: 42px;
+    min-width: 0;
     padding: 9px 10px;
 }
 
+.metricas-ranking-list li > span,
+.metricas-ranking-text {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 2px;
+    min-width: 0;
+}
+
+.metricas-ranking-title,
 .metricas-ranking-list span {
+    min-width: 0;
     overflow-wrap: anywhere;
 }
 
-.metricas-ranking-list strong {
+.metricas-ranking-list li > strong {
     color: var(--primary);
     flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.metricas-text-clamp-2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.metricas-text-clamp-1 {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
@@ -612,11 +637,13 @@
 .metricas-ranking-list-detailed li > span {
     display: grid;
     gap: 3px;
+    min-width: 0;
 }
 
 .metricas-ranking-name {
     color: var(--text-light);
     font-size: 0.98rem;
+    white-space: normal;
 }
 
 .metricas-ranking-list small {
@@ -665,6 +692,10 @@ html.dark-mode .metricas-soft-empty,
 html.dark-mode .metricas-kpi-card span,
 html.dark-mode .kanban-check-label small {
     color: var(--muted-dark);
+}
+
+html.dark-mode .kanban-check-label > strong {
+    color: var(--text-dark);
 }
 
 html.dark-mode .metricas-card,
@@ -743,7 +774,7 @@ html.dark-mode .metricas-ranking-list li {
     color: var(--text-dark);
 }
 
-html.dark-mode .metricas-ranking-list strong {
+html.dark-mode .metricas-ranking-list li > strong {
     color: #9ec5fe;
 }
 
@@ -2227,8 +2258,10 @@ html.dark-mode .kanban-filter-category strong {
     border: 1px solid var(--border-light);
     border-radius: 8px;
     display: grid;
-    max-height: 360px;
+    max-height: min(360px, 45vh);
+    overscroll-behavior: contain;
     overflow-y: auto;
+    scrollbar-width: thin;
 }
 
 html.dark-mode .kanban-check-list {
@@ -2236,13 +2269,13 @@ html.dark-mode .kanban-check-list {
 }
 
 .kanban-check-row {
-    align-items: center;
+    align-items: start;
     cursor: pointer;
     display: grid;
     gap: 10px;
     grid-template-columns: 20px minmax(0, 1fr);
     margin: 0;
-    min-height: 44px;
+    min-height: 46px;
     padding: 10px 12px;
 }
 
@@ -2274,6 +2307,7 @@ html.dark-mode .kanban-check-row:hover {
     border-radius: 6px;
     display: inline-flex;
     height: 20px;
+    margin-top: 1px;
     position: relative;
     width: 20px;
 }
@@ -2314,7 +2348,26 @@ html.dark-mode .kanban-check-box {
 }
 
 .kanban-check-label {
+    display: grid;
+    gap: 2px;
+    line-height: 1.25;
+    min-width: 0;
     overflow-wrap: anywhere;
+}
+
+.kanban-check-label > strong {
+    color: var(--text-light);
+    font-size: 0.92rem;
+    font-weight: 800;
+    min-width: 0;
+}
+
+.metricas-user-filter-label small,
+.kanban-user-filter-label small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .kanban-filter-empty {

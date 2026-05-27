@@ -140,6 +140,29 @@ html.dark-mode .dashboard-filters {
     scroll-margin-top: 96px;
 }
 
+.dashboard-op-title,
+.dashboard-op-client {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.dashboard-op-title {
+    display: -webkit-box;
+    line-height: 1.25;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.dashboard-op-client {
+    display: -webkit-box;
+    line-height: 1.25;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+
 /* Animação */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }

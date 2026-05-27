@@ -56,6 +56,37 @@ def test_dashboard_carrega_logado(client, login_as):
     assert resposta.status_code == 200
 
 
+def test_dashboard_mostra_cliente_nos_cards(client, login_as, setores):
+    setor = setores["Acabamento"]
+    op_com_cliente = OP(
+        nome="OP Dashboard Cliente",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        cliente="Cliente Dashboard",
+    )
+    op_sem_cliente = OP(
+        nome="OP Dashboard Sem Cliente",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        cliente=None,
+    )
+    db.session.add_all([op_com_cliente, op_sem_cliente])
+    db.session.flush()
+    db.session.add_all([
+        OPSetor(op_id=op_com_cliente.id, setor_id=setor.id),
+        OPSetor(op_id=op_sem_cliente.id, setor_id=setor.id),
+    ])
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Cliente: Cliente Dashboard" in html
+    assert "Cliente: Não informado" in html
+
+
 def test_calendario_mostra_apenas_tarefas_pendentes_de_ops_em_andamento(client, login_as, setores):
     setor = setores["Acabamento"]
     prazo = hoje_brasilia() + timedelta(days=1)
