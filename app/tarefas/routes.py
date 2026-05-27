@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, jsonify, redirect, request, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, request, url_for
 
 from database.models import db, OP, OPSetor, Tarefa, User
 from tempo import agora_brasilia
@@ -103,6 +103,10 @@ def responsaveis_ordenados(tarefa):
     )
 
 
+def ids_responsaveis_tarefa(tarefa):
+    return sorted(usuario.id for usuario in getattr(tarefa, "responsaveis", []) or [])
+
+
 def usuarios_notificacao_tarefa(tarefa):
     responsaveis = [
         responsavel
@@ -195,11 +199,41 @@ def create_tarefas_blueprint(
         if erro_responsavel:
             return erro_responsavel
 
+        prazo_convertido = datetime.strptime(prazo, "%Y-%m-%d").date() if prazo else None
+        responsaveis_ids = sorted(usuario.id for usuario in responsaveis)
+        limite_duplicidade = agora_brasilia() - timedelta(seconds=5)
+        tarefa_duplicada = None
+        tarefas_recentes = (
+            Tarefa.query
+            .filter(
+                Tarefa.op_id == op_id,
+                Tarefa.setor_id == setor_id,
+                Tarefa.nome == nome,
+                Tarefa.prazo == prazo_convertido,
+                Tarefa.criada_em >= limite_duplicidade,
+            )
+            .order_by(Tarefa.criada_em.desc())
+            .all()
+        )
+        for tarefa_recente in tarefas_recentes:
+            if ids_responsaveis_tarefa(tarefa_recente) == responsaveis_ids:
+                tarefa_duplicada = tarefa_recente
+                break
+
+        if tarefa_duplicada:
+            flash("Esta ação já foi processada.", "info")
+            return redirect(request.referrer or url_for(
+                "ver_op",
+                id=tarefa_duplicada.op_id,
+                setor=setor_id,
+                tarefa=tarefa_duplicada.id
+            ))
+
         nova = Tarefa(
             op_id=op_id,
             setor_id=setor_id,
             nome=nome,
-            prazo=datetime.strptime(prazo, "%Y-%m-%d").date() if prazo else None,
+            prazo=prazo_convertido,
             status=STATUS_PENDENTE,
             liberada=True,
             criada_em=agora_brasilia()

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
@@ -45,6 +45,23 @@ def create_ops_blueprint(
             prazo_convertido = None
             if prazo:
                 prazo_convertido = datetime.strptime(prazo, "%Y-%m-%d").date()
+
+            limite_duplicidade = agora_brasilia() - timedelta(seconds=5)
+            op_duplicada = (
+                OP.query
+                .filter(
+                    OP.nome == nome,
+                    OP.cliente == cliente,
+                    OP.prazo_final == prazo_convertido,
+                    OP.atendente == session.get("usuario"),
+                    OP.criada_em >= limite_duplicidade,
+                )
+                .order_by(OP.criada_em.desc())
+                .first()
+            )
+            if op_duplicada:
+                flash("Esta ação já foi processada.", "info")
+                return redirect(url_for("ver_op", id=op_duplicada.id))
 
             nova_op = OP(
                 nome=nome,

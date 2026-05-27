@@ -67,12 +67,38 @@ def test_setor_nao_pode_criar_op(client, login_as, setores):
     assert b"Acesso negado" in resposta.data
 
 
+def test_setor_nao_pode_postar_criar_op(client, login_as, setores):
+    login_as("SETOR", setor_id=setores["Acabamento"].id)
+
+    resposta = client.post("/criar_op", data={
+        "nome": "OP Sem Permissao",
+        "prazo": "2026-05-20",
+        "setores": [str(setores["Acabamento"].id)],
+    })
+
+    assert resposta.status_code == 403
+    assert OP.query.filter_by(nome="OP Sem Permissao").first() is None
+
+
 def test_atendente_pode_acessar_criar_op(client, login_as):
     login_as("ATENDENTE")
 
     resposta = client.get("/criar_op")
 
     assert resposta.status_code == 200
+
+
+def test_criar_tarefa_post_requer_login(client, op_com_setor):
+    op, setor = op_com_setor
+
+    resposta = client.post(
+        f"/criar_tarefa/{op.id}/{setor.id}",
+        data={"nome": "Tarefa Sem Login", "prazo": "2026-05-21"},
+    )
+
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith("/")
+    assert Tarefa.query.filter_by(nome="Tarefa Sem Login").first() is None
 
 
 def test_pcp_nao_pode_editar_op(client, login_as, op_com_setor):

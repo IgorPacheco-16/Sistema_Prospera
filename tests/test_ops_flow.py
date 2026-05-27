@@ -116,6 +116,25 @@ def test_criacao_de_op(client, login_as, setores):
     assert Notificacao.query.filter_by(op_id=op.id, usuario="PCP", tipo_evento="op_criada").first()
 
 
+def test_criacao_duplicada_de_op_em_sequencia_nao_cria_duas(client, login_as, setores):
+    login_as("ATENDENTE")
+    dados = {
+        "nome": "OP Duplicada",
+        "cliente": "Cliente Duplicado",
+        "prazo": "2026-05-20",
+        "setores": [str(setores["Acabamento"].id)],
+    }
+
+    primeira = client.post("/criar_op", data=dados)
+    segunda = client.post("/criar_op", data=dados, follow_redirects=True)
+
+    ops = OP.query.filter_by(nome="OP Duplicada").all()
+    assert primeira.status_code == 302
+    assert segunda.status_code == 200
+    assert len(ops) == 1
+    assert "Esta ação já foi processada." in segunda.get_data(as_text=True)
+
+
 def test_edicao_de_op_altera_caminho_pasta(client, login_as, op_com_setor):
     op, setor = op_com_setor
     login_as("ATENDENTE")
@@ -381,6 +400,30 @@ def test_criacao_de_tarefa_notifica_setor(client, login_as, op_com_setor):
         setor_id=setor.id,
         tipo_evento="tarefa_criada"
     ).first()
+
+
+def test_criacao_duplicada_de_tarefa_em_sequencia_nao_cria_duas(client, login_as, op_com_setor):
+    op, setor = op_com_setor
+    login_as("PCP")
+    dados = {"nome": "Tarefa Duplicada", "prazo": "2026-05-21"}
+
+    primeira = client.post(
+        f"/criar_tarefa/{op.id}/{setor.id}",
+        data=dados,
+        headers={"Referer": f"/op/{op.id}"}
+    )
+    segunda = client.post(
+        f"/criar_tarefa/{op.id}/{setor.id}",
+        data=dados,
+        headers={"Referer": f"/op/{op.id}"},
+        follow_redirects=True
+    )
+
+    tarefas = Tarefa.query.filter_by(op_id=op.id, setor_id=setor.id, nome="Tarefa Duplicada").all()
+    assert primeira.status_code == 302
+    assert segunda.status_code == 200
+    assert len(tarefas) == 1
+    assert "Esta ação já foi processada." in segunda.get_data(as_text=True)
 
 
 def test_setor_inicia_tarefa_pendente(client, login_as, tarefa):

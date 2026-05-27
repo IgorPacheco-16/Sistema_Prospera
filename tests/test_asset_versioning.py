@@ -21,6 +21,7 @@ def test_dashboard_carrega_assets_versionados(client, login_as):
     assert "css/theme.css?v=" in conteudo
     assert "css/dashboard.css?v=" in conteudo
     assert "js/password_toggle.js?v=" in conteudo
+    assert "js/form_guard.js?v=" in conteudo
 
 
 def test_op_carrega_theme_css_versionado(client, login_as, op_com_setor):
@@ -30,7 +31,9 @@ def test_op_carrega_theme_css_versionado(client, login_as, op_com_setor):
     resposta = client.get(f"/op/{op.id}")
 
     assert resposta.status_code == 200
-    assert "css/theme.css?v=" in html(resposta)
+    conteudo = html(resposta)
+    assert "css/theme.css?v=" in conteudo
+    assert "js/form_guard.js?v=" in conteudo
 
 
 def test_usuarios_carrega_theme_css_versionado(client, login_as):
@@ -51,4 +54,13 @@ def test_slides_mantem_versionamento_proprio(client, login_as):
     assert resposta.status_code == 200
     assert "css/slides.css?v=" in conteudo
     assert "js/slides.js?v=" in conteudo
+    assert "js/form_guard.js?v=" in conteudo
     assert "asset_version(" not in conteudo
+
+
+def test_login_carrega_form_guard_versionado(client):
+    resposta = client.get("/")
+    conteudo = html(resposta)
+
+    assert resposta.status_code == 200
+    assert "js/form_guard.js?v=" in conteudo
