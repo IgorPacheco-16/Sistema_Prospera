@@ -3,7 +3,7 @@ from datetime import timedelta
 from flask import Blueprint, render_template, request, session, url_for
 from sqlalchemy.orm import load_only, selectinload
 
-from database.models import OP, OPSetor, Setor, Tarefa
+from database.models import OP, OPSetor, Setor, Tarefa, User
 from tempo import hoje_brasilia
 
 
@@ -73,12 +73,40 @@ def ids_querystring(nome):
     return ids
 
 
+def responsaveis_querystring():
+    valores = request.args.getlist("responsavel")
+
+    for valor in request.args.getlist("responsaveis"):
+        valores.extend(parte.strip() for parte in valor.split(","))
+
+    if any((valor or "").strip() == "sem_responsavel" for valor in valores):
+        return {
+            "sem_responsavel": True,
+            "ids": [],
+        }
+
+    ids = []
+    for valor in valores:
+        try:
+            responsavel_id = int(valor)
+        except (TypeError, ValueError):
+            continue
+        if responsavel_id not in ids:
+            ids.append(responsavel_id)
+
+    return {
+        "sem_responsavel": False,
+        "ids": ids,
+    }
+
+
 def filtros_kanban():
     return {
         "busca": request.args.get("busca", "").strip(),
         "status": request.args.get("status", "todos").strip() or "todos",
         "setores": ids_querystring("setores"),
         "ops": ids_querystring("ops"),
+        "responsaveis": responsaveis_querystring(),
         "tipos_op": request.args.getlist("tipos_op"),
         "prazos": request.args.getlist("prazos"),
     }
@@ -214,6 +242,16 @@ def aplicar_filtros_visuais(tarefas, filtros, hoje):
     return tarefas_filtradas
 
 
+def ordenar_usuarios_por_nome(usuarios):
+    return sorted(
+        usuarios,
+        key=lambda usuario: (
+            (usuario.nome or usuario.email or "").casefold(),
+            usuario.id,
+        )
+    )
+
+
 def create_kanban_blueprint(login_required):
     kanban_bp = Blueprint("kanban_bp", __name__)
 
@@ -244,6 +282,37 @@ def create_kanban_blueprint(login_required):
 
         if filtros["ops"]:
             query = query.filter(Tarefa.op_id.in_(filtros["ops"]))
+
+        usuarios_disponiveis = []
+        if tipo != "ESPECTADOR":
+            usuarios_query = (
+                User.query
+                .options(selectinload(User.setor))
+                .filter(User.ativo.is_(True), User.setor_id.isnot(None))
+            )
+            if tipo == "SETOR":
+                usuarios_query = usuarios_query.filter(User.setor_id == setor_usuario_id)
+            usuarios_disponiveis = ordenar_usuarios_por_nome(usuarios_query.all())
+        usuarios_disponiveis_ids = {usuario.id for usuario in usuarios_disponiveis}
+
+        if tipo == "ESPECTADOR":
+            filtros["responsaveis"] = {
+                "sem_responsavel": False,
+                "ids": [],
+            }
+        elif filtros["responsaveis"]["sem_responsavel"]:
+            query = query.filter(~Tarefa.responsaveis.any())
+        elif filtros["responsaveis"]["ids"]:
+            responsaveis_permitidos = [
+                responsavel_id
+                for responsavel_id in filtros["responsaveis"]["ids"]
+                if responsavel_id in usuarios_disponiveis_ids
+            ]
+            filtros["responsaveis"]["ids"] = responsaveis_permitidos
+            if responsaveis_permitidos:
+                query = query.filter(
+                    Tarefa.responsaveis.any(User.id.in_(responsaveis_permitidos))
+                ).distinct()
 
         tarefas = query.all()
         tarefas = aplicar_filtros_visuais(tarefas, filtros, hoje)
@@ -310,6 +379,7 @@ def create_kanban_blueprint(login_required):
             status_filtro=STATUS_FILTRO,
             setores_disponiveis=setores_disponiveis,
             ops_disponiveis=ops_disponiveis,
+            usuarios_disponiveis=usuarios_disponiveis,
             tipos_op_filtro=TIPOS_OP_FILTRO,
             prazos_filtro=PRAZOS_FILTRO,
         )

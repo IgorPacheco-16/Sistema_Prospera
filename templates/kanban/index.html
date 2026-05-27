@@ -40,6 +40,8 @@
     {% if filtros.status != "todos" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
     {% if tipo != "SETOR" and filtros.setores %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.setores|length) %}{% endif %}
     {% if filtros.ops %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.ops|length) %}{% endif %}
+    {% set responsaveis_ativos = 1 if filtros.responsaveis.sem_responsavel else (filtros.responsaveis.ids|length) %}
+    {% if responsaveis_ativos %}{% set filtros_ativos.total = filtros_ativos.total + responsaveis_ativos %}{% endif %}
     {% if filtros.tipos_op %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.tipos_op|length) %}{% endif %}
     {% if filtros.prazos %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.prazos|length) %}{% endif %}
 
@@ -93,6 +95,12 @@
                             <span>OPs</span>
                             {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
                         </button>
+                        {% if tipo != "ESPECTADOR" %}
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="responsavel">
+                            <span>Respons&aacute;vel</span>
+                            {% if responsaveis_ativos %}<strong>{{ responsaveis_ativos }}</strong>{% endif %}
+                        </button>
+                        {% endif %}
                         <button type="button" class="kanban-filter-category" data-kanban-filter-tab="tipo-op">
                             <span>Tipo de OP</span>
                             {% if filtros.tipos_op %}<strong>{{ filtros.tipos_op|length }}</strong>{% endif %}
@@ -182,6 +190,69 @@
                                 {% endfor %}
                             </div>
                         </section>
+
+                        {% if tipo != "ESPECTADOR" %}
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="responsavel" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Usu&aacute;rio / respons&aacute;vel</h3>
+                                {% if tipo == "SETOR" %}
+                                <p>Filtre por usu&aacute;rios ativos do seu setor.</p>
+                                {% else %}
+                                <p>Filtre tarefas atribu&iacute;das a uma pessoa ou tarefas gerais do setor.</p>
+                                {% endif %}
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar usu&aacute;rio"
+                                   data-kanban-list-search="responsaveis">
+                            <div class="kanban-check-list" data-kanban-list="responsaveis">
+                                <label class="kanban-check-row" data-kanban-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value=""
+                                           data-kanban-responsavel-todos
+                                           {{ 'checked' if not responsaveis_ativos else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">Todos</span>
+                                </label>
+                                <label class="kanban-check-row" data-kanban-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value="sem_responsavel"
+                                           data-kanban-responsavel-sem
+                                           {{ 'checked' if filtros.responsaveis.sem_responsavel else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">Sem respons&aacute;vel</span>
+                                </label>
+                                {% for usuario in usuarios_disponiveis %}
+                                <label class="kanban-check-row" data-kanban-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value="{{ usuario.id }}"
+                                           data-kanban-responsavel-usuario
+                                           {{ 'checked' if usuario.id in filtros.responsaveis.ids else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label kanban-user-filter-label">
+                                        <strong title="{{ usuario.nome or usuario.email }}">
+                                            {{ usuario.nome or usuario.email }}
+                                        </strong>
+                                        <small title="{{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}">
+                                            {% if usuario.email and usuario.email != (usuario.nome or usuario.email) %}
+                                                {{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}
+                                            {% elif usuario.setor %}
+                                                {{ usuario.setor.nome }}
+                                            {% else %}
+                                                Sem setor
+                                            {% endif %}
+                                        </small>
+                                    </span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhum respons&aacute;vel ativo dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+                        {% endif %}
 
                         <section class="kanban-filter-panel" data-kanban-filter-panel="tipo-op" hidden>
                             <div class="kanban-filter-panel-head">
@@ -334,6 +405,49 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     });
+
+    const responsavelTodos = document.querySelector("[data-kanban-responsavel-todos]");
+    const responsavelSem = document.querySelector("[data-kanban-responsavel-sem]");
+    const responsavelUsuarios = document.querySelectorAll("[data-kanban-responsavel-usuario]");
+
+    if (responsavelTodos && responsavelSem) {
+        responsavelTodos.addEventListener("change", function() {
+            if (!responsavelTodos.checked) {
+                return;
+            }
+            responsavelSem.checked = false;
+            responsavelUsuarios.forEach(function(input) {
+                input.checked = false;
+            });
+        });
+
+        responsavelSem.addEventListener("change", function() {
+            if (!responsavelSem.checked) {
+                return;
+            }
+            responsavelTodos.checked = false;
+            responsavelUsuarios.forEach(function(input) {
+                input.checked = false;
+            });
+        });
+
+        responsavelUsuarios.forEach(function(input) {
+            input.addEventListener("change", function() {
+                if (input.checked) {
+                    responsavelTodos.checked = false;
+                    responsavelSem.checked = false;
+                    return;
+                }
+
+                const algumUsuarioMarcado = Array.from(responsavelUsuarios).some(function(usuario) {
+                    return usuario.checked;
+                });
+                if (!algumUsuarioMarcado && !responsavelSem.checked) {
+                    responsavelTodos.checked = true;
+                }
+            });
+        });
+    }
 });
 </script>
 <script src="{{ url_for('static', filename='js/form_guard.js') }}?v={{ asset_version('js/form_guard.js') }}"></script>
