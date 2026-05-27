@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="pt-br">
 <head>
-    <title>Calendário</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calend&aacute;rio</title>
 
-    <!-- darkmode -->
     <script>
     (function() {
         const theme = localStorage.getItem("theme");
@@ -14,7 +14,6 @@
     })();
     </script>
 
-    <!-- CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v={{ asset_version('css/theme.css') }}">
 </head>
@@ -23,159 +22,502 @@
 
 {% include "base/components/navbar.html" %}
 
-<div class="container mt-4">
+<div class="container mt-4 calendario-page">
+    <div class="calendario-header">
+        <div>
+            <h1>Calend&aacute;rio de Tarefas</h1>
+            <p class="calendario-subtitle">
+                Vis&atilde;o operacional dos prazos de tarefas ativas.
+            </p>
+        </div>
+        <span class="op-status-pill">{{ tipo }}</span>
+    </div>
 
-    <h1 class="mb-4">📅 Calendário de Tarefas</h1>
+    <form method="get" action="{{ url_for('calendario') }}" class="kanban-filter-shell calendario-filter-shell" id="calendarioFilterForm">
+        <div class="kanban-filter-bar calendario-filter-bar">
+            <div class="calendario-filter-summary">
+                <strong>{{ total_tarefas }} tarefa{% if total_tarefas != 1 %}s{% endif %} no calend&aacute;rio</strong>
+                <span>Baseado no hor&aacute;rio de Bras&iacute;lia: {{ today.strftime('%d/%m/%Y') }}</span>
+            </div>
 
-    <!-- tarefas do dia atual e seguinte -->
-    <h4>Hoje e Amanhã</h4>
-    <ul class="list-group mb-4">
-        {% for t, op in hoje_amanha %}
-            <li class="list-group-item
-                {% if t.prazo and t.prazo < today %}
-                    list-group-item-danger
-                {% elif t.prazo and t.prazo == today %}
-                    list-group-item-warning
+            <button class="btn btn-primary kanban-filter-open"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#calendarioFiltersPanel"
+                    aria-controls="calendarioFiltersPanel">
+                Filtros
+                <span class="kanban-active-count" aria-label="{{ filtros_ativos_total }} filtros ativos">
+                    {{ filtros_ativos_total }}
+                </span>
+            </button>
+
+            <a href="{{ url_for('calendario') }}" class="btn btn-outline-secondary kanban-clear-link">Limpar</a>
+        </div>
+
+        <div class="offcanvas offcanvas-end kanban-filter-drawer calendario-filter-drawer" tabindex="-1" id="calendarioFiltersPanel" aria-labelledby="calendarioFiltersPanelTitle">
+            <div class="offcanvas-header">
+                <div>
+                    <h2 class="offcanvas-title" id="calendarioFiltersPanelTitle">Filtros</h2>
+                    <p class="kanban-filter-drawer-subtitle">Combine categorias para refinar os prazos.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+            </div>
+
+            <div class="offcanvas-body">
+                <div class="kanban-filter-drawer-layout">
+                    <div class="kanban-filter-categories" aria-label="Categorias de filtros">
+                        <button type="button" class="kanban-filter-category active" data-calendario-filter-tab="status">
+                            <span>Status</span>
+                            {% if filtros.status %}<strong>{{ filtros.status|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="setores">
+                            <span>Setores</span>
+                            {% if tipo != "SETOR" and filtros.setores %}<strong>{{ filtros.setores|length }}</strong>{% endif %}
+                        </button>
+                        {% if tipo != "ESPECTADOR" %}
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="responsavel">
+                            <span>Respons&aacute;vel</span>
+                            {% if filtros.responsaveis.sem_responsavel %}<strong>1</strong>{% elif filtros.responsaveis.ids %}<strong>{{ filtros.responsaveis.ids|length }}</strong>{% endif %}
+                        </button>
+                        {% endif %}
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="cliente">
+                            <span>Cliente</span>
+                            {% if filtros.cliente %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="ops">
+                            <span>OPs</span>
+                            {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="periodo">
+                            <span>Per&iacute;odo</span>
+                            {% if filtros.periodo != "todos" or filtros.data_inicio or filtros.data_fim %}<strong>1</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-calendario-filter-tab="tipo-op">
+                            <span>Tipo de OP</span>
+                            {% set total_tipo_op = (filtros.tipos_op|length) + (1 if filtros.alta_prioridade else 0) + (1 if filtros.apenas_atrasadas else 0) %}
+                            {% if total_tipo_op %}<strong>{{ total_tipo_op }}</strong>{% endif %}
+                        </button>
+                    </div>
+
+                    <div class="kanban-filter-panels">
+                        <section class="kanban-filter-panel active" data-calendario-filter-panel="status">
+                            <div class="kanban-filter-panel-head">
+                                <h3>Status</h3>
+                                <p>Selecione uma ou mais etapas do fluxo.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for status in status_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="status"
+                                           value="{{ status }}"
+                                           {{ 'checked' if status in filtros.status else '' }}>
+                                    <span>{{ status }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="setores" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Setores</h3>
+                                {% if tipo == "SETOR" %}
+                                <p>Travado no seu setor.</p>
+                                {% else %}
+                                <p>Selecione um ou mais setores.</p>
+                                {% endif %}
+                            </div>
+                            {% if tipo != "SETOR" %}
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar setor"
+                                   data-calendario-list-search="setores">
+                            {% endif %}
+                            <div class="kanban-check-list" data-calendario-list="setores">
+                                {% for setor in setores_disponiveis %}
+                                <label class="kanban-check-row" data-calendario-list-item>
+                                    <input type="checkbox"
+                                           name="setores"
+                                           value="{{ setor.id }}"
+                                           {{ 'checked' if setor.id in filtros.setores else '' }}
+                                           {% if tipo == "SETOR" %}disabled{% endif %}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">{{ setor.nome }}</span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhum setor dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                            {% if tipo == "SETOR" and setores_disponiveis %}
+                            <input type="hidden" name="setores" value="{{ setores_disponiveis[0].id }}">
+                            {% endif %}
+                        </section>
+
+                        {% if tipo != "ESPECTADOR" %}
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="responsavel" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Usu&aacute;rio / respons&aacute;vel</h3>
+                                {% if tipo == "SETOR" %}
+                                <p>Filtre por usu&aacute;rios ativos do seu setor.</p>
+                                {% else %}
+                                <p>Filtre tarefas atribu&iacute;das a uma pessoa ou tarefas gerais do setor.</p>
+                                {% endif %}
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar usu&aacute;rio"
+                                   data-calendario-list-search="responsaveis">
+                            <div class="kanban-check-list" data-calendario-list="responsaveis">
+                                <label class="kanban-check-row" data-calendario-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value=""
+                                           data-calendario-responsavel-todos
+                                           {{ 'checked' if not filtros.responsaveis.sem_responsavel and not filtros.responsaveis.ids else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">Todos</span>
+                                </label>
+                                <label class="kanban-check-row" data-calendario-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value="sem_responsavel"
+                                           data-calendario-responsavel-sem
+                                           {{ 'checked' if filtros.responsaveis.sem_responsavel else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">Sem respons&aacute;vel</span>
+                                </label>
+                                {% for usuario in usuarios_disponiveis %}
+                                <label class="kanban-check-row" data-calendario-list-item>
+                                    <input type="checkbox"
+                                           name="responsavel"
+                                           value="{{ usuario.id }}"
+                                           data-calendario-responsavel-usuario
+                                           {{ 'checked' if usuario.id in filtros.responsaveis.ids else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label kanban-user-filter-label">
+                                        <strong title="{{ usuario.nome or usuario.email }}">{{ usuario.nome or usuario.email }}</strong>
+                                        <small title="{{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}">
+                                            {% if usuario.email and usuario.email != (usuario.nome or usuario.email) %}
+                                                {{ usuario.email }}{% if usuario.setor %} | {{ usuario.setor.nome }}{% endif %}
+                                            {% elif usuario.setor %}
+                                                {{ usuario.setor.nome }}
+                                            {% else %}
+                                                Sem setor
+                                            {% endif %}
+                                        </small>
+                                    </span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhum respons&aacute;vel ativo dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+                        {% endif %}
+
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="cliente" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Cliente</h3>
+                                <p>Busque por parte do nome do cliente.</p>
+                            </div>
+                            <input type="search"
+                                   name="cliente"
+                                   class="form-control kanban-list-search"
+                                   value="{{ filtros.cliente }}"
+                                   placeholder="Nome do cliente">
+                        </section>
+
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="ops" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>OP</h3>
+                                <p>Filtre por uma ou mais OPs ativas.</p>
+                            </div>
+                            <input type="search"
+                                   class="form-control kanban-list-search"
+                                   placeholder="Buscar OP"
+                                   data-calendario-list-search="ops">
+                            <div class="kanban-check-list" data-calendario-list="ops">
+                                {% for op in ops_disponiveis %}
+                                <label class="kanban-check-row" data-calendario-list-item>
+                                    <input type="checkbox"
+                                           name="ops"
+                                           value="{{ op.id }}"
+                                           {{ 'checked' if op.id in filtros.ops else '' }}>
+                                    <span class="kanban-check-box"></span>
+                                    <span class="kanban-check-label">
+                                        <strong title="{{ op.nome }}">{{ op.nome }}</strong>
+                                        <small title="{{ op.cliente or 'Cliente nao informado' }}">{{ op.cliente or 'Cliente n&atilde;o informado' }}</small>
+                                    </span>
+                                </label>
+                                {% else %}
+                                <div class="kanban-filter-empty">Nenhuma OP ativa dispon&iacute;vel.</div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="periodo" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Per&iacute;odo</h3>
+                                <p>Use datas de prazo das tarefas.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                {% for valor, rotulo in periodos_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="radio"
+                                           name="periodo"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if filtros.periodo == valor else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="calendario-date-range">
+                                <label>
+                                    <span>In&iacute;cio</span>
+                                    <input type="date"
+                                           name="data_inicio"
+                                           class="form-control"
+                                           value="{{ filtros.data_inicio.isoformat() if filtros.data_inicio else '' }}">
+                                </label>
+                                <label>
+                                    <span>Fim</span>
+                                    <input type="date"
+                                           name="data_fim"
+                                           class="form-control"
+                                           value="{{ filtros.data_fim.isoformat() if filtros.data_fim else '' }}">
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-calendario-filter-panel="tipo-op" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Tipo de OP</h3>
+                                <p>Combine caracter&iacute;sticas da OP e alertas de prazo.</p>
+                            </div>
+                            <div class="kanban-chip-group">
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="apenas_atrasadas"
+                                           value="1"
+                                           {{ 'checked' if filtros.apenas_atrasadas else '' }}>
+                                    <span>Apenas atrasadas</span>
+                                </label>
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="alta_prioridade"
+                                           value="1"
+                                           {{ 'checked' if filtros.alta_prioridade else '' }}>
+                                    <span>Apenas alta prioridade</span>
+                                </label>
+                                {% for valor, rotulo in tipos_op_filtro %}
+                                <label class="kanban-chip">
+                                    <input type="checkbox"
+                                           name="tipos_op"
+                                           value="{{ valor }}"
+                                           {{ 'checked' if valor in filtros.tipos_op else '' }}>
+                                    <span>{{ rotulo }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-filter-drawer-footer">
+                <a href="{{ url_for('calendario') }}" class="btn btn-outline-secondary">Limpar</a>
+                <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+            </div>
+        </div>
+    </form>
+
+    <section class="calendario-summary-grid" aria-label="Resumo de prazos">
+        <div class="calendario-summary-card calendario-summary-danger">
+            <span>Atrasadas</span>
+            <strong>{{ resumo.atrasadas }}</strong>
+        </div>
+        <div class="calendario-summary-card calendario-summary-warning">
+            <span>Hoje</span>
+            <strong>{{ resumo.hoje }}</strong>
+        </div>
+        <div class="calendario-summary-card calendario-summary-warning">
+            <span>Amanh&atilde;</span>
+            <strong>{{ resumo.amanha }}</strong>
+        </div>
+        <div class="calendario-summary-card">
+            <span>Pr&oacute;ximos 7 dias</span>
+            <strong>{{ resumo.proximos_7 }}</strong>
+        </div>
+        <div class="calendario-summary-card">
+            <span>Pr&oacute;ximos 30 dias</span>
+            <strong>{{ resumo.proximos_30 }}</strong>
+        </div>
+    </section>
+
+    {% if total_tarefas == 0 and filtros_ativos_total > 0 %}
+    <div class="calendario-global-empty">
+        Nenhuma tarefa encontrada com os filtros atuais.
+    </div>
+    {% endif %}
+
+    <div class="calendario-sections">
+        {% for secao in secoes %}
+        <section class="calendario-section" aria-labelledby="calendario-{{ secao.chave }}">
+            <div class="calendario-section-head">
+                <div>
+                    <h2 id="calendario-{{ secao.chave }}">{{ secao.titulo }}</h2>
+                    <p>{{ secao.tarefas|length }} tarefa{% if secao.tarefas|length != 1 %}s{% endif %}</p>
+                </div>
+                <span class="sector-status-badge {% if secao.chave == 'atrasadas' %}status-danger{% elif secao.chave in ['hoje', 'amanha'] %}status-warning{% else %}status-muted{% endif %}">
+                    {{ secao.tarefas|length }}
+                </span>
+            </div>
+
+            <div class="calendario-task-list">
+                {% for item in secao.tarefas %}
+                <a class="calendario-task-card {{ item.prazo.card_classe }} {% if item.op.alta_prioridade %}calendario-task-priority{% endif %}"
+                   href="{{ item.link }}">
+                    <div class="calendario-task-main">
+                        <div class="calendario-task-title-block">
+                            <span class="calendario-task-op calendario-text-truncate" title="{{ item.op.nome if item.op else 'OP sem nome' }}">
+                                {{ item.op.nome if item.op else "OP sem nome" }}
+                            </span>
+                            <strong class="calendario-text-clamp-2" title="{{ item.tarefa.nome }}">
+                                {{ item.tarefa.nome }}
+                            </strong>
+                            <small class="calendario-text-truncate" title="{{ item.cliente or 'Cliente nao informado' }}">
+                                Cliente: {{ item.cliente or "Cliente n&atilde;o informado" }}
+                            </small>
+                        </div>
+
+                        <div class="calendario-task-badges">
+                            <span class="sector-status-badge {{ item.prazo.classe }}">{{ item.prazo.texto }}</span>
+                            <span class="sector-status-badge status-muted">{{ item.status }}</span>
+                            {% if item.op.alta_prioridade %}
+                            <span class="sector-status-badge status-danger">Alta prioridade</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <dl class="calendario-task-meta">
+                        <div>
+                            <dt>Setor</dt>
+                            <dd class="calendario-text-truncate" title="{{ item.setor.nome if item.setor else 'Sem setor' }}">
+                                {{ item.setor.nome if item.setor else "Sem setor" }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Respons&aacute;veis</dt>
+                            <dd class="calendario-text-truncate" title="{{ item.responsaveis }}">
+                                {{ item.responsaveis }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Prazo</dt>
+                            <dd>
+                                {% if item.tarefa.prazo %}
+                                    {{ item.tarefa.prazo.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                    N&atilde;o definido
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </a>
                 {% else %}
-                    list-group-item-light
-                {% endif %}
-            ">
-
-                <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
-                Responsáveis:
-                {% if t.responsaveis %}
-                    {% for responsavel in t.responsaveis %}
-                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
-                    {% endfor %}
-                {% else %}
-                    Geral do setor
-                {% endif %} -
-
-                {% if t.prazo %}
-                    {{ t.prazo.strftime('%d/%m/%Y') }}
-                {% else %}
-                    Sem prazo
-                {% endif %}
-
-                <br>
-
-                {% if t.validado %}
-                    <span class="badge bg-success">Validado</span>
-                {% elif t.entregue %}
-                    <span class="badge bg-warning text-dark">Aguardando validação</span>
-                {% else %}
-                    <span class="badge bg-danger">Pendente</span>
-                {% endif %}
-
-            </li>
-        {% else %}
-            <li class="list-group-item">Nenhuma tarefa</li>
+                <div class="calendario-section-empty">
+                    Nenhuma tarefa nesta se&ccedil;&atilde;o.
+                </div>
+                {% endfor %}
+            </div>
+        </section>
         {% endfor %}
-    </ul>
-
-    <!-- Tarefas dos próximos 7 dias -->
-    <h4>Próximos 7 dias</h4>
-    <ul class="list-group mb-4">
-        {% for t, op in semana %}
-            <li class="list-group-item
-                {% if t.prazo and t.prazo < today %}
-                    list-group-item-danger
-                {% elif t.prazo and t.prazo == today %}
-                    list-group-item-warning
-                {% elif t.prazo and (t.prazo - today).days <= 3 %}
-                    list-group-item-warning
-                {% endif %}
-            ">
-
-                <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
-                Responsáveis:
-                {% if t.responsaveis %}
-                    {% for responsavel in t.responsaveis %}
-                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
-                    {% endfor %}
-                {% else %}
-                    Geral do setor
-                {% endif %} -
-
-                {% if t.prazo %}
-                    {{ t.prazo.strftime('%d/%m/%Y') }}
-                {% else %}
-                    Sem prazo
-                {% endif %}
-
-                <br>
-
-                {% if t.validado %}
-                    <span class="badge bg-success">Validado</span>
-                {% elif t.entregue %}
-                    <span class="badge bg-warning text-dark">Aguardando validação</span>
-                {% else %}
-                    <span class="badge bg-danger">Pendente</span>
-                {% endif %}
-
-            </li>
-        {% else %}
-            <li class="list-group-item">Nenhuma tarefa</li>
-        {% endfor %}
-    </ul>
-
-    <!-- tarefas dos proximos 30 dias -->
-    <h4>Próximos 30 dias</h4>
-    <ul class="list-group">
-        {% for t, op in mes %}
-            <li class="list-group-item
-                {% if t.prazo and t.prazo < today %}
-                    list-group-item-danger
-                {% elif t.prazo and (t.prazo - today).days <= 7 %}
-                    list-group-item-warning
-                {% endif %}
-            ">
-
-                <strong>{{ op.nome }}</strong> - {{ t.setor.nome }} -
-                Responsáveis:
-                {% if t.responsaveis %}
-                    {% for responsavel in t.responsaveis %}
-                        {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
-                    {% endfor %}
-                {% else %}
-                    Geral do setor
-                {% endif %} -
-
-                {% if t.prazo %}
-                    {{ t.prazo.strftime('%d/%m/%Y') }}
-                {% else %}
-                    Sem prazo
-                {% endif %}
-
-                <br>
-
-                {% if t.validado %}
-                    <span class="badge bg-success">Validado</span>
-                {% elif t.entregue %}
-                    <span class="badge bg-warning text-dark">Aguardando validação</span>
-                {% else %}
-                    <span class="badge bg-danger">Pendente</span>
-                {% endif %}
-
-            </li>
-        {% else %}
-            <li class="list-group-item">Nenhuma tarefa</li>
-        {% endfor %}
-    </ul>
-
+    </div>
 </div>
 
-<!-- darkmode global -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function toggleDarkMode() {
-    const html = document.documentElement;
-    html.classList.toggle("dark-mode");
+document.addEventListener("DOMContentLoaded", function() {
+    const tabButtons = document.querySelectorAll("[data-calendario-filter-tab]");
+    const panels = document.querySelectorAll("[data-calendario-filter-panel]");
 
-    const isDark = html.classList.contains("dark-mode");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-}
+    function activatePanel(panelName) {
+        tabButtons.forEach(function(button) {
+            button.classList.toggle("active", button.dataset.calendarioFilterTab === panelName);
+        });
+
+        panels.forEach(function(panel) {
+            const active = panel.dataset.calendarioFilterPanel === panelName;
+            panel.classList.toggle("active", active);
+            panel.hidden = !active;
+        });
+    }
+
+    tabButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+            activatePanel(button.dataset.calendarioFilterTab);
+        });
+    });
+
+    document.querySelectorAll("[data-calendario-list-search]").forEach(function(input) {
+        input.addEventListener("input", function() {
+            const listName = input.dataset.calendarioListSearch;
+            const list = document.querySelector('[data-calendario-list="' + listName + '"]');
+            const term = input.value.trim().toLowerCase();
+
+            if (!list) {
+                return;
+            }
+
+            list.querySelectorAll("[data-calendario-list-item]").forEach(function(item) {
+                item.hidden = !item.textContent.toLowerCase().includes(term);
+            });
+        });
+    });
+
+    const responsavelTodos = document.querySelector("[data-calendario-responsavel-todos]");
+    const responsavelSem = document.querySelector("[data-calendario-responsavel-sem]");
+    const responsavelUsuarios = document.querySelectorAll("[data-calendario-responsavel-usuario]");
+
+    if (responsavelTodos && responsavelSem) {
+        responsavelTodos.addEventListener("change", function() {
+            if (!responsavelTodos.checked) {
+                return;
+            }
+            responsavelSem.checked = false;
+            responsavelUsuarios.forEach(function(input) {
+                input.checked = false;
+            });
+        });
+
+        responsavelSem.addEventListener("change", function() {
+            if (!responsavelSem.checked) {
+                return;
+            }
+            responsavelTodos.checked = false;
+            responsavelUsuarios.forEach(function(input) {
+                input.checked = false;
+            });
+        });
+
+        responsavelUsuarios.forEach(function(input) {
+            input.addEventListener("change", function() {
+                if (input.checked) {
+                    responsavelTodos.checked = false;
+                    responsavelSem.checked = false;
+                    return;
+                }
+
+                const algumUsuarioMarcado = Array.from(responsavelUsuarios).some(function(usuario) {
+                    return usuario.checked;
+                });
+                if (!algumUsuarioMarcado && !responsavelSem.checked) {
+                    responsavelTodos.checked = true;
+                }
+            });
+        });
+    }
+});
 </script>
-
 <script src="{{ url_for('static', filename='js/form_guard.js') }}?v={{ asset_version('js/form_guard.js') }}"></script>
 </body>
 </html>

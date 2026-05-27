@@ -2574,6 +2574,351 @@ html.dark-mode .kanban-empty {
     color: var(--muted-dark);
 }
 
+/* ========================================= */
+/* CALENDARIO */
+/* ========================================= */
+
+.calendario-page {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 1440px;
+    padding-bottom: 32px;
+}
+
+.calendario-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.calendario-header h1 {
+    font-size: 2rem;
+    font-weight: 750;
+    margin: 0 0 4px;
+}
+
+.calendario-subtitle,
+.calendario-filter-summary span,
+.calendario-section-head p,
+.calendario-task-title-block small,
+.calendario-task-meta dt,
+.calendario-section-empty,
+.calendario-global-empty {
+    color: var(--muted-light);
+}
+
+html.dark-mode .calendario-subtitle,
+html.dark-mode .calendario-filter-summary span,
+html.dark-mode .calendario-section-head p,
+html.dark-mode .calendario-task-title-block small,
+html.dark-mode .calendario-task-meta dt,
+html.dark-mode .calendario-section-empty,
+html.dark-mode .calendario-global-empty {
+    color: var(--muted-dark);
+}
+
+.calendario-subtitle {
+    margin: 0;
+}
+
+.calendario-filter-shell {
+    margin-bottom: 0;
+}
+
+.calendario-filter-bar {
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+}
+
+.calendario-filter-summary {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.calendario-filter-summary strong {
+    font-size: 0.98rem;
+}
+
+.calendario-filter-summary span {
+    font-size: 0.88rem;
+}
+
+.calendario-filter-drawer {
+    --bs-offcanvas-width: min(780px, 100vw);
+}
+
+.calendario-date-range {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.calendario-date-range label {
+    display: grid;
+    gap: 5px;
+}
+
+.calendario-date-range span {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+html.dark-mode .calendario-date-range span {
+    color: var(--muted-dark);
+}
+
+.calendario-summary-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(5, minmax(140px, 1fr));
+}
+
+.calendario-summary-card {
+    background-color: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 14px;
+}
+
+html.dark-mode .calendario-summary-card {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+}
+
+.calendario-summary-card span {
+    color: var(--muted-light);
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+html.dark-mode .calendario-summary-card span {
+    color: var(--muted-dark);
+}
+
+.calendario-summary-card strong {
+    color: var(--text-light);
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+html.dark-mode .calendario-summary-card strong {
+    color: var(--text-dark);
+}
+
+.calendario-summary-danger {
+    border-color: rgba(220, 53, 69, 0.35);
+}
+
+.calendario-summary-warning {
+    border-color: rgba(255, 193, 7, 0.5);
+}
+
+.calendario-sections {
+    display: grid;
+    gap: 16px;
+}
+
+.calendario-section {
+    background-color: rgba(255,255,255,0.58);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+html.dark-mode .calendario-section {
+    background-color: rgba(255,255,255,0.04);
+    border-color: var(--border-dark);
+}
+
+.calendario-section-head {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.calendario-section-head h2 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.calendario-section-head p {
+    font-size: 0.88rem;
+    margin: 2px 0 0;
+}
+
+.calendario-task-list {
+    display: grid;
+    gap: 10px;
+}
+
+.calendario-task-card {
+    background-color: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-left: 5px solid var(--primary);
+    border-radius: 8px;
+    color: inherit;
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    text-decoration: none;
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.calendario-task-card:hover {
+    box-shadow: 0 10px 22px rgba(0,0,0,0.11);
+    color: inherit;
+    transform: translateY(-1px);
+}
+
+.calendario-task-card:focus-visible {
+    outline: 3px solid rgba(13, 110, 253, 0.3);
+    outline-offset: 2px;
+}
+
+html.dark-mode .calendario-task-card {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+.calendario-card-late {
+    border-left-color: var(--danger);
+}
+
+.calendario-card-today,
+.calendario-card-soon {
+    border-left-color: var(--warning);
+}
+
+.calendario-card-ok {
+    border-left-color: var(--success);
+}
+
+.calendario-card-neutral {
+    border-left-color: var(--muted-light);
+}
+
+.calendario-task-priority {
+    border-top-color: rgba(220, 53, 69, 0.55);
+    box-shadow: 0 8px 20px rgba(220, 53, 69, 0.1);
+}
+
+.calendario-task-main {
+    align-items: start;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.calendario-task-title-block {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.calendario-task-title-block strong {
+    color: var(--text-light);
+    font-size: 1rem;
+    line-height: 1.25;
+}
+
+html.dark-mode .calendario-task-title-block strong {
+    color: var(--text-dark);
+}
+
+.calendario-task-op {
+    color: var(--primary);
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.calendario-task-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    max-width: 340px;
+}
+
+.calendario-task-meta {
+    border-top: 1px solid var(--border-light);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1.3fr) minmax(100px, 0.7fr);
+    margin: 0;
+    padding-top: 10px;
+}
+
+html.dark-mode .calendario-task-meta {
+    border-color: var(--border-dark);
+}
+
+.calendario-task-meta div {
+    min-width: 0;
+}
+
+.calendario-task-meta dt {
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+}
+
+.calendario-task-meta dd {
+    color: var(--text-light);
+    font-size: 0.88rem;
+    line-height: 1.25;
+    margin: 0;
+}
+
+html.dark-mode .calendario-task-meta dd {
+    color: var(--text-dark);
+}
+
+.calendario-text-truncate {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendario-text-clamp-2 {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    overflow: hidden;
+}
+
+.calendario-section-empty,
+.calendario-global-empty {
+    border: 1px dashed var(--border-light);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+html.dark-mode .calendario-section-empty,
+html.dark-mode .calendario-global-empty {
+    border-color: var(--border-dark);
+}
+
 @media (max-width: 768px) {
     .app-navbar .container-fluid,
     .navbar-links,
@@ -2683,6 +3028,7 @@ html.dark-mode .kanban-empty {
         width: 100%;
     }
 
+    .calendario-date-range,
     .metricas-date-range,
     .metricas-overview-grid,
     .metricas-chart-grid,
@@ -2743,6 +3089,25 @@ html.dark-mode .kanban-empty {
     .kanban-filter-drawer-footer .btn {
         width: 100%;
     }
+
+    .calendario-header,
+    .calendario-task-main {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .calendario-header {
+        flex-direction: column;
+    }
+
+    .calendario-task-badges {
+        justify-content: flex-start;
+        max-width: none;
+    }
+
+    .calendario-task-meta {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 1200px) {
@@ -2763,6 +3128,10 @@ html.dark-mode .kanban-empty {
     .metricas-task-detail-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .calendario-summary-grid {
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -2777,6 +3146,10 @@ html.dark-mode .kanban-empty {
     .metricas-mini-grid,
     .metricas-mini-grid-wide,
     .metricas-task-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .calendario-summary-grid {
         grid-template-columns: 1fr;
     }
 }
