@@ -150,6 +150,7 @@ def create_tarefas_blueprint(
     tipos_permitidos,
     is_setor,
     usuario_pode_acionar_tarefa,
+    usuario_pode_validar_tarefa,
     criar_notificacao,
     mensagem_tarefa,
     link_tarefa,
@@ -160,6 +161,15 @@ def create_tarefas_blueprint(
 
     def exigir_permissao_tarefa(tarefa):
         if not usuario_pode_acionar_tarefa(tarefa):
+            if not is_setor():
+                return "Acesso negado para esta tarefa", 403
+
+            return "Setor incorreto", 403
+
+        return None
+
+    def exigir_permissao_validacao(tarefa):
+        if not usuario_pode_validar_tarefa(tarefa):
             if not is_setor():
                 return "Acesso negado para esta tarefa", 403
 
@@ -316,10 +326,12 @@ def create_tarefas_blueprint(
         if status_atual_tarefa(tarefa) != STATUS_EM_ANDAMENTO:
             return "A tarefa precisa estar em andamento para enviar à validação", 400
 
+        observacao_entrega = request.form.get("observacao_entrega", "").strip()
         agora = agora_brasilia()
         aplicar_status_tarefa(tarefa, STATUS_EM_VALIDACAO)
         preencher_data_se_vazia(tarefa, "enviada_validacao_em", agora)
         preencher_data_se_vazia(tarefa, "entregue_em", agora)
+        tarefa.observacao_entrega = observacao_entrega or None
 
         op = db.session.get(OP, tarefa.op_id)
         if op:
@@ -376,7 +388,7 @@ def create_tarefas_blueprint(
     def validar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
 
-        acesso_negado = exigir_permissao_tarefa(tarefa)
+        acesso_negado = exigir_permissao_validacao(tarefa)
         if acesso_negado:
             return acesso_negado
 

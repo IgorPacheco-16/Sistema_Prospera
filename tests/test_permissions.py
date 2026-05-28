@@ -316,6 +316,46 @@ def test_pcp_nao_movimenta_tarefa_de_outro_setor(client, login_as, setores):
     assert tarefa.status == "PENDENTE"
 
 
+def test_pcp_valida_tarefa_de_outro_setor_sem_iniciar(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÇÃO",
+        entregue=True,
+        validado=False,
+    )
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.validado is True
+
+
+def test_atendente_nao_valida_tarefa_de_outro_setor(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÇÃO",
+        entregue=True,
+        validado=False,
+    )
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.status == "EM VALIDAÇÃO"
+    assert tarefa.validado is False
+
+
 def test_atendente_nao_movimenta_tarefa_de_outro_setor(client, login_as, setores):
     _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
     login_as("ATENDENTE")

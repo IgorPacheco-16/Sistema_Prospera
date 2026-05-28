@@ -199,6 +199,21 @@ def test_calendario_filtra_por_cliente(client, login_as, setores):
     assert "Tarefa cliente prata" not in html
 
 
+def test_calendario_lista_clientes_sem_duplicar_e_em_ordem(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_calendario("OP Zeta 1", setor, "Tarefa Zeta 1", cliente="Zeta")
+    criar_op_calendario("OP Alfa", setor, "Tarefa Alfa", cliente="Alfa")
+    criar_op_calendario("OP Zeta 2", setor, "Tarefa Zeta 2", cliente="Zeta")
+    login_as("PCP")
+
+    resposta = client.get("/calendario")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert html.count('<option value="Zeta">') == 1
+    assert html.index('<option value="Alfa">') < html.index('<option value="Zeta">')
+
+
 def test_calendario_setor_nao_ve_tarefas_de_outro_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]

@@ -223,7 +223,13 @@
                                    name="cliente"
                                    class="form-control kanban-list-search"
                                    value="{{ filtros.cliente }}"
+                                   list="calendarioClientesDisponiveis"
                                    placeholder="Nome do cliente">
+                            <datalist id="calendarioClientesDisponiveis">
+                                {% for cliente in clientes_disponiveis %}
+                                <option value="{{ cliente }}">
+                                {% endfor %}
+                            </datalist>
                         </section>
 
                         <section class="kanban-filter-panel" data-calendario-filter-panel="ops" hidden>

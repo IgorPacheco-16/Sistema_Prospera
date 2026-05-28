@@ -38,6 +38,7 @@
     {% set filtros_ativos = namespace(total=0) %}
     {% if filtros.busca %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
     {% if filtros.status != "todos" %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
+    {% if filtros.cliente %}{% set filtros_ativos.total = filtros_ativos.total + 1 %}{% endif %}
     {% if tipo != "SETOR" and filtros.setores %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.setores|length) %}{% endif %}
     {% if filtros.ops %}{% set filtros_ativos.total = filtros_ativos.total + (filtros.ops|length) %}{% endif %}
     {% set responsaveis_ativos = 1 if filtros.responsaveis.sem_responsavel else (filtros.responsaveis.ids|length) %}
@@ -94,6 +95,10 @@
                         <button type="button" class="kanban-filter-category" data-kanban-filter-tab="ops">
                             <span>OPs</span>
                             {% if filtros.ops %}<strong>{{ filtros.ops|length }}</strong>{% endif %}
+                        </button>
+                        <button type="button" class="kanban-filter-category" data-kanban-filter-tab="cliente">
+                            <span>Cliente</span>
+                            {% if filtros.cliente %}<strong>1</strong>{% endif %}
                         </button>
                         {% if tipo != "ESPECTADOR" %}
                         <button type="button" class="kanban-filter-category" data-kanban-filter-tab="responsavel">
@@ -189,6 +194,24 @@
                                 <div class="kanban-filter-empty">Nenhuma OP ativa dispon&iacute;vel.</div>
                                 {% endfor %}
                             </div>
+                        </section>
+
+                        <section class="kanban-filter-panel" data-kanban-filter-panel="cliente" hidden>
+                            <div class="kanban-filter-panel-head">
+                                <h3>Cliente</h3>
+                                <p>Busque por parte do nome do cliente.</p>
+                            </div>
+                            <input type="search"
+                                   name="cliente"
+                                   class="form-control kanban-list-search"
+                                   value="{{ filtros.cliente }}"
+                                   list="kanbanClientesDisponiveis"
+                                   placeholder="Nome do cliente">
+                            <datalist id="kanbanClientesDisponiveis">
+                                {% for cliente in clientes_disponiveis %}
+                                <option value="{{ cliente }}">
+                                {% endfor %}
+                            </datalist>
                         </section>
 
                         {% if tipo != "ESPECTADOR" %}
@@ -323,6 +346,7 @@
 
                     <div class="kanban-card-meta">
                         <span>OP: {{ item.op.nome }}</span>
+                        <span>Cliente: {{ item.op.cliente or "Cliente nao informado" }}</span>
                         <span>Setor: {{ item.setor.nome if item.setor else "Sem setor" }}</span>
                         <span>
                             Responsáveis:

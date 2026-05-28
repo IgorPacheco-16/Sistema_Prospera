@@ -510,6 +510,44 @@ def test_entrega_de_tarefa_notifica_atendente_e_pcp(client, login_as, tarefa):
     ).first()
 
 
+def test_entrega_de_tarefa_salva_observacao_e_exibe_no_detalhe(client, login_as, tarefa):
+    tarefa.status = "EM ANDAMENTO"
+    db.session.commit()
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        data={"observacao_entrega": "Material entregue na bancada 2."},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.observacao_entrega == "Material entregue na bancada 2."
+
+    login_as("ADMIN")
+    html = client.get(f"/op/{tarefa.op_id}").get_data(as_text=True)
+    assert "Observacao da entrega" in html
+    assert "Material entregue na bancada 2." in html
+
+
+def test_entrega_de_tarefa_sem_observacao_continua_funcionando(client, login_as, tarefa):
+    tarefa.status = "EM ANDAMENTO"
+    db.session.commit()
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        data={"observacao_entrega": ""},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM VALIDAÇÃO"
+    assert tarefa.observacao_entrega is None
+
+
 def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
     tarefa.status = "EM VALIDAÇÃO"
     tarefa.entregue = True

@@ -508,6 +508,24 @@ def create_calendario_blueprint(login_required):
             ops_query = ops_query.filter(Tarefa.setor_id == setor_usuario_id)
         ops_disponiveis = ops_query.distinct().order_by(OP.nome).all()
 
+        clientes_query = (
+            OP.query
+            .with_entities(OP.cliente)
+            .join(Tarefa, Tarefa.op_id == OP.id)
+            .filter(
+                OP.status == "EM ANDAMENTO",
+                Tarefa.validado.is_(False),
+                OP.cliente.isnot(None),
+                OP.cliente != "",
+            )
+        )
+        if tipo == "SETOR":
+            clientes_query = clientes_query.filter(Tarefa.setor_id == setor_usuario_id)
+        clientes_disponiveis = [
+            cliente
+            for cliente, in clientes_query.distinct().order_by(OP.cliente).all()
+        ]
+
         secoes = montar_secoes(tarefas, hoje)
         resumo = resumo_secoes(secoes)
         total_tarefas = sum(resumo.values())
@@ -524,6 +542,7 @@ def create_calendario_blueprint(login_required):
             status_filtro=STATUS_FILTRO,
             setores_disponiveis=setores_disponiveis,
             ops_disponiveis=ops_disponiveis,
+            clientes_disponiveis=clientes_disponiveis,
             usuarios_disponiveis=usuarios_disponiveis,
             tipos_op_filtro=TIPOS_OP_FILTRO,
             periodos_filtro=PERIODOS_FILTRO,

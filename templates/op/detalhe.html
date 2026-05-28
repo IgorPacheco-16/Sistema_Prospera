@@ -202,6 +202,12 @@
                                             Geral do setor
                                         {% endif %}
                                     </div>
+                                    {% if t.observacao_entrega %}
+                                    <div class="task-delivery-note">
+                                        <strong>Observacao da entrega</strong>
+                                        <p>{{ t.observacao_entrega }}</p>
+                                    </div>
+                                    {% endif %}
                                 </div>
 
                                 <div class="task-status-area">
@@ -242,7 +248,14 @@
                                 {% endif %}
 
                                 {% if t.pode_acionar and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
-                                <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}">
+                                <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}" class="task-delivery-form">
+                                    <label class="form-label visually-hidden" for="observacaoEntrega{{ t.id }}">Observacao da entrega</label>
+                                    <textarea id="observacaoEntrega{{ t.id }}"
+                                              name="observacao_entrega"
+                                              class="form-control form-control-sm"
+                                              rows="2"
+                                              maxlength="1000"
+                                              placeholder="Observacao da entrega (opcional)"></textarea>
                                     <button class="btn btn-entregar btn-sm"
                                             type="submit"
                                             onclick="return confirm('Enviar esta tarefa para validação?')">
@@ -251,7 +264,7 @@
                                 </form>
                                 {% endif %}
 
-                                {% if t.pode_acionar and t.entregue and not t.validado %}
+                                {% if t.pode_validar and t.entregue and not t.validado %}
                                 <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
                                     <button class="btn btn-validar btn-sm"
                                             type="submit"

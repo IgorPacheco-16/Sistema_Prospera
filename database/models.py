@@ -148,6 +148,7 @@ class Tarefa(db.Model):
     recusada_em = db.Column(db.DateTime, nullable=True)
     entregue_em = db.Column(db.DateTime, nullable=True)
     concluida_em = db.Column(db.DateTime, nullable=True)
+    observacao_entrega = db.Column(db.String(1000), nullable=True)
     motivo_recusa = db.Column(db.String(255), nullable=True)
     setor = db.relationship('Setor')
     responsaveis = db.relationship(

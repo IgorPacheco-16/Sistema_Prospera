@@ -75,6 +75,15 @@ def usuario_pode_acionar_tarefa(tarefa):
     return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
 
 
+def usuario_pode_validar_tarefa(tarefa):
+    tipo = session.get("tipo")
+
+    if tipo in {"ADMIN", "PCP"}:
+        return True
+
+    return usuario_pode_acionar_tarefa(tarefa)
+
+
 def usuario_logado_ativo():
     email = session.get("usuario")
     if not email:

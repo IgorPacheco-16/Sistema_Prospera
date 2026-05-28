@@ -9,6 +9,7 @@ def criar_op_com_tarefa(nome_op, setor, nome_tarefa, status="EM ANDAMENTO", **kw
     status_tarefa = kwargs.pop("status_tarefa", None)
     op = OP(
         nome=nome_op,
+        cliente=kwargs.pop("cliente", None),
         status=status,
         atendente="atendente@teste.com",
         prazo_final=prazo_final,
@@ -191,6 +192,65 @@ def test_kanban_combina_busca_status_setor_op_tipo_e_prazo(client, login_as, set
     assert "Montar balcão outro setor" not in html
     assert "Montar balcão sem prioridade" not in html
     assert "Montar balcão futuro" not in html
+
+
+def test_kanban_filtra_por_cliente_com_filtros_existentes(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+
+    criar_op_com_tarefa(
+        "OP Cliente Alvo",
+        acabamento,
+        "Tarefa cliente alvo",
+        cliente="Cliente Ouro",
+        status_tarefa="EM ANDAMENTO",
+    )
+    criar_op_com_tarefa(
+        "OP Cliente Errado",
+        acabamento,
+        "Tarefa cliente errado",
+        cliente="Cliente Prata",
+        status_tarefa="EM ANDAMENTO",
+    )
+    criar_op_com_tarefa(
+        "OP Cliente Outro Setor",
+        pcp,
+        "Tarefa cliente outro setor",
+        cliente="Cliente Ouro",
+        status_tarefa="EM ANDAMENTO",
+    )
+    login_as("ADMIN")
+
+    resposta = client.get(
+        "/kanban",
+        query_string=[
+            ("cliente", "Ouro"),
+            ("status", "EM ANDAMENTO"),
+            ("setores", str(acabamento.id)),
+        ],
+    )
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Tarefa cliente alvo" in html
+    assert "Tarefa cliente errado" not in html
+    assert "Tarefa cliente outro setor" not in html
+    assert 'data-kanban-filter-tab="cliente"' in html
+
+
+def test_kanban_lista_clientes_sem_duplicar_e_em_ordem(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_com_tarefa("OP Zeta 1", setor, "Tarefa Zeta 1", cliente="Zeta")
+    criar_op_com_tarefa("OP Alfa", setor, "Tarefa Alfa", cliente="Alfa")
+    criar_op_com_tarefa("OP Zeta 2", setor, "Tarefa Zeta 2", cliente="Zeta")
+    login_as("PCP")
+
+    resposta = client.get("/kanban")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert html.count('<option value="Zeta">') == 1
+    assert html.index('<option value="Alfa">') < html.index('<option value="Zeta">')
 
 
 def test_kanban_setor_nao_consegue_filtrar_outro_setor(client, login_as, setores):

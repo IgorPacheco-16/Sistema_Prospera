@@ -104,6 +104,7 @@ def filtros_kanban():
     return {
         "busca": request.args.get("busca", "").strip(),
         "status": request.args.get("status", "todos").strip() or "todos",
+        "cliente": request.args.get("cliente", "").strip(),
         "setores": ids_querystring("setores"),
         "ops": ids_querystring("ops"),
         "responsaveis": responsaveis_querystring(),
@@ -223,12 +224,22 @@ def tarefa_no_filtro_busca(tarefa, busca):
     return any(termo in (campo or "").casefold() for campo in campos)
 
 
+def tarefa_no_filtro_cliente(tarefa, cliente):
+    if not cliente:
+        return True
+
+    cliente_op = (getattr(tarefa.op, "cliente", "") or "").casefold()
+    return cliente.casefold() in cliente_op
+
+
 def aplicar_filtros_visuais(tarefas, filtros, hoje):
     tarefas_filtradas = []
 
     for tarefa in tarefas:
         status = status_visual_tarefa(tarefa)
         if filtros["status"] != "todos" and filtros["status"] != status:
+            continue
+        if not tarefa_no_filtro_cliente(tarefa, filtros["cliente"]):
             continue
         if not tarefa_no_filtro_busca(tarefa, filtros["busca"]):
             continue
@@ -341,6 +352,24 @@ def create_kanban_blueprint(login_required):
 
         ops_disponiveis = ops_query.order_by(OP.nome).all()
 
+        clientes_query = (
+            OP.query
+            .with_entities(OP.cliente)
+            .filter(
+                OP.status.notin_(["FINALIZADA", "ARQUIVADA"]),
+                OP.cliente.isnot(None),
+                OP.cliente != "",
+            )
+        )
+        if tipo == "SETOR":
+            clientes_query = clientes_query.join(OPSetor).filter(
+                OPSetor.setor_id == setor_usuario_id
+            )
+        clientes_disponiveis = [
+            cliente
+            for cliente, in clientes_query.distinct().order_by(OP.cliente).all()
+        ]
+
         colunas = []
         tarefas_por_status = {
             coluna["status"]: []
@@ -379,6 +408,7 @@ def create_kanban_blueprint(login_required):
             status_filtro=STATUS_FILTRO,
             setores_disponiveis=setores_disponiveis,
             ops_disponiveis=ops_disponiveis,
+            clientes_disponiveis=clientes_disponiveis,
             usuarios_disponiveis=usuarios_disponiveis,
             tipos_op_filtro=TIPOS_OP_FILTRO,
             prazos_filtro=PRAZOS_FILTRO,

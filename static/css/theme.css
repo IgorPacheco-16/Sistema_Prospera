@@ -2169,6 +2169,41 @@ html.dark-mode .op-history-meta {
     margin: 0;
 }
 
+.task-delivery-form {
+    align-items: flex-end;
+    display: flex;
+    gap: 8px;
+    min-width: min(100%, 360px);
+}
+
+.task-delivery-form .form-control {
+    min-width: 210px;
+    resize: vertical;
+}
+
+.task-delivery-note {
+    background-color: rgba(13, 110, 253, 0.05);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--text-light);
+    display: grid;
+    gap: 3px;
+    margin-top: 8px;
+    max-width: 620px;
+    padding: 9px 10px;
+}
+
+.task-delivery-note strong {
+    color: var(--muted-light);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+}
+
+.task-delivery-note p {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
 .task-refusal-form {
     display: flex;
     gap: 8px;
@@ -2209,6 +2244,16 @@ html.dark-mode .tarefa,
 html.dark-mode .task-edit-item {
     background-color: #151922;
     border-color: var(--border-dark);
+}
+
+html.dark-mode .task-delivery-note {
+    background-color: rgba(90, 160, 255, 0.08);
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .task-delivery-note strong {
+    color: var(--muted-dark);
 }
 
 .status.validado {
@@ -3237,6 +3282,7 @@ html.dark-mode .calendario-global-empty {
         position: static;
     }
 
+    .task-delivery-form,
     .task-refusal-form {
         flex-direction: column;
     }

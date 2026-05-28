@@ -14,6 +14,7 @@ def create_ops_blueprint(
     is_admin,
     is_atendente,
     usuario_pode_acionar_tarefa,
+    usuario_pode_validar_tarefa,
     criar_notificacao,
     mensagem_op,
     link_op,
@@ -165,6 +166,7 @@ def create_ops_blueprint(
             )
             for tarefa in tarefas:
                 tarefa.pode_acionar = usuario_pode_acionar_tarefa(tarefa)
+                tarefa.pode_validar = usuario_pode_validar_tarefa(tarefa)
                 tarefa.responsaveis_ordenados = sorted(
                     list(getattr(tarefa, "responsaveis", []) or []),
                     key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),

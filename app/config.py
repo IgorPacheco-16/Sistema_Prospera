@@ -137,6 +137,7 @@ def garantir_colunas_tarefa():
     adicionar_coluna_se_nao_existir("tarefas", "recusada_em", "DATETIME")
     adicionar_coluna_se_nao_existir("tarefas", "entregue_em", "DATETIME")
     adicionar_coluna_se_nao_existir("tarefas", "concluida_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "observacao_entrega", "VARCHAR(1000)")
     adicionar_coluna_se_nao_existir("tarefas", "motivo_recusa", "VARCHAR(255)")
     agora = agora_brasilia()
     db.session.execute(
