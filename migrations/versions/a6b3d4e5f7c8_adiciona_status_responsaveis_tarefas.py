@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    ativo_true = "TRUE" if bind.dialect.name == "postgresql" else "1"
+
     op.create_table(
         "tarefa_responsaveis_nova",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -39,10 +42,10 @@ def upgrade():
     )
 
     op.execute(
-        """
+        f"""
         INSERT INTO tarefa_responsaveis_nova
             (tarefa_id, usuario_id, status, tipo, solicitado_em, ativo)
-        SELECT tarefa_id, user_id, 'ACEITO', 'ATRIBUICAO', CURRENT_TIMESTAMP, 1
+        SELECT tarefa_id, user_id, 'ACEITO', 'ATRIBUICAO', CURRENT_TIMESTAMP, {ativo_true}
         FROM tarefa_responsaveis
         """
     )
@@ -52,6 +55,16 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        ativo_true = "TRUE"
+        insert_antiga = "INSERT INTO"
+        on_conflict = "ON CONFLICT (tarefa_id, user_id) DO NOTHING"
+    else:
+        ativo_true = "1"
+        insert_antiga = "INSERT OR IGNORE INTO"
+        on_conflict = ""
+
     op.create_table(
         "tarefa_responsaveis_antiga",
         sa.Column("tarefa_id", sa.Integer(), nullable=False),
@@ -62,11 +75,12 @@ def downgrade():
     )
 
     op.execute(
-        """
-        INSERT OR IGNORE INTO tarefa_responsaveis_antiga (tarefa_id, user_id)
+        f"""
+        {insert_antiga} tarefa_responsaveis_antiga (tarefa_id, user_id)
         SELECT tarefa_id, usuario_id
         FROM tarefa_responsaveis
-        WHERE status = 'ACEITO' AND ativo = 1
+        WHERE status = 'ACEITO' AND ativo = {ativo_true}
+        {on_conflict}
         """
     )
 
