@@ -983,10 +983,12 @@ html.dark-mode .list-group-item-danger {
     display: grid;
     gap: 16px;
     margin: 0 auto 32px;
-    max-width: 1180px;
+    margin-left: 50%;
+    max-width: none;
     min-width: 0;
     padding: 0 4px;
-    width: 100%;
+    transform: translateX(-50%);
+    width: min(1320px, calc(100vw - 32px));
 }
 
 .usuarios-header {
@@ -1034,16 +1036,19 @@ html.dark-mode .list-group-item-danger {
     border-radius: 8px;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .usuarios-table-wrap {
     overflow-x: auto;
+    overflow-y: visible;
     width: 100%;
 }
 
 .usuarios-table {
-    min-width: 940px;
+    table-layout: fixed;
+    width: 100%;
+    min-width: 0;
     --bs-table-bg: transparent;
     --bs-table-border-color: var(--border-light);
     --bs-table-color: var(--text-light);
@@ -1054,8 +1059,9 @@ html.dark-mode .list-group-item-danger {
     background-color: transparent;
     border-color: var(--border-light);
     color: inherit;
-    padding: 12px 14px;
+    padding: 10px 10px;
     vertical-align: middle;
+    overflow-wrap: anywhere;
 }
 
 .usuarios-table thead {
@@ -1070,6 +1076,36 @@ html.dark-mode .list-group-item-danger {
     white-space: nowrap;
 }
 
+.usuarios-table th:nth-child(1),
+.usuarios-table td:nth-child(1) {
+    width: 16%;
+}
+
+.usuarios-table th:nth-child(2),
+.usuarios-table td:nth-child(2) {
+    width: 24%;
+}
+
+.usuarios-table th:nth-child(3),
+.usuarios-table td:nth-child(3) {
+    width: 13%;
+}
+
+.usuarios-table th:nth-child(4),
+.usuarios-table td:nth-child(4) {
+    width: 14%;
+}
+
+.usuarios-table th:nth-child(5),
+.usuarios-table td:nth-child(5) {
+    width: 17%;
+}
+
+.usuarios-table th:nth-child(6),
+.usuarios-table td:nth-child(6) {
+    width: 220px;
+}
+
 .usuarios-table td {
     font-size: 0.92rem;
     line-height: 1.35;
@@ -1080,15 +1116,15 @@ html.dark-mode .list-group-item-danger {
 }
 
 .usuarios-actions-cell {
-    min-width: 210px;
-    width: 210px;
+    min-width: 220px;
+    width: 220px;
 }
 
 .user-actions {
     align-items: center;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     justify-content: flex-end;
 }
 
@@ -1098,7 +1134,8 @@ html.dark-mode .list-group-item-danger {
 
 .user-actions .btn {
     min-height: 31px;
-    white-space: nowrap;
+    padding: 0.25rem 0.45rem;
+    white-space: normal;
 }
 
 .usuarios-badge {
@@ -1191,6 +1228,7 @@ html.dark-mode .btn-outline-danger:hover {
 @media (max-width: 768px) {
     .usuarios-page {
         padding: 0;
+        width: 100%;
     }
 
     .usuarios-header,
@@ -1204,6 +1242,7 @@ html.dark-mode .btn-outline-danger:hover {
     }
 
     .usuarios-table {
+        table-layout: auto;
         min-width: 860px;
     }
 
