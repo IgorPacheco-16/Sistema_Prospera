@@ -1,11 +1,12 @@
 import click
 from flask import Flask, g, request, session
 from flask_migrate import Migrate
-from database.models import db, Notificacao, User
+from database.models import db, Notificacao, Setor, User
 from tempo import formatar_data_hora_brasilia
 import importlib.util
 import os
 import time
+import unicodedata
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 
@@ -154,6 +155,9 @@ BUILD_ONLY_ALIASES = [
     ("/recusar_tarefa/<int:id>", "recusar_tarefa"),
     ("/editar_tarefa/<int:id>", "editar_tarefa"),
     ("/excluir_tarefa/<int:id>", "excluir_tarefa"),
+    ("/tarefas/<int:id>/responsaveis", "repassar_tarefa"),
+    ("/tarefas/responsaveis/<int:vinculo_id>/aceitar", "aceitar_tarefa_responsavel"),
+    ("/tarefas/responsaveis/<int:vinculo_id>/recusar", "recusar_tarefa_responsavel"),
 ]
 
 
@@ -338,6 +342,129 @@ def criar_admin(email, nome, senha):
     ))
     db.session.commit()
     click.echo(f"Administrador criado: {email_normalizado}")
+
+
+@app.cli.group("seed")
+def seed_cli():
+    """Comandos locais para popular dados de desenvolvimento."""
+
+
+AMBIENTES_SEED_USUARIOS_TESTE = {"development", "test", "local"}
+SENHA_USUARIOS_TESTE = "teste123"
+
+
+def ambiente_seed_usuarios_teste():
+    app_env_atual = config_module.app_env()
+    ambiente_atual = (
+        os.environ.get("AMBIENTE", app_env_atual).strip().lower()
+        or app_env_atual
+    )
+    return app_env_atual, ambiente_atual
+
+
+def validar_ambiente_seed_usuarios_teste():
+    app_env_atual, ambiente_atual = ambiente_seed_usuarios_teste()
+    ambientes = {"APP_ENV": app_env_atual, "AMBIENTE": ambiente_atual}
+
+    for nome, valor in ambientes.items():
+        if valor == "production":
+            raise click.ClickException(
+                f"Seed de usuarios de teste bloqueado: {nome}=production."
+            )
+
+        if valor not in AMBIENTES_SEED_USUARIOS_TESTE:
+            permitidos = ", ".join(sorted(AMBIENTES_SEED_USUARIOS_TESTE))
+            raise click.ClickException(
+                f"Seed de usuarios de teste bloqueado: {nome}={valor}. "
+                f"Use um destes ambientes: {permitidos}."
+            )
+
+
+def slug_email_setor(nome_setor):
+    texto = unicodedata.normalize("NFKD", nome_setor or "")
+    texto = "".join(caractere for caractere in texto if not unicodedata.combining(caractere))
+    texto = texto.lower()
+    texto = "".join(caractere if caractere.isalnum() else "." for caractere in texto)
+    partes = [parte for parte in texto.split(".") if parte]
+    return ".".join(partes) or "setor"
+
+
+def garantir_usuario_teste(nome, email, tipo, setor_id=None):
+    email = normalizar_email(email)
+    usuario = User.query.filter_by(email=email).first()
+    criado = usuario is None
+
+    if not usuario:
+        usuario = User(email=email)
+        db.session.add(usuario)
+
+    usuario.nome = nome
+    usuario.tipo = tipo
+    usuario.setor_id = setor_id
+    usuario.senha = generate_password_hash(SENHA_USUARIOS_TESTE)
+    usuario.ativo = True
+
+    return usuario, criado
+
+
+@seed_cli.command("usuarios-teste")
+def seed_usuarios_teste():
+    validar_ambiente_seed_usuarios_teste()
+
+    setores = Setor.query.order_by(Setor.nome).all()
+    if not setores:
+        raise click.ClickException(
+            "Nenhum setor encontrado. Crie os setores antes de gerar usuarios de teste."
+        )
+
+    especificos = [
+        ("Admin Teste Local", "admin.teste@local.test", "ADMIN", None),
+        ("PCP Teste Local", "pcp.teste@local.test", "PCP", None),
+        ("Atendente Teste Local", "atendente.teste@local.test", "ATENDENTE", None),
+        ("Espectador Teste Local", "espectador.teste@local.test", "ESPECTADOR", None),
+    ]
+
+    resultados = []
+    for nome, email, tipo, setor_id in especificos:
+        usuario, criado = garantir_usuario_teste(nome, email, tipo, setor_id)
+        resultados.append((usuario, criado))
+
+    emails_setores = {email for _nome, email, _tipo, _setor_id in especificos}
+    for setor in setores:
+        slug = slug_email_setor(setor.nome)
+        email = f"{slug}.teste@local.test"
+        sufixo = 2
+        while email in emails_setores:
+            email = f"{slug}.{sufixo}.teste@local.test"
+            sufixo += 1
+        emails_setores.add(email)
+
+        usuario, criado = garantir_usuario_teste(
+            nome=f"{setor.nome} Teste Local",
+            email=email,
+            tipo="SETOR",
+            setor_id=setor.id,
+        )
+        resultados.append((usuario, criado))
+
+    db.session.commit()
+
+    criados = sum(1 for _usuario, criado in resultados if criado)
+    atualizados = len(resultados) - criados
+
+    click.echo("Usuarios de teste locais prontos.")
+    click.echo(f"Criados: {criados}")
+    click.echo(f"Atualizados/ja existentes: {atualizados}")
+    click.echo(f"Senha padrao: {SENHA_USUARIOS_TESTE}")
+    click.echo("")
+    click.echo("Credenciais:")
+    for usuario, criado in resultados:
+        setor = f" | setor={usuario.setor.nome}" if usuario.setor else ""
+        status = "criado" if criado else "atualizado"
+        click.echo(
+            f"- {usuario.email} | senha={SENHA_USUARIOS_TESTE} "
+            f"| tipo={usuario.tipo}{setor} | {status}"
+        )
 
 
 @app.cli.command("testar-email")

@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, User
+from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaResponsavel, User
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -117,6 +117,9 @@ def create_ops_blueprint(
             .options(
                 selectinload(OP.op_setores).selectinload(OPSetor.setor),
                 selectinload(OP.tarefas).selectinload(Tarefa.responsaveis),
+                selectinload(OP.tarefas)
+                .selectinload(Tarefa.responsavel_vinculos)
+                .selectinload(TarefaResponsavel.usuario),
             )
             .filter(OP.id == id)
             .first()
@@ -126,6 +129,10 @@ def create_ops_blueprint(
 
         tipo_usuario = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
+        usuario_logado = User.query.filter_by(
+            email=session.get("usuario"),
+            ativo=True
+        ).first()
         if tipo_usuario == "SETOR":
             vinculo_setor = OPSetor.query.filter_by(
                 op_id=op.id,
@@ -167,9 +174,63 @@ def create_ops_blueprint(
             for tarefa in tarefas:
                 tarefa.pode_acionar = usuario_pode_acionar_tarefa(tarefa)
                 tarefa.pode_validar = usuario_pode_validar_tarefa(tarefa)
+                tarefa.pode_repassar = (
+                    tipo_usuario in {"ADMIN", "PCP"}
+                    or (
+                        tipo_usuario == "SETOR"
+                        and setor_usuario_id == tarefa.setor_id
+                    )
+                )
                 tarefa.responsaveis_ordenados = sorted(
                     list(getattr(tarefa, "responsaveis", []) or []),
                     key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),
+                )
+                tarefa.vinculos_responsaveis_ordenados = sorted(
+                    [
+                        vinculo
+                        for vinculo in getattr(tarefa, "responsavel_vinculos", []) or []
+                        if vinculo.status != "REMOVIDO"
+                    ],
+                    key=lambda vinculo: (
+                        0 if vinculo.status == "ACEITO" else 1 if vinculo.status in {"PENDENTE", "APROVADO"} else 2,
+                        (vinculo.usuario.nome or vinculo.usuario.email or "").casefold()
+                        if vinculo.usuario else "",
+                        vinculo.id,
+                    ),
+                )
+                tarefa.vinculos_responsaveis_contabilizados = [
+                    vinculo
+                    for vinculo in tarefa.vinculos_responsaveis_ordenados
+                    if (
+                        vinculo.ativo
+                        and (
+                            vinculo.status == "ACEITO"
+                            or (vinculo.status == "PENDENTE" and vinculo.tipo != "REPASSE")
+                        )
+                    )
+                ]
+                tarefa.responsaveis_contabilizados_total = len(
+                    tarefa.vinculos_responsaveis_contabilizados
+                )
+                tarefa.responsaveis_contabilizados_ids = {
+                    vinculo.usuario_id
+                    for vinculo in tarefa.vinculos_responsaveis_contabilizados
+                }
+                tarefa.responsaveis_atuais_ids = {
+                    responsavel.id
+                    for responsavel in tarefa.responsaveis_ordenados
+                }
+                tarefa.usuario_logado_id = usuario_logado.id if usuario_logado else None
+                tarefa.repasse_pendente_usuario = next(
+                    (
+                        vinculo
+                        for vinculo in tarefa.vinculos_responsaveis_ordenados
+                        if usuario_logado
+                        and vinculo.usuario_id == usuario_logado.id
+                        and vinculo.status == "PENDENTE"
+                        and vinculo.ativo
+                    ),
+                    None,
                 )
 
             estrutura.append({

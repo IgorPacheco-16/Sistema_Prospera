@@ -13,7 +13,7 @@ from email_service import carregar_config_email
 from tempo import agora_brasilia
 
 
-AMBIENTES_COM_SEED_TESTE = {"development", "test"}
+AMBIENTES_COM_SEED_TESTE = {"development", "test", "local"}
 
 
 def app_env():
@@ -26,7 +26,7 @@ def database_url_para_ambiente(ambiente):
     if ambiente == "test":
         return database_url or "sqlite:///:memory:"
 
-    if ambiente == "development":
+    if ambiente in {"development", "local"}:
         return database_url or "sqlite:///database.db"
 
     if not database_url:
@@ -66,7 +66,7 @@ def configure_app(app):
     database_url = database_url_para_ambiente(ambiente)
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
-        if ambiente == "development":
+        if ambiente in {"development", "local"}:
             secret_key = secrets.token_hex(32)
         else:
             raise RuntimeError(

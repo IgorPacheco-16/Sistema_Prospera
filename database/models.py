@@ -6,19 +6,55 @@ db = SQLAlchemy()
 
 tarefa_responsaveis = db.Table(
     "tarefa_responsaveis",
+    db.Column("id", db.Integer, primary_key=True),
     db.Column(
         "tarefa_id",
         db.Integer,
         db.ForeignKey("tarefas.id", ondelete="CASCADE"),
-        primary_key=True
+        nullable=False
     ),
     db.Column(
-        "user_id",
+        "usuario_id",
         db.Integer,
         db.ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True
+        nullable=False
     ),
+    db.Column("status", db.String(20), nullable=False, default="ACEITO", server_default="ACEITO"),
+    db.Column("tipo", db.String(20), nullable=False, default="ATRIBUICAO", server_default="ATRIBUICAO"),
+    db.Column("solicitado_por_id", db.Integer, db.ForeignKey("users.id"), nullable=True),
+    db.Column("solicitado_em", db.DateTime, default=agora_brasilia, nullable=False),
+    db.Column("respondido_em", db.DateTime, nullable=True),
+    db.Column("observacao", db.String(1000), nullable=True),
+    db.Column("ativo", db.Boolean, default=True, nullable=False, server_default="1"),
+    db.Column("repasse_lote_id", db.String(36), nullable=True),
+    db.Column("repasse_papel", db.String(20), nullable=True),
+    db.Column("repasse_status", db.String(20), nullable=True),
 )
+
+
+class TarefaResponsavel(db.Model):
+    __table__ = tarefa_responsaveis
+
+    tarefa = db.relationship(
+        "Tarefa",
+        back_populates="responsavel_vinculos",
+        overlaps="responsaveis,tarefas_responsaveis"
+    )
+    usuario = db.relationship(
+        "User",
+        foreign_keys=[tarefa_responsaveis.c.usuario_id],
+        overlaps="responsaveis,tarefas_responsaveis"
+    )
+    solicitado_por = db.relationship(
+        "User",
+        foreign_keys=[tarefa_responsaveis.c.solicitado_por_id],
+    )
+
+    def esta_pendente(self):
+        return self.ativo and self.status == "PENDENTE"
+
+    def esta_aceito(self):
+        return self.ativo and self.status == "ACEITO"
 
 
 #USUÁRIOS
@@ -151,11 +187,25 @@ class Tarefa(db.Model):
     observacao_entrega = db.Column(db.String(1000), nullable=True)
     motivo_recusa = db.Column(db.String(255), nullable=True)
     setor = db.relationship('Setor')
+    responsavel_vinculos = db.relationship(
+        "TarefaResponsavel",
+        back_populates="tarefa",
+        cascade="all, delete-orphan",
+        order_by="TarefaResponsavel.solicitado_em, TarefaResponsavel.id",
+        overlaps="responsaveis,tarefas_responsaveis",
+    )
     responsaveis = db.relationship(
         'User',
         secondary=tarefa_responsaveis,
+        primaryjoin=(
+            "and_(Tarefa.id == tarefa_responsaveis.c.tarefa_id, "
+            "tarefa_responsaveis.c.status == 'ACEITO', "
+            "tarefa_responsaveis.c.ativo == True)"
+        ),
+        secondaryjoin="User.id == tarefa_responsaveis.c.usuario_id",
         backref=db.backref('tarefas_responsaveis', lazy='dynamic'),
         order_by='User.nome',
+        overlaps="responsavel_vinculos,tarefa,usuario",
     )
 
 

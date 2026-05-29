@@ -2047,6 +2047,12 @@ html.dark-mode .barra-bg {
     padding: 6px 7px;
 }
 
+.task-assignee-feedback {
+    color: var(--danger);
+    font-size: 0.78rem;
+    min-height: 1rem;
+}
+
 .task-review-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2122,15 +2128,16 @@ html.dark-mode .btn-close {
 
 .task-list {
     display: grid;
-    gap: 10px;
+    gap: 12px;
 }
 
 .tarefa,
 .task-edit-item {
-    background-color: rgba(13, 110, 253, 0.04);
+    background-color: var(--card-light);
     border: 1px solid var(--border-light);
     border-radius: 8px;
-    padding: 12px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    padding: 14px;
     margin-top: 10px;
 }
 
@@ -2187,25 +2194,168 @@ html.dark-mode .op-history-meta {
 
 .task-modal-item .nome {
     display: block;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
     overflow-wrap: anywhere;
+}
+
+.task-card-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.task-card-title-group {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.task-deadline {
+    display: inline-flex;
+    font-size: 0.84rem;
+    line-height: 1.25;
 }
 
 .task-status-area {
     flex: 0 0 auto;
 }
 
-.task-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 12px;
+.task-status-area .sector-status-badge {
+    min-height: 24px;
+    padding: 3px 9px;
 }
 
-.task-actions form {
+.task-responsible-summary {
+    align-items: center;
+    color: var(--muted-light);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.84rem;
+    gap: 6px;
+    line-height: 1.35;
+    margin-top: 9px;
+}
+
+.task-responsible-summary > span:first-child {
+    color: var(--text-light);
+    font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.task-summary-dot {
+    background-color: currentColor;
+    border-radius: 999px;
+    height: 4px;
+    opacity: 0.45;
+    width: 4px;
+}
+
+.task-detail-panel,
+.task-delivery-note,
+.task-repass-box,
+.form-editar-tarefa,
+.task-delete-form {
+    border-top: 1px solid var(--border-light);
+    margin-top: 12px;
+    padding-top: 12px;
+}
+
+.task-detail-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-detail-group {
+    background-color: rgba(15, 23, 42, 0.025);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+}
+
+.task-detail-group h3 {
+    color: var(--muted-light);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
     margin: 0;
+    text-transform: uppercase;
+}
+
+.task-person-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.task-person-list span {
+    background-color: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+    color: var(--text-light);
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 5px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-person-list small {
+    color: var(--muted-light);
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-left: 4px;
+}
+
+.task-person-list .task-detail-empty {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--muted-light);
+    font-weight: 500;
+    padding-left: 0;
+}
+
+.task-actions {
+    display: flex;
+    align-items: flex-end;
+    border-top: 1px solid var(--border-light);
+    gap: 10px;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding-top: 12px;
+}
+
+.task-actions form,
+.task-secondary-actions,
+.task-primary-actions {
+    margin: 0;
+}
+
+.task-secondary-actions,
+.task-primary-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.task-secondary-actions {
+    justify-content: flex-start;
+}
+
+.task-primary-actions {
+    justify-content: flex-end;
+    margin-left: auto;
 }
 
 .task-delivery-form {
@@ -2221,15 +2371,9 @@ html.dark-mode .op-history-meta {
 }
 
 .task-delivery-note {
-    background-color: rgba(13, 110, 253, 0.05);
-    border: 1px solid var(--border-light);
-    border-radius: 8px;
     color: var(--text-light);
     display: grid;
     gap: 3px;
-    margin-top: 8px;
-    max-width: 620px;
-    padding: 9px 10px;
 }
 
 .task-delivery-note strong {
@@ -2241,6 +2385,49 @@ html.dark-mode .op-history-meta {
 .task-delivery-note p {
     margin: 0;
     overflow-wrap: anywhere;
+}
+
+.task-repass-box {
+    margin-top: 12px;
+}
+
+.task-repass-form {
+    align-items: start;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 130px minmax(210px, 1fr) minmax(210px, 1fr) minmax(180px, 0.8fr) auto;
+}
+
+.task-repass-assignee-field {
+    min-width: 0;
+}
+
+.task-repass-section {
+    display: grid;
+    gap: 6px;
+}
+
+.task-repass-form .form-label {
+    color: var(--muted-light);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.task-repass-info {
+    color: var(--muted-light);
+    font-size: 0.78rem;
+    grid-column: 1 / -1;
+}
+
+.task-repass-info p {
+    margin: 0 0 4px;
+}
+
+.task-requester-exit-warning {
+    color: var(--danger);
+    font-weight: 700;
 }
 
 .task-refusal-form {
@@ -2283,15 +2470,52 @@ html.dark-mode .tarefa,
 html.dark-mode .task-edit-item {
     background-color: #151922;
     border-color: var(--border-dark);
+    box-shadow: 0 14px 30px rgba(0,0,0,0.26);
 }
 
+html.dark-mode .task-responsible-summary {
+    color: var(--muted-dark);
+}
+
+html.dark-mode .task-responsible-summary > span:first-child,
+html.dark-mode .task-person-list span,
 html.dark-mode .task-delivery-note {
-    background-color: rgba(90, 160, 255, 0.08);
-    border-color: var(--border-dark);
     color: var(--text-dark);
 }
 
+html.dark-mode .task-detail-panel,
+html.dark-mode .task-delivery-note,
+html.dark-mode .task-repass-box,
+html.dark-mode .form-editar-tarefa,
+html.dark-mode .task-delete-form,
+html.dark-mode .task-actions {
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .task-detail-group {
+    background-color: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.08);
+}
+
+html.dark-mode .task-person-list span {
+    background-color: rgba(255,255,255,0.05);
+    border-color: var(--border-dark);
+}
+
+html.dark-mode .task-person-list .task-detail-empty {
+    background-color: transparent;
+    border-color: transparent;
+}
+
+html.dark-mode .task-detail-group h3,
+html.dark-mode .task-person-list small,
+html.dark-mode .task-person-list .task-detail-empty,
 html.dark-mode .task-delivery-note strong {
+    color: var(--muted-dark);
+}
+
+html.dark-mode .task-repass-form .form-label,
+html.dark-mode .task-repass-info {
     color: var(--muted-dark);
 }
 
@@ -3298,18 +3522,34 @@ html.dark-mode .calendario-global-empty {
         max-width: none;
     }
 
-    .tarefa-topo {
+    .tarefa-topo,
+    .task-card-header {
         align-items: flex-start;
         flex-direction: column;
     }
 
     .task-actions {
+        align-items: stretch;
+        flex-direction: column;
         justify-content: stretch;
     }
 
-    .task-actions .btn,
-    .task-actions form {
+    .task-secondary-actions,
+    .task-primary-actions {
+        align-items: stretch;
+        flex-direction: column;
+        margin-left: 0;
         width: 100%;
+    }
+
+    .task-actions .btn,
+    .task-actions form,
+    .task-detail-grid {
+        width: 100%;
+    }
+
+    .task-detail-grid {
+        grid-template-columns: 1fr;
     }
 
     .form-tarefa > .btn,
@@ -3324,6 +3564,10 @@ html.dark-mode .calendario-global-empty {
     .task-delivery-form,
     .task-refusal-form {
         flex-direction: column;
+    }
+
+    .task-repass-form {
+        grid-template-columns: 1fr;
     }
 
     .op-history-item {

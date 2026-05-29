@@ -178,35 +178,34 @@
                     {% for t in item.tarefas %}
                         <div class="tarefa task-modal-item {% if focus_tarefa_id == t.id %}task-highlight{% endif %}"
                              id="tarefa{{ t.id }}">
-                            <div class="tarefa-topo">
-                                <div>
+                            {% set responsaveis_count = t.responsaveis_ordenados|length %}
+                            {% set resumo_repasse = namespace(pendencias=0, entrando=0, saindo=0, recusas=0) %}
+                            {% for vinculo in t.vinculos_responsaveis_ordenados or [] %}
+                                {% if vinculo.status in ["PENDENTE", "APROVADO"] %}
+                                    {% set resumo_repasse.pendencias = resumo_repasse.pendencias + 1 %}
+                                    {% if vinculo.repasse_papel == "SAIDA" or vinculo.tipo == "REMOCAO" %}
+                                        {% set resumo_repasse.saindo = resumo_repasse.saindo + 1 %}
+                                    {% else %}
+                                        {% set resumo_repasse.entrando = resumo_repasse.entrando + 1 %}
+                                    {% endif %}
+                                {% elif vinculo.status in ["RECUSADO", "CANCELADO"] %}
+                                    {% set resumo_repasse.recusas = resumo_repasse.recusas + 1 %}
+                                {% endif %}
+                            {% endfor %}
+
+                            <div class="task-card-header">
+                                <div class="task-card-title-group">
                                     <span class="nome">{{ t.nome }}</span>
                                     {% if t.prazo %}
                                         {% if t.prazo < today and not t.validado %}
-                                            <div class="prazo atrasado">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                            <span class="task-deadline prazo atrasado">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</span>
                                         {% elif (t.prazo - today).days <= 2 and not t.validado %}
-                                            <div class="prazo urgente">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                            <span class="task-deadline prazo urgente">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</span>
                                         {% else %}
-                                            <div class="prazo">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</div>
+                                            <span class="task-deadline prazo">Prazo: {{ t.prazo.strftime('%d/%m/%Y') }}</span>
                                         {% endif %}
                                     {% else %}
-                                        <div class="prazo">Prazo não definido</div>
-                                    {% endif %}
-                                    <div class="prazo">
-                                        Responsáveis:
-                                        {% if t.responsaveis %}
-                                            {% for responsavel in t.responsaveis_ordenados %}
-                                                {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
-                                            {% endfor %}
-                                        {% else %}
-                                            Geral do setor
-                                        {% endif %}
-                                    </div>
-                                    {% if t.observacao_entrega %}
-                                    <div class="task-delivery-note">
-                                        <strong>Observacao da entrega</strong>
-                                        <p>{{ t.observacao_entrega }}</p>
-                                    </div>
+                                        <span class="task-deadline prazo">Prazo não definido</span>
                                     {% endif %}
                                 </div>
 
@@ -225,70 +224,284 @@
                                 </div>
                             </div>
 
-                            <div class="task-actions">
-                                {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
-                                <button class="btn btn-outline-primary btn-sm"
-                                        type="button"
-                                        data-bs-toggle="collapse"
-                                        data-bs-target="#editarTarefa{{ t.id }}"
-                                        aria-expanded="false"
-                                        aria-controls="editarTarefa{{ t.id }}">
-                                    Editar
-                                </button>
-                                {% endif %}
-
-                                {% if t.pode_acionar and t.status == "PENDENTE" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
-                                <form method="POST" action="{{ url_for('iniciar_tarefa', id=t.id) }}">
-                                    <button class="btn btn-primary btn-sm"
-                                            type="submit"
-                                            onclick="return confirm('Iniciar esta tarefa agora?')">
-                                        Iniciar
-                                    </button>
-                                </form>
-                                {% endif %}
-
-                                {% if t.pode_acionar and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
-                                <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}" class="task-delivery-form">
-                                    <label class="form-label visually-hidden" for="observacaoEntrega{{ t.id }}">Observacao da entrega</label>
-                                    <textarea id="observacaoEntrega{{ t.id }}"
-                                              name="observacao_entrega"
-                                              class="form-control form-control-sm"
-                                              rows="2"
-                                              maxlength="1000"
-                                              placeholder="Observacao da entrega (opcional)"></textarea>
-                                    <button class="btn btn-entregar btn-sm"
-                                            type="submit"
-                                            onclick="return confirm('Enviar esta tarefa para validação?')">
-                                        Enviar para validação
-                                    </button>
-                                </form>
-                                {% endif %}
-
-                                {% if t.pode_validar and t.entregue and not t.validado %}
-                                <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
-                                    <button class="btn btn-validar btn-sm"
-                                            type="submit"
-                                            onclick="return confirm('Validar esta entrega?')">
-                                        Validar
-                                    </button>
-                                </form>
-
-                                {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
-                                <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}" class="task-refusal-form">
-                                    <input type="text"
-                                           name="motivo_recusa"
-                                           class="form-control form-control-sm"
-                                           placeholder="Motivo da recusa"
-                                           required>
-                                    <button class="btn btn-outline-danger btn-sm"
-                                            type="submit"
-                                            onclick="return confirm('Recusar esta entrega e devolver para pendente?')">
-                                        Recusar
-                                    </button>
-                                </form>
-                                {% endif %}
+                            <div class="task-responsible-summary">
+                                <span>
+                                    Responsáveis:
+                                    {% if t.responsaveis_ordenados %}
+                                        {% for responsavel in t.responsaveis_ordenados %}
+                                            {{ responsavel.nome or responsavel.email }}{% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        Geral do setor
+                                    {% endif %}
+                                </span>
+                                <span class="task-summary-dot" aria-hidden="true"></span>
+                                <span>{{ responsaveis_count or 1 }} ativo{% if (responsaveis_count or 1) != 1 %}s{% endif %}</span>
+                                {% if resumo_repasse.pendencias or resumo_repasse.recusas %}
+                                    <span class="task-summary-dot" aria-hidden="true"></span>
+                                    <span>
+                                        {{ resumo_repasse.entrando }} entrando • {{ resumo_repasse.saindo }} saindo • {{ resumo_repasse.pendencias }} pendência{% if resumo_repasse.pendencias != 1 %}s{% endif %}
+                                        {% if resumo_repasse.recusas %} • {{ resumo_repasse.recusas }} recusa{% if resumo_repasse.recusas != 1 %}s{% endif %}{% endif %}
+                                    </span>
                                 {% endif %}
                             </div>
+
+                            {% set mostrar_detalhes_repasse = resumo_repasse.entrando or resumo_repasse.saindo or resumo_repasse.recusas %}
+                            {% if mostrar_detalhes_repasse %}
+                            <div class="collapse task-detail-panel" id="detalhesTarefa{{ t.id }}">
+                                <div class="task-detail-grid">
+                                    {% if resumo_repasse.entrando %}
+                                    <section class="task-detail-group">
+                                        <h3>Entradas pendentes</h3>
+                                        <div class="task-person-list">
+                                            {% for vinculo in t.vinculos_responsaveis_ordenados or [] %}
+                                                {% if vinculo.status in ["PENDENTE", "APROVADO"] and not (vinculo.repasse_papel == "SAIDA" or vinculo.tipo == "REMOCAO") %}
+                                                    <span>{{ vinculo.usuario.nome or vinculo.usuario.email }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </section>
+                                    {% endif %}
+
+                                    {% if resumo_repasse.saindo %}
+                                    <section class="task-detail-group">
+                                        <h3>Saídas pendentes</h3>
+                                        <div class="task-person-list">
+                                            {% for vinculo in t.vinculos_responsaveis_ordenados or [] %}
+                                                {% if vinculo.status in ["PENDENTE", "APROVADO"] and (vinculo.repasse_papel == "SAIDA" or vinculo.tipo == "REMOCAO") %}
+                                                    <span>{{ vinculo.usuario.nome or vinculo.usuario.email }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </section>
+                                    {% endif %}
+
+                                    {% if resumo_repasse.recusas %}
+                                    <section class="task-detail-group">
+                                        <h3>Recusas</h3>
+                                        <div class="task-person-list">
+                                            {% for vinculo in t.vinculos_responsaveis_ordenados or [] %}
+                                                {% if vinculo.status in ["RECUSADO", "CANCELADO"] %}
+                                                    <span>
+                                                        {{ vinculo.usuario.nome or vinculo.usuario.email }}
+                                                        <small>{{ "Recusado" if vinculo.status == "RECUSADO" else "Cancelado" }}</small>
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </section>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if t.observacao_entrega %}
+                            <div class="collapse task-delivery-note" id="observacaoTarefa{{ t.id }}">
+                                <strong>Observacao da entrega</strong>
+                                <p>{{ t.observacao_entrega }}</p>
+                            </div>
+                            {% endif %}
+
+                            <div class="task-actions">
+                                <div class="task-secondary-actions">
+                                    {% if mostrar_detalhes_repasse %}
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#detalhesTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="detalhesTarefa{{ t.id }}">
+                                        Detalhes
+                                    </button>
+                                    {% endif %}
+
+                                    {% if t.observacao_entrega %}
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#observacaoTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="observacaoTarefa{{ t.id }}">
+                                        Observacao da entrega
+                                    </button>
+                                    {% endif %}
+
+                                    {% if t.pode_repassar %}
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#repassarTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="repassarTarefa{{ t.id }}">
+                                        Gerenciar responsáveis
+                                    </button>
+                                    {% endif %}
+
+                                    {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                                    <button class="btn btn-outline-primary btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#editarTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="editarTarefa{{ t.id }}">
+                                        Editar
+                                    </button>
+                                    {% endif %}
+
+                                    {% if t.repasse_pendente_usuario %}
+                                    <form method="POST" action="{{ url_for('recusar_tarefa_responsavel', vinculo_id=t.repasse_pendente_usuario.id) }}">
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Recusar este repasse?')">
+                                            Recusar tarefa
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if t.pode_validar and t.entregue and not t.validado and tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                                    <form method="POST" action="{{ url_for('recusar_tarefa', id=t.id) }}" class="task-refusal-form">
+                                        <input type="text"
+                                               name="motivo_recusa"
+                                               class="form-control form-control-sm"
+                                               placeholder="Motivo da recusa"
+                                               required>
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Recusar esta entrega e devolver para pendente?')">
+                                            Recusar
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+
+                                <div class="task-primary-actions">
+                                    {% if t.repasse_pendente_usuario %}
+                                    <form method="POST" action="{{ url_for('aceitar_tarefa_responsavel', vinculo_id=t.repasse_pendente_usuario.id) }}">
+                                        <button class="btn btn-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Aceitar esta tarefa?')">
+                                            Aceitar tarefa
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if t.pode_acionar and t.status == "PENDENTE" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                    <form method="POST" action="{{ url_for('iniciar_tarefa', id=t.id) }}">
+                                        <button class="btn btn-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Iniciar esta tarefa agora?')">
+                                            Iniciar
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if t.pode_acionar and t.status == "EM ANDAMENTO" and not t.entregue and (t.liberada if t.liberada is defined else True) %}
+                                    <form method="POST" action="{{ url_for('entregar_tarefa', id=t.id) }}" class="task-delivery-form">
+                                        <label class="form-label visually-hidden" for="observacaoEntrega{{ t.id }}">Observacao da entrega</label>
+                                        <textarea id="observacaoEntrega{{ t.id }}"
+                                                  name="observacao_entrega"
+                                                  class="form-control form-control-sm"
+                                                  rows="2"
+                                                  maxlength="1000"
+                                                  placeholder="Observação da entrega (opcional)"></textarea>
+                                        <button class="btn btn-entregar btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Enviar esta tarefa para validação?')">
+                                            Enviar para validação
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if t.pode_validar and t.entregue and not t.validado %}
+                                    <form method="POST" action="{{ url_for('validar_tarefa', id=t.id) }}">
+                                        <button class="btn btn-validar btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Validar esta entrega?')">
+                                            Validar
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if t.pode_repassar %}
+                            <div class="collapse task-repass-box" id="repassarTarefa{{ t.id }}">
+                                <form method="POST" action="{{ url_for('repassar_tarefa', id=t.id) }}" class="task-repass-form" data-task-repass-form>
+                                    <div class="task-repass-section">
+                                        <label class="form-label" for="tipoRepasse{{ t.id }}">Tipo</label>
+                                        <select id="tipoRepasse{{ t.id }}" name="tipo" class="form-select form-select-sm">
+                                            <option value="REPASSE">Repasse</option>
+                                            <option value="INCLUSAO">Inclus&atilde;o</option>
+                                            <option value="REMOCAO">Remo&ccedil;&atilde;o</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="task-responsavel-field task-repass-assignee-field">
+                                        <label class="form-label" for="responsaveisRepasse{{ t.id }}">Quem vai entrar</label>
+                                        <input type="search"
+                                               class="form-control form-control-sm task-responsavel-search"
+                                               placeholder="Filtrar respons&aacute;veis"
+                                               data-task-responsavel-search="responsaveisRepasse{{ t.id }}">
+                                        <select id="responsaveisRepasse{{ t.id }}"
+                                                name="usuario_ids"
+                                                class="form-select task-responsavel-select"
+                                                multiple
+                                                size="5"
+                                                data-assignee-current="0"
+                                                data-assignee-empty-label="Nenhum convite selecionado"
+                                                data-assignee-required="true"
+                                                data-assignee-error-target="repasseErro{{ t.id }}">
+                                        {% for usuario in item.usuarios %}
+                                        <option value="{{ usuario.id }}" {% if usuario.id in t.responsaveis_atuais_ids %}disabled{% endif %}>
+                                            {{ usuario.nome or usuario.email }}{% if usuario.email %} ({{ usuario.email }}){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                        </select>
+                                        <div class="task-assignee-feedback" id="repasseErro{{ t.id }}" aria-live="polite"></div>
+                                    </div>
+
+                                    <div class="task-responsavel-field task-repass-assignee-field">
+                                        <label class="form-label" for="responsaveisSaida{{ t.id }}">Quem vai sair</label>
+                                        <input type="search"
+                                               class="form-control form-control-sm task-responsavel-search"
+                                               placeholder="Filtrar respons&aacute;veis"
+                                               data-task-responsavel-search="responsaveisSaida{{ t.id }}">
+                                        <select id="responsaveisSaida{{ t.id }}"
+                                                name="sair_ids"
+                                                class="form-select task-responsavel-select"
+                                                multiple
+                                                size="5"
+                                                data-assignee-current="0"
+                                                data-assignee-empty-label="Ninguem selecionado para sair"
+                                                data-assignee-required="false"
+                                                data-assignee-error-target="saidaErro{{ t.id }}">
+                                        {% for responsavel in t.responsaveis_ordenados %}
+                                        <option value="{{ responsavel.id }}" data-requester-exit="{{ 'true' if responsavel.id == t.usuario_logado_id else 'false' }}">
+                                            {{ responsavel.nome or responsavel.email }}{% if responsavel.email %} ({{ responsavel.email }}){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                        </select>
+                                        <div class="task-assignee-feedback" id="saidaErro{{ t.id }}" aria-live="polite"></div>
+                                    </div>
+
+                                    <input type="text"
+                                           name="observacao"
+                                           class="form-control form-control-sm"
+                                           maxlength="1000"
+                                           placeholder="Observacao opcional">
+
+                                    <div class="task-repass-info">
+                                        <p>Quem n&atilde;o for selecionado para sair permanecer&aacute; na tarefa.</p>
+                                        <p>O repasse s&oacute; ser&aacute; conclu&iacute;do quando todos os envolvidos aceitarem. Se algu&eacute;m recusar, a troca n&atilde;o ser&aacute; aplicada.</p>
+                                        <p class="task-requester-exit-warning" data-requester-exit-warning hidden>Voc&ecirc; s&oacute; sair&aacute; da tarefa quando todo o repasse for aceito.</p>
+                                    </div>
+
+                                    <button class="btn btn-primary btn-sm" type="submit">
+                                        Enviar solicita&ccedil;&atilde;o
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
 
                             {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                             <div class="collapse" id="editarTarefa{{ t.id }}">
@@ -392,7 +605,13 @@ document.addEventListener("DOMContentLoaded", function() {
     document.querySelectorAll("[data-task-responsavel-search]").forEach(function(input) {
         const select = document.getElementById(input.dataset.taskResponsavelSearch);
         const field = input.closest(".task-responsavel-field");
-        const max = 4;
+        const max = parseInt(select ? select.dataset.assigneeMax || "4" : "4", 10);
+        const baseCount = parseInt(select ? select.dataset.assigneeCurrent || "0" : "0", 10);
+        const emptyLabel = select ? select.dataset.assigneeEmptyLabel || "Geral do setor" : "Geral do setor";
+        const requiresSelection = select ? select.dataset.assigneeRequired === "true" : false;
+        const feedback = select && select.dataset.assigneeErrorTarget
+            ? document.getElementById(select.dataset.assigneeErrorTarget)
+            : null;
 
         if (!select || !field) {
             return;
@@ -441,6 +660,7 @@ document.addEventListener("DOMContentLoaded", function() {
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.checked = option.selected;
+            checkbox.disabled = option.disabled;
             checkbox.dataset.optionValue = option.value;
             checkbox.dataset.optionLabel = option.textContent.trim().replace(/\s*\([^)]*\)\s*$/, "");
 
@@ -463,7 +683,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         return item.value && item.selected;
                     });
 
-                    if (checkbox.checked && selectedUserOptions.length >= max) {
+                    if (checkbox.checked && baseCount + selectedUserOptions.length >= max) {
                         checkbox.checked = false;
                         return;
                     }
@@ -492,6 +712,7 @@ document.addEventListener("DOMContentLoaded", function() {
         function updatePicker() {
             const selected = selectedUserOptions();
             const hasSelected = selected.length > 0;
+            const form = field.closest("form");
 
             options.forEach(function(option) {
                 if (!option.value) {
@@ -507,16 +728,28 @@ document.addEventListener("DOMContentLoaded", function() {
                     return;
                 }
                 checkbox.checked = option.selected;
-                checkbox.disabled = Boolean(option.value) && !option.selected && selected.length >= max;
+                checkbox.disabled = option.disabled || (
+                    Boolean(option.value) && !option.selected && baseCount + selected.length >= max
+                );
             });
 
-            count.textContent = selected.length + "/" + max;
+            count.textContent = (baseCount + selected.length) + "/" + max;
             chips.innerHTML = "";
+
+            if (select.name === "sair_ids" && form) {
+                const avisoSolicitante = form.querySelector("[data-requester-exit-warning]");
+                if (avisoSolicitante) {
+                    const solicitanteSelecionado = selected.some(function(option) {
+                        return option.dataset.requesterExit === "true";
+                    });
+                    avisoSolicitante.hidden = !solicitanteSelecionado;
+                }
+            }
 
             if (!hasSelected) {
                 const chip = document.createElement("span");
                 chip.className = "task-assignee-chip task-assignee-general-chip";
-                chip.textContent = "Geral do setor";
+                chip.textContent = emptyLabel;
                 chips.appendChild(chip);
                 return;
             }
@@ -552,6 +785,59 @@ document.addEventListener("DOMContentLoaded", function() {
             filterOptions();
             field.classList.add("is-open");
         });
+
+        const form = field.closest("form");
+        if (form) {
+            const tipoSelect = form.querySelector("select[name='tipo']");
+
+            function campoObrigatorioNoContexto() {
+                const tipoAtual = tipoSelect ? tipoSelect.value : "REPASSE";
+                if (select.name === "usuario_ids") {
+                    return requiresSelection && tipoAtual !== "REMOCAO";
+                }
+                if (select.name === "sair_ids") {
+                    return tipoAtual === "REPASSE" || tipoAtual === "REMOCAO";
+                }
+                return requiresSelection;
+            }
+
+            form.addEventListener("submit", function(event) {
+                if (!campoObrigatorioNoContexto()) {
+                    return;
+                }
+
+                if (selectedUserOptions().length > 0) {
+                    if (feedback) {
+                        feedback.textContent = "";
+                    }
+                    return;
+                }
+
+                event.preventDefault();
+                field.classList.add("is-open");
+                input.focus();
+                if (feedback) {
+                    if (select.name === "sair_ids") {
+                        feedback.textContent = "Selecione ao menos um responsavel para sair.";
+                    } else {
+                        if (feedback) {
+                            feedback.textContent = baseCount >= max
+                                ? "A tarefa ja possui o limite de 4 responsaveis."
+                                : "Selecione ao menos um responsavel.";
+                        }
+                    }
+                }
+            });
+
+            if (tipoSelect) {
+                tipoSelect.addEventListener("change", function() {
+                    if (feedback) {
+                        feedback.textContent = "";
+                    }
+                    updatePicker();
+                });
+            }
+        }
 
         dropdown.addEventListener("mousedown", function(event) {
             event.preventDefault();
