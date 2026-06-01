@@ -19,7 +19,7 @@ def create_notificacoes_blueprint(
     @notificacoes_bp.route("/notificacoes")
     @login_required
     def notificacoes():
-        gerar_notificacoes_pendentes()
+        gerar_notificacoes_pendentes(enviar_emails=False)
 
         lista = query_notificacoes_usuario().order_by(
             Notificacao.data.desc()
@@ -75,7 +75,7 @@ def create_notificacoes_blueprint(
     @notificacoes_bp.route("/api/notificacoes")
     @login_required
     def api_notificacoes():
-        gerar_notificacoes_pendentes()
+        gerar_notificacoes_pendentes(enviar_emails=False)
 
         total = query_notificacoes_usuario().filter_by(lida=False).count()
 

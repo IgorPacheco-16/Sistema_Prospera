@@ -115,8 +115,15 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         def marcar_tempo(etapa):
             tempos[etapa] = round((time.perf_counter() - inicio_dashboard) * 1000, 1)
 
-        gerar_notificacoes_pendentes()
-        marcar_tempo("notificacoes_ms")
+        try:
+            gerar_notificacoes_pendentes(enviar_emails=False)
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "dashboard_notificacoes_nao_geradas"
+            )
+        finally:
+            marcar_tempo("notificacoes_ms")
 
         hoje = hoje_brasilia()
 

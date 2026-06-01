@@ -3,7 +3,7 @@ import os
 import sys
 import time
 
-from flask import current_app, has_request_context, request, session
+from flask import current_app, has_app_context, has_request_context, request, session
 from sqlalchemy import or_
 from sqlalchemy.orm import selectinload
 
@@ -56,6 +56,10 @@ ASSUNTO_PREFIXO = {
 
 INTERVALO_PADRAO_NOTIFICACOES_SEGUNDOS = 300
 _ultima_geracao_pendentes = 0.0
+EMAILS_OPERACIONAIS_CONFIG_KEYS = (
+    "EMAILS_OPERACIONAIS_ATIVOS",
+    "ENVIAR_EMAILS_OPERACIONAIS",
+)
 
 
 def imprimir_log_email(texto):
@@ -65,6 +69,32 @@ def imprimir_log_email(texto):
         encoding = sys.stdout.encoding or "utf-8"
         texto_seguro = texto.encode(encoding, errors="replace").decode(encoding)
         print(texto_seguro)
+
+
+def emails_operacionais_ativos():
+    if has_app_context():
+        for chave in EMAILS_OPERACIONAIS_CONFIG_KEYS:
+            valor = current_app.config.get(chave)
+            if valor not in (None, ""):
+                return parse_bool(valor, default=False)
+
+    for chave in EMAILS_OPERACIONAIS_CONFIG_KEYS:
+        valor = os.environ.get(chave)
+        if valor not in (None, ""):
+            return parse_bool(valor, default=False)
+
+    return False
+
+
+def registrar_email_desativado(evento, notificacoes):
+    for notificacao in notificacoes:
+        if notificacao is not None:
+            notificacao.email_enviado = False
+
+    current_app.logger.info(
+        "email_operacional_desativado_por_configuracao evento=%s",
+        evento,
+    )
 
 
 def link_op(op_id):
@@ -237,7 +267,8 @@ def enviar_email_operacional(
     if not config:
         return False
 
-    smtp_ativo = smtp_configurado()
+    envio_ativo = emails_operacionais_ativos()
+    smtp_ativo = smtp_configurado() if envio_ativo else False
     if notificacoes is not None:
         notificacoes_pendentes = [
             n for n in notificacoes
@@ -247,12 +278,16 @@ def enviar_email_operacional(
             getattr(n, "_foi_criada", False)
             for n in notificacoes
         )
-        if not criou_notificacao and not (smtp_ativo and notificacoes_pendentes):
+        if not criou_notificacao and not (envio_ativo and smtp_ativo and notificacoes_pendentes):
             return False
     else:
         notificacoes_pendentes = []
 
     notificacoes = notificacoes or []
+    if not envio_ativo:
+        registrar_email_desativado(evento, notificacoes_pendentes)
+        return False
+
     emails = destinatarios or destinatarios_email_operacional(evento, op=op, tarefa=tarefa)
     emails = list(dict.fromkeys((email or "").strip().lower() for email in emails if email))
 
@@ -290,7 +325,16 @@ def enviar_email_operacional(
         )
         return False
 
-    resultado = enviar_email_smtp(emails, assunto, texto, html=html)
+    try:
+        resultado = enviar_email_smtp(emails, assunto, texto, html=html)
+    except Exception as erro:
+        current_app.logger.exception(
+            "email_operacional_erro_smtp_ignorado evento=%s tipo=%s",
+            evento,
+            type(erro).__name__,
+        )
+        return False
+
     if resultado.enviado:
         for notificacao in notificacoes_pendentes:
             notificacao.email_enviado = True
@@ -760,11 +804,11 @@ def geracao_pendente_em_intervalo(intervalo_segundos):
     return False
 
 
-def gerar_notificacoes_pendentes(forcar=False):
+def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
     if not forcar and geracao_pendente_em_intervalo(intervalo_notificacoes_pendentes()):
         return False
 
-    verificar_atrasos()
+    verificar_atrasos(enviar_emails=enviar_emails)
 
     tarefas_entregues = (
         Tarefa.query
@@ -804,13 +848,14 @@ def gerar_notificacoes_pendentes(forcar=False):
                 setor_id=tarefa.setor_id,
                 tipo_evento="tarefa_aguardando_validacao"
             ))
-        enviar_email_operacional(
-            "tarefa_aguardando_validacao",
-            op=op,
-            tarefa=tarefa,
-            link=link,
-            notificacoes=notificacoes
-        )
+        if enviar_emails:
+            enviar_email_operacional(
+                "tarefa_aguardando_validacao",
+                op=op,
+                tarefa=tarefa,
+                link=link,
+                notificacoes=notificacoes
+            )
 
     db.session.commit()
     return True

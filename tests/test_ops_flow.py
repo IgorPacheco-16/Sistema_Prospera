@@ -245,9 +245,10 @@ def test_detalhe_de_op_mostra_botao_para_copiar_caminho_pasta(client, login_as, 
     assert r"\\servidor\projetos\Cliente\OP789" in html
 
 
-def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, app, login_as, setores, monkeypatch, capsys):
+def test_criacao_de_op_nao_envia_email_operacional_com_config_global_desligada(client, app, login_as, setores, monkeypatch, capsys):
     limpar_env_email(monkeypatch)
     limpar_config_email(app)
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = False
     login_as("ATENDENTE")
 
     resposta = client.post("/criar_op", data={
@@ -261,16 +262,45 @@ def test_criacao_de_op_envia_email_operacional_com_smtp_ausente(client, app, log
     op = OP.query.filter_by(nome="OP Email Operacional").first()
     assert resposta.status_code == 302
     assert op is not None
-    assert "[EMAIL OPERACIONAL][DESTINATARIOS] op_criada | SMTP ausente -> pcp@teste.com" in saida
-    assert "[EMAIL OPERACIONAL][DEV]" in saida
-    assert "Nova OP criada" in saida
-    assert "pcp@teste.com" in saida
-    assert f"/op/{op.id}" in saida
+    notificacao = Notificacao.query.filter_by(op_id=op.id, usuario="PCP", tipo_evento="op_criada").first()
+    assert notificacao is not None
+    assert notificacao.email_enviado is False
+    assert "[EMAIL OPERACIONAL][DEV]" not in saida
+
+
+def test_falha_smtp_operacional_nao_quebra_criacao_de_op(client, app, login_as, setores, monkeypatch, caplog):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
+    monkeypatch.setattr(services, "smtp_configurado", lambda: True)
+
+    def falhar_smtp(*args, **kwargs):
+        raise RuntimeError("smtp indisponivel")
+
+    monkeypatch.setattr(services, "enviar_email_smtp", falhar_smtp)
+    caplog.set_level("ERROR")
+    login_as("ATENDENTE")
+
+    resposta = client.post("/criar_op", data={
+        "nome": "OP SMTP Falho",
+        "prazo": "2026-05-20",
+        "setores": [str(setores["Acabamento"].id)],
+    })
+
+    op = OP.query.filter_by(nome="OP SMTP Falho").first()
+    assert resposta.status_code == 302
+    assert op is not None
+    notificacao = Notificacao.query.filter_by(op_id=op.id, usuario="PCP", tipo_evento="op_criada").first()
+    assert notificacao is not None
+    assert notificacao.email_enviado is False
+    assert "email_operacional_erro_smtp_ignorado evento=op_criada tipo=RuntimeError" in caplog.text
 
 
 def test_email_operacional_nao_repete_notificacao_existente(app, capsys, monkeypatch):
     limpar_env_email(monkeypatch)
     limpar_config_email(app)
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
 
     import app as app_module
 
@@ -321,6 +351,7 @@ def test_email_operacional_nao_repete_notificacao_existente(app, capsys, monkeyp
 def test_notificacao_de_atraso_chama_servico_de_email(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     setor = setores["Acabamento"]

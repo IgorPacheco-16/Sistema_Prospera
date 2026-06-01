@@ -9,11 +9,15 @@ from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash
 
 from database.models import db, Setor, User
-from email_service import carregar_config_email
+from email_service import carregar_config_email, parse_bool
 from tempo import agora_brasilia
 
 
 AMBIENTES_COM_SEED_TESTE = {"development", "test", "local"}
+EMAILS_OPERACIONAIS_ENV_KEYS = (
+    "EMAILS_OPERACIONAIS_ATIVOS",
+    "ENVIAR_EMAILS_OPERACIONAIS",
+)
 
 
 def app_env():
@@ -78,6 +82,17 @@ def configure_app(app):
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = (
         timedelta(hours=12) if ambiente == "production" else 0
+    )
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = parse_bool(
+        next(
+            (
+                os.environ.get(chave)
+                for chave in EMAILS_OPERACIONAIS_ENV_KEYS
+                if os.environ.get(chave) not in (None, "")
+            ),
+            None,
+        ),
+        default=False,
     )
     carregar_config_email(app)
 

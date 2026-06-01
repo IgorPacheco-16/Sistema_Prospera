@@ -38,7 +38,7 @@ def pytest_unconfigure(config):
 
 @pytest.fixture()
 def app():
-    flask_app.config.update(TESTING=True)
+    flask_app.config.update(TESTING=True, EMAILS_OPERACIONAIS_ATIVOS=False)
 
     with flask_app.app_context():
         db.drop_all()

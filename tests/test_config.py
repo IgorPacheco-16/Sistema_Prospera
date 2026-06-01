@@ -81,3 +81,32 @@ def test_configure_app_carrega_variaveis_mail_no_app_config(monkeypatch):
     assert flask_app.config["MAIL_SERVER"] == "smtp.example.com"
     assert flask_app.config["MAIL_PORT"] == "465"
     assert flask_app.config["MAIL_USE_SSL"] == "true"
+
+
+def test_configure_app_desativa_emails_operacionais_por_padrao(monkeypatch):
+    import app as app_module
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("SECRET_KEY", "secret")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.delenv("EMAILS_OPERACIONAIS_ATIVOS", raising=False)
+    monkeypatch.delenv("ENVIAR_EMAILS_OPERACIONAIS", raising=False)
+
+    flask_app = Flask(__name__)
+    app_module.config_module.configure_app(flask_app)
+
+    assert flask_app.config["EMAILS_OPERACIONAIS_ATIVOS"] is False
+
+
+def test_configure_app_permite_reativar_emails_operacionais_por_env(monkeypatch):
+    import app as app_module
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("SECRET_KEY", "secret")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("ENVIAR_EMAILS_OPERACIONAIS", "true")
+
+    flask_app = Flask(__name__)
+    app_module.config_module.configure_app(flask_app)
+
+    assert flask_app.config["EMAILS_OPERACIONAIS_ATIVOS"] is True

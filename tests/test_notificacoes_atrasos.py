@@ -32,6 +32,21 @@ def criar_tarefa_atrasada(setor):
     return op, tarefa
 
 
+def criar_op_urgente(setor):
+    op = OP(
+        nome="OP urgente",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+        prazo_final=hoje_brasilia() + timedelta(days=1),
+        alta_prioridade=True,
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+    db.session.commit()
+    return op
+
+
 def configurar_email_fake(monkeypatch, services, chamadas, resultado=None):
     monkeypatch.setattr(services, "smtp_configurado", lambda: True)
 
@@ -68,6 +83,7 @@ def criar_notificacoes_atraso(tarefa, email_enviado=False):
 def test_tarefa_nova_atrasada_cria_notificacao_e_envia_email_para_setor(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     _, tarefa = criar_tarefa_atrasada(setores["Acabamento"])
@@ -91,6 +107,7 @@ def test_tarefa_nova_atrasada_cria_notificacao_e_envia_email_para_setor(app, set
 def test_tarefa_atrasada_com_notificacao_existente_sem_email_envia_uma_vez(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     _, tarefa = criar_tarefa_atrasada(setores["Acabamento"])
@@ -112,6 +129,7 @@ def test_tarefa_atrasada_com_notificacao_existente_sem_email_envia_uma_vez(app, 
 def test_tarefa_atrasada_com_email_ja_enviado_nao_reenvia(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     _, tarefa = criar_tarefa_atrasada(setores["Acabamento"])
@@ -129,6 +147,7 @@ def test_tarefa_atrasada_com_email_ja_enviado_nao_reenvia(app, setores, monkeypa
 def test_tarefa_atrasada_setor_sem_usuarios_nao_quebra(app, monkeypatch, caplog):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     setor = Setor(nome="Setor sem usuarios")
@@ -144,7 +163,35 @@ def test_tarefa_atrasada_setor_sem_usuarios_nao_quebra(app, monkeypatch, caplog)
     assert "email_operacional_setor_sem_usuarios_ativos" in caplog.text
 
 
-def test_smtp_falhando_nao_quebra_dashboard(client, login_as, setores, monkeypatch, caplog):
+def test_config_global_desliga_email_mesmo_com_enviar_emails_true(app, setores, monkeypatch, caplog):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    _, tarefa = criar_tarefa_atrasada(setores["Acabamento"])
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = False
+    monkeypatch.setattr(services, "smtp_configurado", lambda: True)
+
+    def falhar_se_enviar_email(*args, **kwargs):
+        raise AssertionError("config global deve bloquear envio SMTP")
+
+    monkeypatch.setattr(services, "enviar_email_smtp", falhar_se_enviar_email)
+    caplog.set_level("INFO")
+
+    resumo = services.verificar_atrasos(enviar_emails=True)
+    db.session.commit()
+
+    notificacoes = Notificacao.query.filter_by(
+        tarefa_id=tarefa.id,
+        tipo_evento="tarefa_atrasada",
+    ).all()
+    assert resumo["notificacoes_criadas"] == 3
+    assert resumo["emails_tarefa_atrasada_enviados"] == 0
+    assert len(notificacoes) == 3
+    assert all(n.email_enviado is False for n in notificacoes)
+    assert "email_operacional_desativado_por_configuracao evento=tarefa_atrasada" in caplog.text
+
+
+def test_dashboard_nao_envia_email_sincrono_quando_smtp_falha(client, login_as, setores, monkeypatch):
     import app as app_module
 
     services = app_module.notificacoes_module
@@ -156,11 +203,45 @@ def test_smtp_falhando_nao_quebra_dashboard(client, login_as, setores, monkeypat
         chamadas,
         resultado=ResultadoEmail(enviado=False, erro="Falha SMTP: RuntimeError"),
     )
-    caplog.set_level("ERROR")
+
+    def falhar_se_enviar_email(*args, **kwargs):
+        chamadas.append({"args": args, "kwargs": kwargs})
+        raise AssertionError("dashboard nao deve enviar email sincrono")
+
+    monkeypatch.setattr(services, "enviar_email_smtp", falhar_se_enviar_email)
     login_as("ADMIN")
 
     resposta = client.get("/dashboard")
 
     assert resposta.status_code == 200
-    assert chamadas
-    assert "email_operacional_nao_enviado evento=tarefa_atrasada" in caplog.text
+    assert chamadas == []
+
+
+def test_dashboard_cria_notificacao_op_urgente_sem_email_sincrono(client, login_as, setores, monkeypatch):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    chamadas = []
+    op = criar_op_urgente(setores["Acabamento"])
+
+    monkeypatch.setattr(services, "smtp_configurado", lambda: True)
+
+    def falhar_se_enviar_email(*args, **kwargs):
+        chamadas.append({"args": args, "kwargs": kwargs})
+        raise AssertionError("dashboard nao deve enviar email sincrono")
+
+    monkeypatch.setattr(services, "enviar_email_smtp", falhar_se_enviar_email)
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard")
+
+    notificacoes = Notificacao.query.filter_by(
+        op_id=op.id,
+        tipo_evento="op_urgente",
+    ).all()
+    usuarios = sorted(n.usuario for n in notificacoes)
+
+    assert resposta.status_code == 200
+    assert chamadas == []
+    assert usuarios == ["ATENDENTE", "PCP", "SETOR"]
+    assert all(n.email_enviado is False for n in notificacoes)

@@ -260,6 +260,7 @@ def test_admin_continua_podendo_movimentar_tarefa_com_responsaveis(client, login
 def test_atraso_com_responsaveis_notifica_e_envia_email_apenas_para_eles(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     setor = setores["Acabamento"]
@@ -311,6 +312,7 @@ def test_atraso_com_responsaveis_notifica_e_envia_email_apenas_para_eles(app, se
 def test_tarefa_sem_responsaveis_continua_enviando_email_para_setor(app, setores, monkeypatch):
     import app as app_module
 
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
     services = app_module.notificacoes_module
     chamadas = []
     setor = setores["Acabamento"]
