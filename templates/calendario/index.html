@@ -401,6 +401,9 @@
                             {% if item.op.alta_prioridade %}
                             <span class="sector-status-badge status-danger">Alta prioridade</span>
                             {% endif %}
+                            {% if item.tarefa.em_espera or item.tarefa.status == "EM ESPERA" %}
+                            <span class="sector-status-badge status-waiting">Em espera</span>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -427,6 +430,14 @@
                                 {% endif %}
                             </dd>
                         </div>
+                        {% if item.tarefa.em_espera or item.tarefa.status == "EM ESPERA" %}
+                        <div>
+                            <dt>Espera</dt>
+                            <dd class="calendario-text-truncate" title="{{ item.tarefa.espera_motivo_atual or 'Motivo nao informado' }}">
+                                {{ item.tarefa.espera_motivo_atual or "Motivo n&atilde;o informado" }}
+                            </dd>
+                        </div>
+                        {% endif %}
                     </dl>
                 </a>
                 {% else %}

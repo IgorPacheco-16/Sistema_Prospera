@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaResponsavel, User
+from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, User
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -120,6 +120,13 @@ def create_ops_blueprint(
                 selectinload(OP.tarefas)
                 .selectinload(Tarefa.responsavel_vinculos)
                 .selectinload(TarefaResponsavel.usuario),
+                selectinload(OP.tarefas)
+                .selectinload(Tarefa.espera_solicitacoes)
+                .selectinload(TarefaEsperaSolicitacao.solicitado_por),
+                selectinload(OP.tarefas)
+                .selectinload(Tarefa.espera_solicitacoes)
+                .selectinload(TarefaEsperaSolicitacao.respondido_por),
+                selectinload(OP.tarefas).selectinload(Tarefa.espera_solicitacao_atual),
             )
             .filter(OP.id == id)
             .first()
@@ -181,6 +188,36 @@ def create_ops_blueprint(
                         and setor_usuario_id == tarefa.setor_id
                     )
                 )
+                tarefa.espera_pendente = next(
+                    (
+                        solicitacao
+                        for solicitacao in getattr(tarefa, "espera_solicitacoes", []) or []
+                        if solicitacao.ativo and solicitacao.status == "PENDENTE"
+                    ),
+                    None,
+                )
+                tarefa.espera_ativa = (
+                    tarefa.espera_solicitacao_atual
+                    if tarefa.espera_solicitacao_atual
+                    and tarefa.espera_solicitacao_atual.ativo
+                    and tarefa.espera_solicitacao_atual.status == "APROVADA"
+                    else None
+                )
+                tarefa.pode_solicitar_espera = (
+                    tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
+                    or (
+                        tipo_usuario == "SETOR"
+                        and setor_usuario_id == tarefa.setor_id
+                    )
+                    or (
+                        usuario_logado
+                        and any(
+                            responsavel.id == usuario_logado.id
+                            for responsavel in getattr(tarefa, "responsaveis", []) or []
+                        )
+                    )
+                )
+                tarefa.pode_responder_espera = tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
                 tarefa.responsaveis_ordenados = sorted(
                     list(getattr(tarefa, "responsaveis", []) or []),
                     key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),

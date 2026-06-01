@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, session, url_for
 
-from database.models import db, OP, OPSetor, Tarefa, TarefaResponsavel, User
+from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, User
 from tempo import agora_brasilia
 
 
@@ -11,6 +11,7 @@ STATUS_PENDENTE = "PENDENTE"
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDAÇÃO"
 STATUS_ENTREGUE = "ENTREGUE"
+STATUS_EM_ESPERA = "EM ESPERA"
 MAX_RESPONSAVEIS_TAREFA = 4
 STATUS_RESPONSAVEL_PENDENTE = "PENDENTE"
 STATUS_RESPONSAVEL_ACEITO = "ACEITO"
@@ -31,9 +32,15 @@ PAPEL_REPASSE_SAIDA = "SAIDA"
 STATUS_LOTE_REPASSE_PENDENTE = "PENDENTE"
 STATUS_LOTE_REPASSE_CONCLUIDO = "CONCLUIDO"
 STATUS_LOTE_REPASSE_RECUSADO = "RECUSADO"
+STATUS_ESPERA_PENDENTE = "PENDENTE"
+STATUS_ESPERA_APROVADA = "APROVADA"
+STATUS_ESPERA_RECUSADA = "RECUSADA"
+STATUS_ESPERA_CANCELADA = "CANCELADA"
 
 
 def status_atual_tarefa(tarefa):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return STATUS_EM_ESPERA
     if tarefa.validado:
         return STATUS_ENTREGUE
     if tarefa.entregue:
@@ -49,6 +56,9 @@ def aplicar_status_tarefa(tarefa, status):
         tarefa.validado = True
     elif status == STATUS_EM_VALIDACAO:
         tarefa.entregue = True
+        tarefa.validado = False
+    elif status == STATUS_EM_ESPERA:
+        tarefa.entregue = False
         tarefa.validado = False
     else:
         tarefa.entregue = False
@@ -267,6 +277,31 @@ def usuario_pode_repassar_tarefa(tarefa):
     return False
 
 
+def usuario_pode_solicitar_espera(tarefa):
+    tipo = session.get("tipo")
+    if tipo in {"ADMIN", "PCP", "ATENDENTE"}:
+        return True
+
+    usuario = usuario_logado_ativo()
+    if usuario and any(
+        responsavel.id == usuario.id
+        for responsavel in getattr(tarefa, "responsaveis", []) or []
+    ):
+        return True
+
+    if tipo == "SETOR":
+        try:
+            return int(session.get("setor_id")) == tarefa.setor_id
+        except (TypeError, ValueError):
+            return False
+
+    return False
+
+
+def usuario_pode_responder_espera():
+    return session.get("tipo") in {"ADMIN", "PCP", "ATENDENTE"}
+
+
 def usuario_pode_responder_vinculo(vinculo):
     usuario = usuario_logado_ativo()
     return bool(usuario and usuario.id == vinculo.usuario_id)
@@ -393,6 +428,110 @@ def criar_notificacoes_tarefa(criar_notificacao, tarefa, mensagem, link, tipo_ev
             tipo_evento=tipo_evento
         )
         notificacoes.append(notificacao)
+    return notificacoes
+
+
+def espera_pendente_tarefa(tarefa):
+    return (
+        TarefaEsperaSolicitacao.query
+        .filter_by(
+            tarefa_id=tarefa.id,
+            status=STATUS_ESPERA_PENDENTE,
+            ativo=True,
+        )
+        .order_by(TarefaEsperaSolicitacao.solicitado_em.desc(), TarefaEsperaSolicitacao.id.desc())
+        .first()
+    )
+
+
+def solicitacao_espera_ativa(tarefa):
+    atual = getattr(tarefa, "espera_solicitacao_atual", None)
+    if atual and atual.status == STATUS_ESPERA_APROVADA and atual.ativo:
+        return atual
+    return (
+        TarefaEsperaSolicitacao.query
+        .filter_by(
+            tarefa_id=tarefa.id,
+            status=STATUS_ESPERA_APROVADA,
+            ativo=True,
+        )
+        .order_by(TarefaEsperaSolicitacao.respondido_em.desc(), TarefaEsperaSolicitacao.id.desc())
+        .first()
+    )
+
+
+def mensagem_espera(evento, op, tarefa, solicitacao, usuario=None, justificativa=None):
+    titulos = {
+        "solicitada": "SOLICITACAO DE ESPERA",
+        "aprovada": "ESPERA APROVADA",
+        "recusada": "ESPERA RECUSADA",
+        "retomada": "TAREFA RETOMADA",
+    }
+    mensagem = (
+        f"{titulos.get(evento, 'ESPERA')}\n"
+        f"OP: {op.nome if op else tarefa.op_id}\n"
+        f"Tarefa: {tarefa.nome}"
+    )
+    if solicitacao and solicitacao.motivo:
+        mensagem += f"\nMotivo: {solicitacao.motivo}"
+    if usuario:
+        mensagem += f"\nPor: {nome_usuario(usuario)}"
+    if justificativa:
+        mensagem += f"\nJustificativa: {justificativa}"
+    return mensagem
+
+
+def usuarios_gestao_espera(op):
+    usuarios = ["PCP"]
+    atendente = (getattr(op, "atendente", "") or "").strip().lower()
+    if atendente:
+        usuarios.append(atendente)
+    return list(dict.fromkeys(usuarios))
+
+
+def notificar_gestao_espera(criar_notificacao, op, tarefa, solicitacao, link):
+    notificacoes = []
+    for usuario in usuarios_gestao_espera(op):
+        notificacoes.append(criar_notificacao(
+            usuario,
+            mensagem_espera("solicitada", op, tarefa, solicitacao, solicitacao.solicitado_por),
+            link=link,
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento=f"tarefa_espera_solicitada_{solicitacao.id}",
+        ))
+    return notificacoes
+
+
+def notificar_usuario_solicitante(criar_notificacao, solicitacao, mensagem, link, tipo_evento):
+    usuario = solicitacao.solicitado_por
+    email = (getattr(usuario, "email", "") or "").strip().lower()
+    if not email:
+        return None
+    return criar_notificacao(
+        email,
+        mensagem,
+        link=link,
+        op_id=solicitacao.tarefa.op_id,
+        tarefa_id=solicitacao.tarefa_id,
+        setor_id=solicitacao.tarefa.setor_id,
+        tipo_evento=tipo_evento,
+    )
+
+
+def notificar_responsaveis_espera(criar_notificacao, tarefa, mensagem, link, tipo_evento):
+    notificacoes = []
+    for usuario in usuarios_notificacao_tarefa(tarefa):
+        notificacoes.append(criar_notificacao(
+            usuario,
+            mensagem,
+            link=link,
+            op_id=tarefa.op_id,
+            tarefa_id=tarefa.id,
+            setor_id=tarefa.setor_id,
+            tipo_evento=tipo_evento,
+        ))
     return notificacoes
 
 
@@ -593,6 +732,242 @@ def create_tarefas_blueprint(
             return "Setor incorreto", 403
 
         return None
+
+    @tarefas_bp.route("/tarefas/<int:id>/espera/solicitar", methods=["POST"])
+    @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
+    def solicitar_espera_tarefa(id):
+        tarefa = Tarefa.query.get_or_404(id)
+
+        if not usuario_pode_solicitar_espera(tarefa):
+            return "Acesso negado para solicitar espera nesta tarefa", 403
+
+        if status_atual_tarefa(tarefa) == STATUS_EM_ESPERA:
+            return "A tarefa ja esta em espera", 400
+
+        if status_atual_tarefa(tarefa) in {STATUS_EM_VALIDACAO, STATUS_ENTREGUE}:
+            return "A tarefa nao pode entrar em espera neste status", 400
+
+        motivo = request.form.get("motivo", "").strip()
+        if not motivo:
+            return "Motivo obrigatorio", 400
+
+        if espera_pendente_tarefa(tarefa):
+            return "Ja existe solicitacao de espera pendente para esta tarefa", 400
+
+        solicitante = usuario_logado_ativo()
+        solicitacao = TarefaEsperaSolicitacao(
+            tarefa_id=tarefa.id,
+            solicitado_por_id=solicitante.id,
+            motivo=motivo,
+            status=STATUS_ESPERA_PENDENTE,
+            status_anterior_tarefa=status_atual_tarefa(tarefa),
+            ativo=True,
+            solicitado_em=agora_brasilia(),
+        )
+        db.session.add(solicitacao)
+        db.session.flush()
+
+        op = db.session.get(OP, tarefa.op_id)
+        link = link_tarefa(tarefa.op_id, tarefa.setor_id, tarefa.id)
+        if op:
+            notificar_gestao_espera(criar_notificacao, op, tarefa, solicitacao, link)
+            registrar_historico(
+                tarefa.op_id,
+                "Espera solicitada",
+                (
+                    f"{nome_usuario(solicitante) or 'Sistema'} solicitou espera "
+                    f"para a tarefa '{tarefa.nome}'. Motivo: {motivo}"
+                )
+            )
+
+        db.session.commit()
+        flash("Solicitacao de espera enviada.", "info")
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
+
+    @tarefas_bp.route("/tarefas/espera/<int:solicitacao_id>/aprovar", methods=["POST"])
+    @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
+    def aprovar_espera_tarefa(solicitacao_id):
+        solicitacao = TarefaEsperaSolicitacao.query.get_or_404(solicitacao_id)
+
+        if not usuario_pode_responder_espera():
+            return "Acesso negado para aprovar espera", 403
+        if not solicitacao.esta_pendente():
+            return "Esta solicitacao de espera nao esta pendente", 400
+
+        tarefa = solicitacao.tarefa
+        if status_atual_tarefa(tarefa) == STATUS_EM_ESPERA:
+            return "A tarefa ja esta em espera", 400
+
+        responsavel = usuario_logado_ativo()
+        agora = agora_brasilia()
+        solicitacao.status_anterior_tarefa = (
+            solicitacao.status_anterior_tarefa or status_atual_tarefa(tarefa)
+        )
+        solicitacao.status = STATUS_ESPERA_APROVADA
+        solicitacao.respondido_por_id = responsavel.id if responsavel else None
+        solicitacao.respondido_em = agora
+        solicitacao.ativo = True
+
+        aplicar_status_tarefa(tarefa, STATUS_EM_ESPERA)
+        tarefa.em_espera = True
+        tarefa.espera_motivo_atual = solicitacao.motivo
+        tarefa.espera_aprovada_em = agora
+        tarefa.espera_aprovada_por_id = responsavel.id if responsavel else None
+        tarefa.espera_solicitacao_atual_id = solicitacao.id
+
+        op = db.session.get(OP, tarefa.op_id)
+        link = link_tarefa(tarefa.op_id, tarefa.setor_id, tarefa.id)
+        if op:
+            mensagem = mensagem_espera("aprovada", op, tarefa, solicitacao, responsavel)
+            notificar_usuario_solicitante(
+                criar_notificacao,
+                solicitacao,
+                mensagem,
+                link,
+                f"tarefa_espera_aprovada_{solicitacao.id}",
+            )
+            notificar_responsaveis_espera(
+                criar_notificacao,
+                tarefa,
+                mensagem,
+                link,
+                f"tarefa_espera_aprovada_responsaveis_{solicitacao.id}",
+            )
+            registrar_historico(
+                tarefa.op_id,
+                "Espera aprovada",
+                (
+                    f"{nome_usuario(responsavel) or 'Sistema'} aprovou espera "
+                    f"para a tarefa '{tarefa.nome}'. Motivo: {solicitacao.motivo}"
+                )
+            )
+
+        db.session.commit()
+        flash("Espera aprovada.", "success")
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
+
+    @tarefas_bp.route("/tarefas/espera/<int:solicitacao_id>/recusar", methods=["POST"])
+    @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
+    def recusar_espera_tarefa(solicitacao_id):
+        solicitacao = TarefaEsperaSolicitacao.query.get_or_404(solicitacao_id)
+
+        if not usuario_pode_responder_espera():
+            return "Acesso negado para recusar espera", 403
+        if not solicitacao.esta_pendente():
+            return "Esta solicitacao de espera nao esta pendente", 400
+
+        justificativa = request.form.get("justificativa_resposta", "").strip() or None
+        responsavel = usuario_logado_ativo()
+        solicitacao.status = STATUS_ESPERA_RECUSADA
+        solicitacao.respondido_por_id = responsavel.id if responsavel else None
+        solicitacao.respondido_em = agora_brasilia()
+        solicitacao.justificativa_resposta = justificativa
+        solicitacao.ativo = False
+
+        tarefa = solicitacao.tarefa
+        op = db.session.get(OP, tarefa.op_id)
+        link = link_tarefa(tarefa.op_id, tarefa.setor_id, tarefa.id)
+        if op:
+            mensagem = mensagem_espera(
+                "recusada",
+                op,
+                tarefa,
+                solicitacao,
+                responsavel,
+                justificativa=justificativa,
+            )
+            notificar_usuario_solicitante(
+                criar_notificacao,
+                solicitacao,
+                mensagem,
+                link,
+                f"tarefa_espera_recusada_{solicitacao.id}",
+            )
+            registrar_historico(
+                tarefa.op_id,
+                "Espera recusada",
+                (
+                    f"{nome_usuario(responsavel) or 'Sistema'} recusou espera "
+                    f"para a tarefa '{tarefa.nome}'."
+                    + (f" Justificativa: {justificativa}" if justificativa else "")
+                )
+            )
+
+        db.session.commit()
+        flash("Solicitacao de espera recusada.", "info")
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
+
+    @tarefas_bp.route("/tarefas/<int:id>/espera/retomar", methods=["POST"])
+    @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
+    def retomar_tarefa_em_espera(id):
+        tarefa = Tarefa.query.get_or_404(id)
+
+        if not usuario_pode_responder_espera():
+            return "Acesso negado para retomar tarefa", 403
+        if status_atual_tarefa(tarefa) != STATUS_EM_ESPERA:
+            return "A tarefa nao esta em espera", 400
+
+        solicitacao = solicitacao_espera_ativa(tarefa)
+        status_anterior = (
+            getattr(solicitacao, "status_anterior_tarefa", None)
+            or STATUS_PENDENTE
+        )
+        if status_anterior == STATUS_EM_ESPERA:
+            status_anterior = STATUS_PENDENTE
+
+        responsavel = usuario_logado_ativo()
+        aplicar_status_tarefa(tarefa, status_anterior)
+        tarefa.em_espera = False
+        tarefa.espera_motivo_atual = None
+        tarefa.espera_aprovada_em = None
+        tarefa.espera_aprovada_por_id = None
+        tarefa.espera_solicitacao_atual_id = None
+        if solicitacao:
+            solicitacao.ativo = False
+
+        op = db.session.get(OP, tarefa.op_id)
+        link = link_tarefa(tarefa.op_id, tarefa.setor_id, tarefa.id)
+        if op:
+            mensagem = mensagem_espera("retomada", op, tarefa, solicitacao, responsavel)
+            notificar_responsaveis_espera(
+                criar_notificacao,
+                tarefa,
+                mensagem,
+                link,
+                f"tarefa_espera_retomada_{tarefa.id}_{agora_brasilia().strftime('%Y%m%d%H%M%S')}",
+            )
+            registrar_historico(
+                tarefa.op_id,
+                "Tarefa retomada",
+                (
+                    f"{nome_usuario(responsavel) or 'Sistema'} retomou a tarefa "
+                    f"'{tarefa.nome}' para o status {status_anterior}."
+                )
+            )
+
+        db.session.commit()
+        flash("Tarefa retomada.", "success")
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
 
     @tarefas_bp.route("/tarefas/<int:id>/responsaveis", methods=["POST"])
     @tipos_permitidos("SETOR", "PCP", "ADMIN")

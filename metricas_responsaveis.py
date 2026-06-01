@@ -4,6 +4,7 @@ from datetime import datetime, time
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDA\u00c7\u00c3O"
 STATUS_ENTREGUE = "ENTREGUE"
+STATUS_EM_ESPERA = "EM ESPERA"
 
 
 def resumo_metricas_responsavel():
@@ -11,6 +12,7 @@ def resumo_metricas_responsavel():
         "total_atribuidas": 0,
         "pendentes": 0,
         "em_andamento": 0,
+        "em_espera": 0,
         "entregues": 0,
         "concluidas": 0,
         "atrasadas": 0,
@@ -75,6 +77,8 @@ def tarefa_em_andamento_metricas(tarefa):
     return bool(
         not tarefa_concluida_metricas(tarefa)
         and not tarefa_entregue_metricas(tarefa)
+        and getattr(tarefa, "status", None) != STATUS_EM_ESPERA
+        and not getattr(tarefa, "em_espera", False)
         and (
             getattr(tarefa, "status", None) == STATUS_EM_ANDAMENTO
             or getattr(tarefa, "iniciada_em", None)
@@ -88,7 +92,13 @@ def tarefa_aberta_metricas(tarefa):
 
 def tarefa_atrasada_metricas(tarefa, hoje):
     prazo = getattr(tarefa, "prazo", None)
-    return bool(prazo and prazo < hoje and tarefa_aberta_metricas(tarefa))
+    return bool(
+        prazo
+        and prazo < hoje
+        and tarefa_aberta_metricas(tarefa)
+        and getattr(tarefa, "status", None) != STATUS_EM_ESPERA
+        and not getattr(tarefa, "em_espera", False)
+    )
 
 
 def tarefa_recusada_metricas(tarefa):
@@ -140,6 +150,9 @@ def atualizar_resumo_metricas(resumo, tarefa, hoje, agora=None):
     elif tarefa_entregue_metricas(tarefa):
         resumo["entregues"] += 1
         resumo["abertas"] += 1
+    elif getattr(tarefa, "em_espera", False) or getattr(tarefa, "status", None) == STATUS_EM_ESPERA:
+        resumo["em_espera"] += 1
+        resumo["abertas"] += 1
     elif tarefa_em_andamento_metricas(tarefa):
         resumo["em_andamento"] += 1
         resumo["abertas"] += 1
@@ -185,6 +198,7 @@ def resumo_tem_valores(resumo):
             "total_atribuidas",
             "pendentes",
             "em_andamento",
+            "em_espera",
             "entregues",
             "concluidas",
             "atrasadas",

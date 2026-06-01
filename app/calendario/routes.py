@@ -12,10 +12,12 @@ STATUS_PENDENTE = "PENDENTE"
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDA\u00c7\u00c3O"
 STATUS_ENTREGUE = "ENTREGUE"
+STATUS_EM_ESPERA = "EM ESPERA"
 
 STATUS_FILTRO = [
     STATUS_PENDENTE,
     STATUS_EM_ANDAMENTO,
+    STATUS_EM_ESPERA,
     STATUS_EM_VALIDACAO,
     STATUS_ENTREGUE,
 ]
@@ -148,6 +150,8 @@ def ordenar_usuarios_por_nome(usuarios):
 
 
 def status_visual_tarefa(tarefa):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return STATUS_EM_ESPERA
     if tarefa.validado or tarefa.status == STATUS_ENTREGUE:
         return STATUS_ENTREGUE
     if tarefa.entregue or tarefa.status == STATUS_EM_VALIDACAO:
@@ -200,7 +204,11 @@ def tarefa_no_periodo(tarefa, filtros, hoje):
     periodo = filtros["periodo"]
 
     if filtros["apenas_atrasadas"]:
-        return bool(prazo and prazo < hoje)
+        return bool(
+            prazo
+            and prazo < hoje
+            and not (getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA)
+        )
     if periodo == "todos":
         return True
     if periodo == "sem_prazo":
@@ -244,6 +252,13 @@ def tarefa_passa_filtros_visuais(tarefa, filtros, hoje):
 
 
 def indicador_prazo(tarefa, hoje):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return {
+            "texto": "Em espera",
+            "classe": "status-waiting",
+            "card_classe": "calendario-card-waiting",
+        }
+
     prazo = tarefa.prazo
     if not prazo:
         return {

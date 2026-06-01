@@ -186,7 +186,36 @@ class Tarefa(db.Model):
     concluida_em = db.Column(db.DateTime, nullable=True)
     observacao_entrega = db.Column(db.String(1000), nullable=True)
     motivo_recusa = db.Column(db.String(255), nullable=True)
+    em_espera = db.Column(db.Boolean, default=False, nullable=False, server_default="0")
+    espera_motivo_atual = db.Column(db.String(1000), nullable=True)
+    espera_aprovada_em = db.Column(db.DateTime, nullable=True)
+    espera_aprovada_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    espera_solicitacao_atual_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "tarefa_espera_solicitacoes.id",
+            use_alter=True,
+            name="fk_tarefas_espera_solicitacao_atual_id",
+        ),
+        nullable=True,
+    )
     setor = db.relationship('Setor')
+    espera_aprovada_por = db.relationship(
+        "User",
+        foreign_keys=[espera_aprovada_por_id],
+    )
+    espera_solicitacao_atual = db.relationship(
+        "TarefaEsperaSolicitacao",
+        foreign_keys=[espera_solicitacao_atual_id],
+        post_update=True,
+    )
+    espera_solicitacoes = db.relationship(
+        "TarefaEsperaSolicitacao",
+        back_populates="tarefa",
+        cascade="all, delete-orphan",
+        foreign_keys="TarefaEsperaSolicitacao.tarefa_id",
+        order_by="TarefaEsperaSolicitacao.solicitado_em, TarefaEsperaSolicitacao.id",
+    )
     responsavel_vinculos = db.relationship(
         "TarefaResponsavel",
         back_populates="tarefa",
@@ -210,6 +239,43 @@ class Tarefa(db.Model):
 
 
 #NOTIFICAÇÕES
+class TarefaEsperaSolicitacao(db.Model):
+    __tablename__ = "tarefa_espera_solicitacoes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tarefa_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tarefas.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    solicitado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    motivo = db.Column(db.String(1000), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="PENDENTE", server_default="PENDENTE")
+    respondido_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    solicitado_em = db.Column(db.DateTime, default=agora_brasilia, nullable=False)
+    respondido_em = db.Column(db.DateTime, nullable=True)
+    justificativa_resposta = db.Column(db.String(1000), nullable=True)
+    status_anterior_tarefa = db.Column(db.String(30), nullable=True)
+    ativo = db.Column(db.Boolean, default=True, nullable=False, server_default="1")
+
+    tarefa = db.relationship(
+        "Tarefa",
+        back_populates="espera_solicitacoes",
+        foreign_keys=[tarefa_id],
+    )
+    solicitado_por = db.relationship(
+        "User",
+        foreign_keys=[solicitado_por_id],
+    )
+    respondido_por = db.relationship(
+        "User",
+        foreign_keys=[respondido_por_id],
+    )
+
+    def esta_pendente(self):
+        return self.ativo and self.status == "PENDENTE"
+
+
 class Notificacao(db.Model):
     __tablename__ = "notificacoes"
 

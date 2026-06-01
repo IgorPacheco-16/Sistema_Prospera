@@ -90,6 +90,7 @@
         {% set validadas = item.validadas %}
         {% set pendentes = total - validadas %}
         {% set atrasadas = item.tarefas
+            | rejectattr("em_espera")
             | selectattr("prazo")
             | selectattr("validado", "equalto", False)
             | selectattr("prazo", "lt", today)
@@ -210,7 +211,9 @@
                                 </div>
 
                                 <div class="task-status-area">
-                                    {% if t.validado %}
+                                    {% if t.em_espera or t.status == "EM ESPERA" %}
+                                        <span class="sector-status-badge status-waiting">EM ESPERA</span>
+                                    {% elif t.validado %}
                                         <span class="sector-status-badge status-success">ENTREGUE</span>
                                     {% elif t.entregue %}
                                         <span class="sector-status-badge status-warning">EM VALIDAÇÃO</span>
@@ -237,6 +240,13 @@
                                 </span>
                                 <span class="task-summary-dot" aria-hidden="true"></span>
                                 <span>{{ responsaveis_count or 1 }} ativo{% if (responsaveis_count or 1) != 1 %}s{% endif %}</span>
+                                {% if t.espera_pendente %}
+                                    <span class="task-summary-dot" aria-hidden="true"></span>
+                                    <span class="task-waiting-summary">Solicita&ccedil;&atilde;o de espera pendente</span>
+                                {% elif t.em_espera or t.status == "EM ESPERA" %}
+                                    <span class="task-summary-dot" aria-hidden="true"></span>
+                                    <span class="task-waiting-summary">Em espera</span>
+                                {% endif %}
                                 {% if resumo_repasse.pendencias or resumo_repasse.recusas %}
                                     <span class="task-summary-dot" aria-hidden="true"></span>
                                     <span>
@@ -245,6 +255,26 @@
                                     </span>
                                 {% endif %}
                             </div>
+
+                            {% if t.espera_pendente %}
+                            <div class="task-waiting-note">
+                                <strong>Espera solicitada</strong>
+                                <p>{{ t.espera_pendente.motivo }}</p>
+                                <small>
+                                    Solicitante:
+                                    {{ t.espera_pendente.solicitado_por.nome or t.espera_pendente.solicitado_por.email if t.espera_pendente.solicitado_por else "Sistema" }}
+                                    em {{ t.espera_pendente.solicitado_em|data_hora_brasilia }}
+                                </small>
+                            </div>
+                            {% elif t.em_espera or t.status == "EM ESPERA" %}
+                            <div class="task-waiting-note">
+                                <strong>Em espera</strong>
+                                <p>{{ t.espera_motivo_atual or (t.espera_ativa.motivo if t.espera_ativa else "Motivo n&atilde;o informado") }}</p>
+                                {% if t.espera_aprovada_em %}
+                                <small>Aprovada em {{ t.espera_aprovada_em|data_hora_brasilia }}</small>
+                                {% endif %}
+                            </div>
+                            {% endif %}
 
                             {% set mostrar_detalhes_repasse = resumo_repasse.entrando or resumo_repasse.saindo or resumo_repasse.recusas %}
                             {% if mostrar_detalhes_repasse %}
@@ -337,6 +367,17 @@
                                     </button>
                                     {% endif %}
 
+                                    {% if t.pode_solicitar_espera and not t.espera_pendente and not t.em_espera and t.status != "EM ESPERA" and not t.entregue and not t.validado %}
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#solicitarEsperaTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="solicitarEsperaTarefa{{ t.id }}">
+                                        Solicitar espera
+                                    </button>
+                                    {% endif %}
+
                                     {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                                     <button class="btn btn-outline-primary btn-sm"
                                             type="button"
@@ -372,9 +413,36 @@
                                         </button>
                                     </form>
                                     {% endif %}
+                                    {% if t.espera_pendente and t.pode_responder_espera %}
+                                    <form method="POST" action="{{ url_for('aprovar_espera_tarefa', solicitacao_id=t.espera_pendente.id) }}">
+                                        <button class="btn btn-outline-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Aprovar espera desta tarefa?')">
+                                            Aprovar espera
+                                        </button>
+                                    </form>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#recusarEsperaTarefa{{ t.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="recusarEsperaTarefa{{ t.id }}">
+                                        Recusar
+                                    </button>
+                                    {% endif %}
                                 </div>
 
                                 <div class="task-primary-actions">
+                                    {% if (t.em_espera or t.status == "EM ESPERA") and t.pode_responder_espera %}
+                                    <form method="POST" action="{{ url_for('retomar_tarefa_em_espera', id=t.id) }}">
+                                        <button class="btn btn-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Liberar esta tarefa e retomar o status anterior?')">
+                                            Liberar tarefa
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
                                     {% if t.repasse_pendente_usuario %}
                                     <form method="POST" action="{{ url_for('aceitar_tarefa_responsavel', vinculo_id=t.repasse_pendente_usuario.id) }}">
                                         <button class="btn btn-primary btn-sm"
@@ -423,6 +491,62 @@
                                     {% endif %}
                                 </div>
                             </div>
+
+                            {% if t.pode_solicitar_espera and not t.espera_pendente and not t.em_espera and t.status != "EM ESPERA" and not t.entregue and not t.validado %}
+                            <div class="collapse task-waiting-box" id="solicitarEsperaTarefa{{ t.id }}">
+                                <form method="POST" action="{{ url_for('solicitar_espera_tarefa', id=t.id) }}" class="task-waiting-form">
+                                    <h3>Solicitar espera da tarefa</h3>
+                                    <label class="form-label" for="motivoEspera{{ t.id }}">Motivo</label>
+                                    <textarea id="motivoEspera{{ t.id }}"
+                                              name="motivo"
+                                              class="form-control form-control-sm"
+                                              rows="3"
+                                              maxlength="1000"
+                                              placeholder="Explique o que est&aacute; impedindo a execu&ccedil;&atilde;o desta tarefa."
+                                              required></textarea>
+                                    <div class="task-waiting-actions">
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#solicitarEsperaTarefa{{ t.id }}">
+                                            Cancelar
+                                        </button>
+                                        <button class="btn btn-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Enviar solicita&ccedil;&atilde;o de espera desta tarefa?')">
+                                            Enviar solicita&ccedil;&atilde;o
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            {% endif %}
+
+                            {% if t.espera_pendente and t.pode_responder_espera %}
+                            <div class="collapse task-waiting-box" id="recusarEsperaTarefa{{ t.id }}">
+                                <form method="POST" action="{{ url_for('recusar_espera_tarefa', solicitacao_id=t.espera_pendente.id) }}" class="task-waiting-form">
+                                    <h3>Recusar espera</h3>
+                                    <label class="form-label" for="justificativaEspera{{ t.id }}">Justificativa opcional</label>
+                                    <textarea id="justificativaEspera{{ t.id }}"
+                                              name="justificativa_resposta"
+                                              class="form-control form-control-sm"
+                                              rows="2"
+                                              maxlength="1000"></textarea>
+                                    <div class="task-waiting-actions">
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#recusarEsperaTarefa{{ t.id }}">
+                                            Cancelar
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Recusar solicita&ccedil;&atilde;o de espera?')">
+                                            Recusar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            {% endif %}
 
                             {% if t.pode_repassar %}
                             <div class="collapse task-repass-box" id="repassarTarefa{{ t.id }}">

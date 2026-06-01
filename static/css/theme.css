@@ -1814,12 +1814,21 @@ html.dark-mode .empty-task-list {
     color: var(--muted-light);
 }
 
+.status-waiting {
+    background-color: rgba(13, 202, 240, 0.14);
+    color: #087990;
+}
+
 html.dark-mode .status-warning {
     color: #ffd166;
 }
 
 html.dark-mode .status-muted {
     color: var(--muted-dark);
+}
+
+html.dark-mode .status-waiting {
+    color: #7bdff2;
 }
 
 .op-status-strip {
@@ -2256,6 +2265,8 @@ html.dark-mode .op-history-meta {
 
 .task-detail-panel,
 .task-delivery-note,
+.task-waiting-box,
+.task-waiting-note,
 .task-repass-box,
 .form-editar-tarefa,
 .task-delete-form {
@@ -2387,6 +2398,47 @@ html.dark-mode .op-history-meta {
     overflow-wrap: anywhere;
 }
 
+.task-waiting-summary {
+    color: #087990;
+    font-weight: 700;
+}
+
+.task-waiting-note {
+    border-left: 4px solid #0dcaf0;
+    color: var(--text-light);
+    padding-left: 12px;
+}
+
+.task-waiting-note strong,
+.task-waiting-form h3 {
+    color: #087990;
+    display: block;
+    font-size: 0.92rem;
+    font-weight: 800;
+    margin: 0 0 6px;
+}
+
+.task-waiting-note p {
+    margin: 0 0 4px;
+    overflow-wrap: anywhere;
+}
+
+.task-waiting-note small {
+    color: var(--muted-light);
+}
+
+.task-waiting-form {
+    display: grid;
+    gap: 10px;
+}
+
+.task-waiting-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
 .task-repass-box {
     margin-top: 12px;
 }
@@ -2479,12 +2531,15 @@ html.dark-mode .task-responsible-summary {
 
 html.dark-mode .task-responsible-summary > span:first-child,
 html.dark-mode .task-person-list span,
-html.dark-mode .task-delivery-note {
+html.dark-mode .task-delivery-note,
+html.dark-mode .task-waiting-note {
     color: var(--text-dark);
 }
 
 html.dark-mode .task-detail-panel,
 html.dark-mode .task-delivery-note,
+html.dark-mode .task-waiting-box,
+html.dark-mode .task-waiting-note,
 html.dark-mode .task-repass-box,
 html.dark-mode .form-editar-tarefa,
 html.dark-mode .task-delete-form,
@@ -2510,13 +2565,21 @@ html.dark-mode .task-person-list .task-detail-empty {
 html.dark-mode .task-detail-group h3,
 html.dark-mode .task-person-list small,
 html.dark-mode .task-person-list .task-detail-empty,
-html.dark-mode .task-delivery-note strong {
+html.dark-mode .task-delivery-note strong,
+html.dark-mode .task-waiting-note small {
     color: var(--muted-dark);
 }
 
 html.dark-mode .task-repass-form .form-label,
+html.dark-mode .task-waiting-form .form-label,
 html.dark-mode .task-repass-info {
     color: var(--muted-dark);
+}
+
+html.dark-mode .task-waiting-summary,
+html.dark-mode .task-waiting-note strong,
+html.dark-mode .task-waiting-form h3 {
+    color: #7bdff2;
 }
 
 .status.validado {
@@ -3084,6 +3147,10 @@ html.dark-mode .kanban-card {
     border-left-color: var(--muted-light);
 }
 
+.kanban-card-waiting {
+    border-left-color: #0dcaf0;
+}
+
 .kanban-card-priority {
     border-top-color: rgba(220, 53, 69, 0.55);
     box-shadow: 0 8px 20px rgba(220, 53, 69, 0.12);
@@ -3363,6 +3430,10 @@ html.dark-mode .calendario-task-card {
 
 .calendario-card-neutral {
     border-left-color: var(--muted-light);
+}
+
+.calendario-card-waiting {
+    border-left-color: #0dcaf0;
 }
 
 .calendario-task-priority {

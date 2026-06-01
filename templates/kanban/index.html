@@ -366,6 +366,9 @@
                                 N&atilde;o definido
                             {% endif %}
                         </span>
+                        {% if item.tarefa.em_espera or item.tarefa.status == "EM ESPERA" %}
+                        <span>Motivo da espera: {{ item.tarefa.espera_motivo_atual or "N&atilde;o informado" }}</span>
+                        {% endif %}
                     </div>
 
                     <div class="kanban-card-footer">

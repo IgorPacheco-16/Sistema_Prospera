@@ -629,7 +629,9 @@ def verificar_atrasos(enviar_emails=True):
         .options(selectinload(Tarefa.op), selectinload(Tarefa.responsaveis))
         .filter(
             Tarefa.prazo < hoje,
-            Tarefa.validado == False
+            Tarefa.validado == False,
+            Tarefa.em_espera == False,
+            Tarefa.status != "EM ESPERA",
         )
         .all()
     )

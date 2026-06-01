@@ -12,6 +12,7 @@ STATUS_PENDENTE = "PENDENTE"
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDA\u00c7\u00c3O"
 STATUS_ENTREGUE = "ENTREGUE"
+STATUS_EM_ESPERA = "EM ESPERA"
 
 
 COLUNAS_KANBAN = [
@@ -26,6 +27,12 @@ COLUNAS_KANBAN = [
         "titulo": "Em andamento",
         "status": STATUS_EM_ANDAMENTO,
         "classe": "status-warning",
+    },
+    {
+        "chave": "em_espera",
+        "titulo": "Em espera",
+        "status": STATUS_EM_ESPERA,
+        "classe": "status-waiting",
     },
     {
         "chave": "em_validacao",
@@ -45,6 +52,7 @@ COLUNAS_KANBAN = [
 STATUS_FILTRO = [
     STATUS_PENDENTE,
     STATUS_EM_ANDAMENTO,
+    STATUS_EM_ESPERA,
     STATUS_EM_VALIDACAO,
     STATUS_ENTREGUE,
 ]
@@ -115,6 +123,8 @@ def filtros_kanban():
 
 
 def status_visual_tarefa(tarefa):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return STATUS_EM_ESPERA
     if tarefa.validado or tarefa.status == STATUS_ENTREGUE:
         return STATUS_ENTREGUE
     if tarefa.entregue or tarefa.status == STATUS_EM_VALIDACAO:
@@ -125,6 +135,13 @@ def status_visual_tarefa(tarefa):
 
 
 def indicador_prazo(tarefa, hoje):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return {
+            "texto": "Em espera",
+            "classe": "status-waiting",
+            "card_classe": "kanban-card-waiting",
+        }
+
     if not tarefa.prazo:
         return {
             "texto": "Sem prazo",
@@ -179,6 +196,8 @@ def op_urgente(op, hoje):
 def tarefa_no_filtro_prazo(tarefa, prazos, hoje):
     if not prazos:
         return True
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return "atrasadas" not in prazos
 
     prazo = tarefa.prazo
     if "sem_prazo" in prazos and not prazo:

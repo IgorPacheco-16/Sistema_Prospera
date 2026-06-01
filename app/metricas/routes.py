@@ -13,10 +13,12 @@ STATUS_PENDENTE = "PENDENTE"
 STATUS_EM_ANDAMENTO = "EM ANDAMENTO"
 STATUS_EM_VALIDACAO = "EM VALIDAÇÃO"
 STATUS_ENTREGUE = "ENTREGUE"
+STATUS_EM_ESPERA = "EM ESPERA"
 
 STATUS_TAREFAS = [
     STATUS_PENDENTE,
     STATUS_EM_ANDAMENTO,
+    STATUS_EM_ESPERA,
     STATUS_EM_VALIDACAO,
     STATUS_ENTREGUE,
 ]
@@ -94,6 +96,8 @@ def filtros_metricas():
 
 
 def status_visual_tarefa(tarefa):
+    if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
+        return STATUS_EM_ESPERA
     if tarefa.validado or tarefa.status == STATUS_ENTREGUE:
         return STATUS_ENTREGUE
     if tarefa.entregue or tarefa.status == STATUS_EM_VALIDACAO:
@@ -249,7 +253,12 @@ def metricas_tarefas(tarefas, hoje):
 
     for tarefa in tarefas:
         totais_por_status[status_visual_tarefa(tarefa)] += 1
-        if tarefa.prazo and tarefa.prazo < hoje and not tarefa_concluida(tarefa):
+        if (
+            tarefa.prazo
+            and tarefa.prazo < hoje
+            and not tarefa_concluida(tarefa)
+            and status_visual_tarefa(tarefa) != STATUS_EM_ESPERA
+        ):
             atrasadas += 1
         if tarefa_recusada(tarefa):
             recusadas += 1
@@ -259,6 +268,7 @@ def metricas_tarefas(tarefas, hoje):
         "total": total_tarefas,
         "pendentes": totais_por_status[STATUS_PENDENTE],
         "em_andamento": totais_por_status[STATUS_EM_ANDAMENTO],
+        "em_espera": totais_por_status[STATUS_EM_ESPERA],
         "entregues": totais_por_status[STATUS_EM_VALIDACAO],
         "concluidas": totais_por_status[STATUS_ENTREGUE],
         "atrasadas": atrasadas,
@@ -557,9 +567,14 @@ def metricas_ops(ops):
 
 
 def grafico_status(totais_por_status):
+    status_grafico = [
+        status
+        for status in STATUS_TAREFAS
+        if status != STATUS_EM_ESPERA
+    ]
     return {
-        "labels": list(totais_por_status.keys()),
-        "data": list(totais_por_status.values()),
+        "labels": status_grafico,
+        "data": [totais_por_status[status] for status in status_grafico],
     }
 
 

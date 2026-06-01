@@ -154,6 +154,11 @@ def garantir_colunas_tarefa():
     adicionar_coluna_se_nao_existir("tarefas", "concluida_em", "DATETIME")
     adicionar_coluna_se_nao_existir("tarefas", "observacao_entrega", "VARCHAR(1000)")
     adicionar_coluna_se_nao_existir("tarefas", "motivo_recusa", "VARCHAR(255)")
+    adicionar_coluna_se_nao_existir("tarefas", "em_espera", "BOOLEAN NOT NULL DEFAULT 0")
+    adicionar_coluna_se_nao_existir("tarefas", "espera_motivo_atual", "VARCHAR(1000)")
+    adicionar_coluna_se_nao_existir("tarefas", "espera_aprovada_em", "DATETIME")
+    adicionar_coluna_se_nao_existir("tarefas", "espera_aprovada_por_id", "INTEGER")
+    adicionar_coluna_se_nao_existir("tarefas", "espera_solicitacao_atual_id", "INTEGER")
     agora = agora_brasilia()
     db.session.execute(
         text("UPDATE tarefas SET criada_em = :agora WHERE criada_em IS NULL"),
