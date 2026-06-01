@@ -1,12 +1,106 @@
-from datetime import datetime
+import time
 
-from flask import Blueprint, render_template, request, session
-from sqlalchemy import case, func
-from sqlalchemy.orm import selectinload
+from flask import Blueprint, current_app, render_template, request, session
+from sqlalchemy import and_, case, func, not_, or_
 
-from database.models import db, OP, OPSetor, Tarefa, User
-from metricas_responsaveis import metricas_usuario
+from database.models import db, OP, OPSetor, Tarefa, TarefaResponsavel, User
+from metricas_responsaveis import (
+    STATUS_EM_ANDAMENTO,
+    STATUS_EM_VALIDACAO,
+    STATUS_ENTREGUE,
+    finalizar_resumo,
+    nova_linha_usuario,
+)
 from tempo import hoje_brasilia
+
+
+def contar_ops(query):
+    return int(query.with_entities(func.count(OP.id)).order_by(None).scalar() or 0)
+
+
+def condicao_op_atrasada(hoje):
+    return and_(
+        OP.prazo_final < hoje,
+        OP.status != "FINALIZADA",
+    )
+
+
+def metricas_usuario_dashboard(usuario, hoje):
+    resumo = nova_linha_usuario(usuario)
+    usuario_id = getattr(usuario, "id", None)
+    if not usuario_id:
+        return finalizar_resumo(resumo)
+
+    tarefa_concluida = or_(
+        Tarefa.concluida_em.isnot(None),
+        Tarefa.validada_em.isnot(None),
+        Tarefa.validado.is_(True),
+    )
+    sinal_entregue = or_(
+        Tarefa.entregue.is_(True),
+        Tarefa.status.in_([STATUS_EM_VALIDACAO, STATUS_ENTREGUE]),
+        Tarefa.enviada_validacao_em.isnot(None),
+    )
+    sinal_em_andamento = or_(
+        Tarefa.status == STATUS_EM_ANDAMENTO,
+        Tarefa.iniciada_em.isnot(None),
+    )
+
+    def contar_tarefas_distintas(condicao):
+        return func.count(func.distinct(case((condicao, Tarefa.id), else_=None)))
+
+    linha = (
+        db.session.query(
+            func.count(func.distinct(Tarefa.id)).label("total_atribuidas"),
+            contar_tarefas_distintas(tarefa_concluida).label("concluidas"),
+            contar_tarefas_distintas(and_(not_(tarefa_concluida), sinal_entregue)).label("entregues"),
+            contar_tarefas_distintas(and_(
+                not_(tarefa_concluida),
+                not_(sinal_entregue),
+                sinal_em_andamento,
+            )).label("em_andamento"),
+            contar_tarefas_distintas(not_(tarefa_concluida)).label("abertas"),
+            contar_tarefas_distintas(and_(
+                Tarefa.prazo < hoje,
+                not_(tarefa_concluida),
+            )).label("atrasadas"),
+            contar_tarefas_distintas(or_(
+                Tarefa.recusada_em.isnot(None),
+                Tarefa.motivo_recusa.isnot(None),
+            )).label("recusadas"),
+        )
+        .join(TarefaResponsavel, TarefaResponsavel.tarefa_id == Tarefa.id)
+        .join(OP, OP.id == Tarefa.op_id)
+        .filter(
+            TarefaResponsavel.usuario_id == usuario_id,
+            TarefaResponsavel.status == "ACEITO",
+            TarefaResponsavel.ativo.is_(True),
+            OP.status != "ARQUIVADA",
+            OP.arquivada_em.is_(None),
+        )
+        .one()
+    )
+
+    for chave in [
+        "total_atribuidas",
+        "concluidas",
+        "entregues",
+        "em_andamento",
+        "abertas",
+        "atrasadas",
+        "recusadas",
+    ]:
+        resumo[chave] = int(getattr(linha, chave) or 0)
+
+    resumo["pendentes"] = max(
+        resumo["total_atribuidas"]
+        - resumo["concluidas"]
+        - resumo["entregues"]
+        - resumo["em_andamento"],
+        0,
+    )
+
+    return finalizar_resumo(resumo)
 
 
 def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
@@ -15,7 +109,14 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
     @dashboard_bp.route("/dashboard")
     @login_required
     def dashboard():
+        inicio_dashboard = time.perf_counter()
+        tempos = {}
+
+        def marcar_tempo(etapa):
+            tempos[etapa] = round((time.perf_counter() - inicio_dashboard) * 1000, 1)
+
         gerar_notificacoes_pendentes()
+        marcar_tempo("notificacoes_ms")
 
         hoje = hoje_brasilia()
 
@@ -23,13 +124,6 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         status = request.args.get("status", "")
         atrasadas_filtro = request.args.get("atrasadas", "")
         filtro = request.args.get("filtro", "")
-
-        def op_atrasada(op):
-            return (
-                op.prazo_final
-                and op.prazo_final < hoje
-                and op.status != "FINALIZADA"
-            )
 
         if status == "FINALIZADA":
             filtro_dashboard = "finalizadas"
@@ -52,37 +146,50 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         usuario_logado = User.query.filter_by(email=session.get("usuario")).first()
 
         if tipo_usuario == "SETOR":
-            query = query.join(OPSetor).filter(OPSetor.setor_id == setor_usuario_id)
+            ops_setor = db.session.query(OPSetor.op_id).filter(
+                OPSetor.setor_id == setor_usuario_id
+            )
+            query = query.filter(OP.id.in_(ops_setor))
 
         if busca:
             query = query.filter(OP.nome.ilike(f"%{busca}%"))
 
-        ops_base = query.all()
-
-        total = sum(
-            1 for op in ops_base
-            if op.status in ("EM ANDAMENTO", "FINALIZADA") or op_atrasada(op)
-        )
-        atrasadas = sum(
-            1 for op in ops_base
-            if op_atrasada(op)
-        )
-        em_andamento = sum(1 for op in ops_base if op.status == "EM ANDAMENTO")
-        finalizadas = sum(1 for op in ops_base if op.status == "FINALIZADA")
+        atrasada = condicao_op_atrasada(hoje)
+        total = contar_ops(query.filter(or_(
+            OP.status.in_(["EM ANDAMENTO", "FINALIZADA"]),
+            atrasada,
+        )))
+        atrasadas = contar_ops(query.filter(atrasada))
+        em_andamento = contar_ops(query.filter(OP.status == "EM ANDAMENTO"))
+        finalizadas = contar_ops(query.filter(OP.status == "FINALIZADA"))
+        marcar_tempo("contadores_ms")
 
         if filtro_dashboard == "total":
-            ops = [
-                op for op in ops_base
-                if op.status in ("EM ANDAMENTO", "FINALIZADA") or op_atrasada(op)
-            ]
+            query_ops = query.filter(or_(
+                OP.status.in_(["EM ANDAMENTO", "FINALIZADA"]),
+                atrasada,
+            ))
         elif filtro_dashboard == "atrasadas":
-            ops = [op for op in ops_base if op_atrasada(op)]
+            query_ops = query.filter(atrasada)
         elif filtro_dashboard == "finalizadas":
-            ops = [op for op in ops_base if op.status == "FINALIZADA"]
+            query_ops = query.filter(OP.status == "FINALIZADA")
         elif filtro_dashboard == "aberta":
-            ops = [op for op in ops_base if op.status == "ABERTA"]
+            query_ops = query.filter(OP.status == "ABERTA")
         else:
-            ops = [op for op in ops_base if op.status == "EM ANDAMENTO"]
+            query_ops = query.filter(OP.status == "EM ANDAMENTO")
+
+        ops = (
+            query_ops
+            .order_by(
+                case((OP.alta_prioridade.is_(True), 0), else_=1),
+                case((OP.status == "FINALIZADA", 1), else_=0),
+                case((OP.prazo_final.is_(None), 1), else_=0),
+                OP.prazo_final,
+                OP.id,
+            )
+            .all()
+        )
+        marcar_tempo("ops_ms")
 
         op_ids = [op.id for op in ops]
         tarefas_por_op = {}
@@ -106,6 +213,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
                 }
                 for linha in tarefas_query.group_by(Tarefa.op_id).all()
             }
+        marcar_tempo("tarefas_por_op_ms")
 
         lista_ops = []
         for op in ops:
@@ -131,34 +239,14 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
                 "validadas": validadas
             })
 
-        lista_ops.sort(
-            key=lambda x: (
-                not getattr(x["op"], "alta_prioridade", False),
-                x["op"].status == "FINALIZADA",
-                x["op"].prazo_final is None,
-                x["op"].prazo_final or datetime.max.date()
-            )
-        )
+        minhas_metricas = metricas_usuario_dashboard(usuario_logado, hoje)
+        marcar_tempo("minhas_metricas_ms")
 
-        tarefas_individuais = []
-        if usuario_logado:
-            tarefas_individuais = (
-                Tarefa.query
-                .options(selectinload(Tarefa.responsaveis), selectinload(Tarefa.op))
-                .filter(Tarefa.responsaveis.any(User.id == usuario_logado.id))
-                .all()
-            )
-            tarefas_individuais = [
-                tarefa
-                for tarefa in tarefas_individuais
-                if tarefa.op and tarefa.op.status != "ARQUIVADA" and not tarefa.op.arquivada_em
-            ]
-
-        return render_template(
+        resposta = render_template(
             "dashboard/index.html",
             usuario=session.get("usuario"),
             tipo=tipo_usuario,
-            minhas_metricas=metricas_usuario(tarefas_individuais, usuario_logado, hoje),
+            minhas_metricas=minhas_metricas,
             ops=lista_ops,
             total=total,
             atrasadas=atrasadas,
@@ -170,5 +258,15 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             atrasadas_filtro=bool(atrasadas_filtro),
             filtro_dashboard=filtro_dashboard
         )
+        marcar_tempo("render_ms")
+
+        current_app.logger.info(
+            "dashboard_timing usuario_tipo=%s ops=%s total_ms=%.1f etapas=%s",
+            tipo_usuario,
+            len(lista_ops),
+            (time.perf_counter() - inicio_dashboard) * 1000,
+            tempos,
+        )
+        return resposta
 
     return dashboard_bp

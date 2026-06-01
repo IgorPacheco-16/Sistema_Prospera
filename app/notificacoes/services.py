@@ -429,6 +429,31 @@ def carregar_chaves_notificacoes(tipo_evento, op_ids=None, tarefa_ids=None):
     return {tuple(linha) for linha in query.all()}
 
 
+def carregar_notificacoes_por_chave(tipo_evento, op_ids=None, tarefa_ids=None):
+    if op_ids is not None and not op_ids:
+        return {}
+    if tarefa_ids is not None and not tarefa_ids:
+        return {}
+
+    query = Notificacao.query.filter(Notificacao.tipo_evento == tipo_evento)
+
+    if op_ids:
+        query = query.filter(Notificacao.op_id.in_(op_ids))
+    if tarefa_ids:
+        query = query.filter(Notificacao.tarefa_id.in_(tarefa_ids))
+
+    return {
+        chave_notificacao(
+            notificacao.usuario,
+            notificacao.op_id,
+            notificacao.tarefa_id,
+            notificacao.setor_id,
+            notificacao.tipo_evento,
+        ): notificacao
+        for notificacao in query.all()
+    }
+
+
 def criar_notificacao_com_chaves(
     chaves_existentes,
     usuario,
@@ -456,6 +481,26 @@ def criar_notificacao_com_chaves(
     notificacao._foi_criada = True
     chaves_existentes.add(chave)
     return notificacao
+
+
+def obter_ou_criar_notificacao_com_chaves(
+    notificacoes_existentes,
+    chaves_existentes,
+    **dados
+):
+    chave = chave_notificacao(
+        dados.get("usuario"),
+        dados.get("op_id"),
+        dados.get("tarefa_id"),
+        dados.get("setor_id"),
+        dados.get("tipo_evento"),
+    )
+    notificacao = notificacoes_existentes.get(chave)
+    if notificacao is not None:
+        notificacao._foi_criada = False
+        return notificacao
+
+    return criar_notificacao_com_chaves(chaves_existentes, **dados)
 
 
 def criar_notificacao_sem_repetir(chaves_existentes=None, **dados):
@@ -545,6 +590,11 @@ def verificar_atrasos(enviar_emails=True):
         .all()
     )
     resumo["tarefas_atrasadas"] = len(tarefas)
+    notificacoes_tarefas_atrasadas = carregar_notificacoes_por_chave(
+        "tarefa_atrasada",
+        tarefa_ids=[tarefa.id for tarefa in tarefas]
+    )
+    chaves_tarefas_atrasadas = set(notificacoes_tarefas_atrasadas)
 
     for t in tarefas:
         op = t.op
@@ -559,7 +609,9 @@ def verificar_atrasos(enviar_emails=True):
         usuarios_tarefa = usuarios_notificacao_tarefa(t)
         if usuarios_tarefa != ["SETOR"]:
             for usuario in usuarios_tarefa:
-                adicionar_se_criada(notificacoes, criar_notificacao(
+                adicionar_se_criada(notificacoes, obter_ou_criar_notificacao_com_chaves(
+                    notificacoes_tarefas_atrasadas,
+                    chaves_tarefas_atrasadas,
                     usuario=usuario,
                     mensagem=mensagem,
                     link=link,
@@ -570,7 +622,9 @@ def verificar_atrasos(enviar_emails=True):
                 ))
         else:
             for usuario in ["ATENDENTE", "PCP"]:
-                adicionar_se_criada(notificacoes, criar_notificacao(
+                adicionar_se_criada(notificacoes, obter_ou_criar_notificacao_com_chaves(
+                    notificacoes_tarefas_atrasadas,
+                    chaves_tarefas_atrasadas,
                     usuario=usuario,
                     mensagem=mensagem,
                     link=link,
@@ -580,7 +634,9 @@ def verificar_atrasos(enviar_emails=True):
                     tipo_evento="tarefa_atrasada"
                 ))
 
-            adicionar_se_criada(notificacoes, criar_notificacao(
+            adicionar_se_criada(notificacoes, obter_ou_criar_notificacao_com_chaves(
+                notificacoes_tarefas_atrasadas,
+                chaves_tarefas_atrasadas,
                 usuario="SETOR",
                 mensagem=mensagem,
                 link=link,

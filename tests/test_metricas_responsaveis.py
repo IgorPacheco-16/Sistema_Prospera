@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from database.models import db, OP, OPSetor, Tarefa, User
+from database.models import db, OP, OPSetor, Tarefa, TarefaResponsavel, User
 from metricas_responsaveis import metricas_usuario, ranking_metricas_responsaveis
 
 
@@ -93,6 +93,50 @@ def test_dashboard_minhas_metricas_conta_apenas_tarefas_do_responsavel(client, l
     assert "<strong>1</strong>" in bloco
     assert "<span>Atrasadas</span>" in bloco
     assert "Tarefa dashboard geral" not in bloco
+
+
+def test_dashboard_minhas_metricas_nao_duplica_vinculos_do_responsavel(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    agora = datetime(2026, 5, 18, 9, 0)
+    responsavel = criar_usuario_metricas(
+        "ana.dashboard.duplicada@teste.com",
+        acabamento,
+        "Ana Dashboard Duplicada",
+    )
+    op = criar_op_metricas("OP Dashboard Vinculo Duplicado", acabamento, agora)
+    tarefa = criar_tarefa_metricas(
+        op,
+        acabamento,
+        "Tarefa dashboard vinculo duplicado",
+        "PENDENTE",
+        agora,
+    )
+    db.session.flush()
+    db.session.add_all([
+        TarefaResponsavel(
+            tarefa_id=tarefa.id,
+            usuario_id=responsavel.id,
+            status="ACEITO",
+            ativo=True,
+        ),
+        TarefaResponsavel(
+            tarefa_id=tarefa.id,
+            usuario_id=responsavel.id,
+            status="ACEITO",
+            ativo=True,
+        ),
+    ])
+    db.session.commit()
+    login_as("SETOR", email=responsavel.email, setor_id=acabamento.id)
+
+    resposta = client.get("/dashboard")
+    html = resposta.get_data(as_text=True)
+    inicio = html.index("Minhas m&eacute;tricas")
+    bloco = html[inicio:inicio + 1200]
+
+    assert resposta.status_code == 200
+    assert "<span>Pendentes</span>" in bloco
+    assert "<strong>1</strong>" in bloco
 
 
 def test_metricas_usuario_ignora_tarefa_geral_do_setor(app, setores):
