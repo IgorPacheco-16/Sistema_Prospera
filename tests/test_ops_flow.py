@@ -87,7 +87,7 @@ def test_dashboard_mostra_cliente_nos_cards(client, login_as, setores):
     assert "Cliente: Não informado" in html
 
 
-def test_dashboard_limita_listagem_a_vinte_ops_por_pagina(client, login_as):
+def test_dashboard_limita_listagem_a_dezoito_ops_por_pagina(client, login_as):
     for indice in range(25):
         db.session.add(OP(
             nome=f"OP Paginada {indice:02d}",
@@ -102,12 +102,12 @@ def test_dashboard_limita_listagem_a_vinte_ops_por_pagina(client, login_as):
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert html.count("Ver OP") == 20
+    assert html.count("Ver OP") == 18
     assert "OP Paginada 00" in html
-    assert "OP Paginada 19" in html
-    assert "OP Paginada 20" not in html
+    assert "OP Paginada 17" in html
+    assert "OP Paginada 18" not in html
     assert "P&aacute;gina 1 de 2" in html
-    assert "Mostrando 1-20 de 25" in html
+    assert "Mostrando 1-18 de 25" in html
 
 
 def test_dashboard_pagina_dois_mostra_proximas_ops(client, login_as):
@@ -125,12 +125,12 @@ def test_dashboard_pagina_dois_mostra_proximas_ops(client, login_as):
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert html.count("Ver OP") == 5
-    assert "OP Segunda Pagina 19" not in html
-    assert "OP Segunda Pagina 20" in html
+    assert html.count("Ver OP") == 7
+    assert "OP Segunda Pagina 17" not in html
+    assert "OP Segunda Pagina 18" in html
     assert "OP Segunda Pagina 24" in html
     assert "P&aacute;gina 2 de 2" in html
-    assert "Mostrando 21-25 de 25" in html
+    assert "Mostrando 19-25 de 25" in html
 
 
 def test_dashboard_paginacao_preserva_filtros(client, login_as):
@@ -154,13 +154,15 @@ def test_dashboard_paginacao_preserva_filtros(client, login_as):
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert html.count("Ver OP") == 20
+    assert html.count("Ver OP") == 18
     assert "OP Outro Cliente" not in html
     assert "page=2" in html
     assert "busca=Nestle" in html
 
     segunda_pagina = client.get("/dashboard?busca=Nestle&page=2").get_data(as_text=True)
-    assert segunda_pagina.count("Ver OP") == 2
+    assert segunda_pagina.count("Ver OP") == 4
+    assert "OP Nestle 18" in segunda_pagina
+    assert "OP Nestle 19" in segunda_pagina
     assert "OP Nestle 20" in segunda_pagina
     assert "OP Nestle 21" in segunda_pagina
     assert "OP Outro Cliente" not in segunda_pagina

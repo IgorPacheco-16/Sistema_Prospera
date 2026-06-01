@@ -14,7 +14,7 @@ from metricas_responsaveis import (
 from tempo import hoje_brasilia
 
 
-OPS_POR_PAGINA_DASHBOARD = 20
+OPS_POR_PAGINA_DASHBOARD = 18
 
 
 def contar_ops(query):
