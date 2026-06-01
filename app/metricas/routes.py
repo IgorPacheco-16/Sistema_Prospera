@@ -1,6 +1,7 @@
+import time as perf_time
 from datetime import datetime, time, timedelta
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, current_app, render_template, request
 from sqlalchemy.orm import selectinload
 
 from database.models import OP, Setor, Tarefa, User
@@ -638,6 +639,7 @@ def create_metricas_blueprint(tipos_permitidos):
     @metricas_bp.route("/metricas")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP")
     def metricas():
+        inicio_metricas = perf_time.perf_counter()
         hoje = hoje_brasilia()
         agora = datetime.combine(hoje, time.max)
         filtros = filtros_metricas()
@@ -679,7 +681,7 @@ def create_metricas_blueprint(tipos_permitidos):
             None
         )
 
-        return render_template(
+        resposta = render_template(
             "metricas/index.html",
             status_tarefas=STATUS_TAREFAS,
             tipos_op_filtro=TIPOS_OP_FILTRO,
@@ -725,5 +727,12 @@ def create_metricas_blueprint(tipos_permitidos):
             formatar_data=formatar_data,
             formatar_data_hora=formatar_data_hora,
         )
+        current_app.logger.info(
+            "metricas_timing tarefas=%s ops=%s total_ms=%.1f",
+            len(tarefas),
+            len(ops_filtradas),
+            (perf_time.perf_counter() - inicio_metricas) * 1000,
+        )
+        return resposta
 
     return metricas_bp

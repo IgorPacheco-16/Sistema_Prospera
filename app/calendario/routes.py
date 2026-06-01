@@ -1,6 +1,7 @@
+import time
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, render_template, request, session, url_for
+from flask import Blueprint, current_app, render_template, request, session, url_for
 from sqlalchemy.orm import load_only, selectinload
 
 from database.models import OP, OPSetor, Setor, Tarefa, User
@@ -399,6 +400,7 @@ def create_calendario_blueprint(login_required):
     @calendario_bp.route("/calendario")
     @login_required
     def calendario():
+        inicio_calendario = time.perf_counter()
         hoje = hoje_brasilia()
         tipo = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
@@ -530,7 +532,7 @@ def create_calendario_blueprint(login_required):
         resumo = resumo_secoes(secoes)
         total_tarefas = sum(resumo.values())
 
-        return render_template(
+        resposta = render_template(
             "calendario/index.html",
             secoes=secoes,
             resumo=resumo,
@@ -547,5 +549,12 @@ def create_calendario_blueprint(login_required):
             tipos_op_filtro=TIPOS_OP_FILTRO,
             periodos_filtro=PERIODOS_FILTRO,
         )
+        current_app.logger.info(
+            "calendario_timing usuario_tipo=%s tarefas=%s total_ms=%.1f",
+            tipo,
+            total_tarefas,
+            (time.perf_counter() - inicio_calendario) * 1000,
+        )
+        return resposta
 
     return calendario_bp

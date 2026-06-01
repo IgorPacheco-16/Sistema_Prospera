@@ -1,7 +1,8 @@
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, url_for
+from flask import Blueprint, current_app, jsonify, render_template, url_for
 from sqlalchemy.orm import selectinload
 
 from database.models import OP, Tarefa
@@ -293,6 +294,14 @@ def create_slides_blueprint(tipos_permitidos):
     @slides_bp.route("/api/slides")
     @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "ESPECTADOR")
     def api_slides():
-        return jsonify(montar_payload_slides())
+        inicio_slides = time.perf_counter()
+        payload = montar_payload_slides()
+        resposta = jsonify(payload)
+        current_app.logger.info(
+            "api_slides_timing slides=%s total_ms=%.1f",
+            len(payload.get("slides", [])),
+            (time.perf_counter() - inicio_slides) * 1000,
+        )
+        return resposta
 
     return slides_bp

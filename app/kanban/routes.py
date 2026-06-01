@@ -1,6 +1,7 @@
+import time
 from datetime import timedelta
 
-from flask import Blueprint, render_template, request, session, url_for
+from flask import Blueprint, current_app, render_template, request, session, url_for
 from sqlalchemy.orm import load_only, selectinload
 
 from database.models import OP, OPSetor, Setor, Tarefa, User
@@ -269,6 +270,7 @@ def create_kanban_blueprint(login_required):
     @kanban_bp.route("/kanban")
     @login_required
     def kanban():
+        inicio_kanban = time.perf_counter()
         hoje = hoje_brasilia()
         tipo = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
@@ -399,7 +401,7 @@ def create_kanban_blueprint(login_required):
                 "tarefas": tarefas_por_status[coluna["status"]],
             })
 
-        return render_template(
+        resposta = render_template(
             "kanban/index.html",
             colunas=colunas,
             today=hoje,
@@ -413,5 +415,12 @@ def create_kanban_blueprint(login_required):
             tipos_op_filtro=TIPOS_OP_FILTRO,
             prazos_filtro=PRAZOS_FILTRO,
         )
+        current_app.logger.info(
+            "kanban_timing usuario_tipo=%s tarefas=%s total_ms=%.1f",
+            tipo,
+            len(tarefas),
+            (time.perf_counter() - inicio_kanban) * 1000,
+        )
+        return resposta
 
     return kanban_bp

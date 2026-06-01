@@ -1,6 +1,7 @@
 import os
+import time
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
 from database.models import db, Notificacao
 from tempo import formatar_data_hora_brasilia
@@ -19,13 +20,21 @@ def create_notificacoes_blueprint(
     @notificacoes_bp.route("/notificacoes")
     @login_required
     def notificacoes():
+        inicio_notificacoes = time.perf_counter()
         gerar_notificacoes_pendentes(enviar_emails=False)
 
         lista = query_notificacoes_usuario().order_by(
             Notificacao.data.desc()
         ).limit(30).all()
 
-        return render_template("notificacoes/index.html", notificacoes=lista)
+        resposta = render_template("notificacoes/index.html", notificacoes=lista)
+        current_app.logger.info(
+            "notificacoes_timing usuario_tipo=%s notificacoes=%s total_ms=%.1f",
+            session.get("tipo"),
+            len(lista),
+            (time.perf_counter() - inicio_notificacoes) * 1000,
+        )
+        return resposta
 
     @notificacoes_bp.route("/ler_notificacao/<int:id>", methods=["POST"])
     @login_required
