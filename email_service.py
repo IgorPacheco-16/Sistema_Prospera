@@ -8,6 +8,7 @@ from flask import current_app, has_app_context
 
 
 ENV_ALIASES = {
+    "MAIL_ENABLED": ("MAIL_ENABLED", "EMAIL_ENABLED", "SMTP_ENABLED"),
     "MAIL_SERVER": ("MAIL_SERVER", "SMTP_HOST", "SMTP_SERVER", "EMAIL_HOST", "EMAIL_SERVER"),
     "MAIL_PORT": ("MAIL_PORT", "SMTP_PORT", "EMAIL_PORT"),
     "MAIL_USERNAME": ("MAIL_USERNAME", "SMTP_USER", "SMTP_USERNAME", "EMAIL_USER", "EMAIL_USERNAME"),
@@ -28,6 +29,7 @@ CONFIG_OBRIGATORIA = (
 
 @dataclass
 class EmailConfig:
+    enabled: bool
     server: str | None
     port: int | None
     username: str | None
@@ -47,6 +49,7 @@ class EmailSendResult:
     enviado: bool
     erro: str | None = None
     faltando_config: tuple[str, ...] = ()
+    desativado: bool = False
 
 
 def _logger():
@@ -83,6 +86,7 @@ def carregar_config_email(app):
         if valor is not None:
             app.config[chave] = valor
 
+    app.config.setdefault("MAIL_ENABLED", "true")
     app.config.setdefault("MAIL_USE_TLS", "true")
     app.config.setdefault("MAIL_USE_SSL", "false")
 
@@ -112,6 +116,7 @@ def configuracao_email():
         use_tls = False
 
     return EmailConfig(
+        enabled=parse_bool(valores.get("MAIL_ENABLED"), default=True),
         server=valores.get("MAIL_SERVER"),
         port=porta,
         username=valores.get("MAIL_USERNAME"),
@@ -124,7 +129,8 @@ def configuracao_email():
 
 
 def smtp_configurado():
-    return configuracao_email().configurado
+    config = configuracao_email()
+    return config.enabled and config.configurado
 
 
 def _erro_config_ausente(missing):
@@ -141,6 +147,10 @@ def enviar_email(destinatarios, assunto, texto, html=None):
         return EmailSendResult(False, erro="Nenhum destinatario informado.")
 
     config = configuracao_email()
+    if not config.enabled:
+        _logger().info("email_nao_enviado motivo=mail_desativado")
+        return EmailSendResult(False, erro="Envio de email desativado.", desativado=True)
+
     if not config.configurado:
         erro = _erro_config_ausente(config.missing)
         log = _logger()
@@ -172,3 +182,46 @@ def enviar_email(destinatarios, assunto, texto, html=None):
             type(erro).__name__,
         )
         return EmailSendResult(False, erro=f"Falha SMTP: {type(erro).__name__}")
+
+
+def corpo_codigo_recuperacao(codigo):
+    return (
+        "Ola!\n\n"
+        "Recebemos uma solicitacao para redefinir sua senha no sistema da "
+        "Prospera Producoes.\n\n"
+        "Seu codigo de verificacao e:\n\n"
+        f"{codigo}\n\n"
+        "Este codigo expira em 10 minutos.\n\n"
+        "Se voce nao solicitou essa alteracao, ignore este e-mail.\n\n"
+        "Atenciosamente,\n"
+        "Prospera Producoes"
+    )
+
+
+def corpo_codigo_cadastro(codigo):
+    return (
+        "Ola!\n\n"
+        "Use o codigo abaixo para concluir seu cadastro no sistema da "
+        "Prospera Producoes:\n\n"
+        f"{codigo}\n\n"
+        "Este codigo expira em 15 minutos.\n\n"
+        "Se voce nao solicitou esse cadastro, ignore este e-mail.\n\n"
+        "Atenciosamente,\n"
+        "Prospera Producoes"
+    )
+
+
+def enviar_codigo_recuperacao(destinatario, codigo):
+    return enviar_email(
+        [destinatario],
+        "Codigo de recuperacao de senha - Prospera Producoes",
+        corpo_codigo_recuperacao(codigo),
+    )
+
+
+def enviar_codigo_cadastro(destinatario, codigo):
+    return enviar_email(
+        [destinatario],
+        "Codigo de verificacao - Sistema Prospera Producoes",
+        corpo_codigo_cadastro(codigo),
+    )

@@ -4,7 +4,7 @@ import secrets
 from flask import redirect, session, url_for
 
 from database.models import User
-from email_service import enviar_email
+from email_service import enviar_codigo_cadastro, enviar_codigo_recuperacao
 
 
 def is_admin():
@@ -130,24 +130,10 @@ def gerar_codigo_recuperacao():
 
 
 def enviar_email_recuperacao(destinatario, codigo):
-    resultado = enviar_email(
-        [destinatario],
-        "Redefinicao de senha - Sistema OP",
-        "Use o codigo abaixo para redefinir sua senha. "
-        "Ele expira em 10 minutos.\n\n"
-        f"Codigo: {codigo}\n\n"
-        "Se voce nao solicitou esta alteracao, ignore este email.",
-    )
+    resultado = enviar_codigo_recuperacao(destinatario, codigo)
     return resultado.enviado
 
 
 def enviar_email_cadastro(destinatario, codigo):
-    resultado = enviar_email(
-        [destinatario],
-        "Codigo de verificacao - Sistema OP",
-        "Use o codigo abaixo para continuar a criacao da sua conta. "
-        "Ele expira em 15 minutos.\n\n"
-        f"Codigo: {codigo}\n\n"
-        "Se voce nao solicitou este cadastro, ignore este email.",
-    )
+    resultado = enviar_codigo_cadastro(destinatario, codigo)
     return resultado.enviado

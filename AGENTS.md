@@ -1,63 +1,170 @@
-## Objetivo do projeto
+## Visao geral do projeto
 
-Este é um sistema interno da Próspera Produções para gerenciar Ordens de Produção, chamadas de OPs.
+Este e um sistema interno da Prospera Producoes para gestao de Ordens de Producao, chamadas de OPs.
 
-O fluxo principal é:
+O fluxo principal e:
 
-1. Atendente cria uma OP com a data de finalização e se é ou não uma OP de prioridade alta.
-2. Atendente seleciona os setores que estarão envolvidos.
-3. PCP é notificado, então ele entra na nova OP e cria tarefas para cada setor, definindo os prazos individuais de cada tarefa.
-4. Cada setor é notificado, então entra na OP e visualiza suas tarefas e marca como entregue.
-5. Atendente recebe a notificação de entrega, podendo validar como entregue ou recusar.
-6. Quando todas as tarefas forem entregues e validadas, a OP pode ser concluída ao atendente clicar em "OP finalizada".
+1. Atendente cria uma OP, define prazo final e marca alta prioridade quando necessario.
+2. Atendente seleciona os setores envolvidos.
+3. PCP e notificado, acessa a OP e cria tarefas para cada setor com prazos individuais.
+4. Cada setor e notificado, acessa suas tarefas e marca entregas.
+5. Atendente ou usuario autorizado valida ou recusa entregas.
+6. Quando todas as tarefas forem entregues e validadas, a OP pode ser finalizada.
 
-## Stack atual
+## Stack principal
 
 - Python
 - Flask
 - Jinja2
-- SQLite
 - SQLAlchemy
+- Flask-Migrate/Alembic
+- PostgreSQL/Supabase em producao
+- SQLite apenas para desenvolvimento/testes, quando aplicavel
+- Render para deploy
 - Bootstrap
-- CSS próprio em `static/css/theme.css`
+- CSS proprio em `static/css/theme.css`
+
+## Principais areas do sistema
+
+- Autenticacao, login, cadastro com codigo por e-mail e recuperacao de senha.
+- Usuarios, permissoes e status ativo/inativo.
+- OPs, setores envolvidos e tarefas por setor.
+- Dashboard, kanban, calendario e metricas.
+- Notificacoes internas e e-mails operacionais.
+- Slides TV.
+- Arquivamento de OPs.
+
+## Papeis de usuario
+
+- `ADMIN`: administra usuarios, permissoes e acessa as areas de gestao.
+- `ATENDENTE`: cria e acompanha OPs, valida entregas e finaliza OPs.
+- `PCP`: planeja OPs e cria tarefas para setores.
+- `SETOR`: executa tarefas do setor vinculado.
+- `ESPECTADOR`: visualiza informacoes permitidas sem executar acoes operacionais.
 
 ## Regras importantes
 
-- Não alterar código sem antes explicar o plano.
-- Não quebrar o fluxo atual de OPs.
-- Preservar o funcionamento de login, dashboard, calendário e notificações.
-- Priorizar mudanças pequenas, seguras e testáveis.
-- Sempre verificar se as rotas existem antes de criar botões ou links.
-- Padronizar todos os templates usando `static/css/theme.css`.
-- Manter o sistema simples, didático e fácil de entender.
+- Nao alterar codigo sem antes explicar o plano.
+- Nao fazer commit automaticamente.
+- Nao expor credenciais, tokens, senhas ou codigos sensiveis em codigo, logs ou mensagens de erro.
+- Nao usar dados de teste em producao.
+- `APP_ENV=production` deve exigir banco PostgreSQL valido.
+- Seeds, usuarios de teste e rotas de teste devem ficar restritos a `development`, `test` ou ambientes locais.
+- Preservar login, dashboard, calendario, kanban, notificacoes e fluxo de OPs.
+- Preservar regras de permissao existentes ao alterar rotas ou templates.
+- Sempre verificar se uma rota existe antes de criar botoes ou links.
+- Preferir arquivar OPs em vez de excluir dados operacionais.
+- Padronizar templates usando `static/css/theme.css`.
+- Manter mudancas pequenas, seguras, didaticas e testaveis.
+- Manter testes passando antes de finalizar qualquer alteracao.
+- Refatorar `app.py` em Blueprints somente depois de estabilizar rotas, permissoes, modelos e fluxos principais.
 
-## Problemas conhecidos
+## E-mails
 
-- `app.py` está concentrando responsabilidades demais.
-- Algumas rotas usadas no HTML ainda não existem.
-- Algumas páginas usam CSS inconsistente.
-- Permissões precisam ser melhor centralizadas.
-- O fluxo de usuários ativos/senha ainda precisa ser melhorado.
-- OPSetor e Tarefa precisam ficar mais consistentes.
-- Campo de alta prioridade ainda precisa ser implementado no model.
+O sistema depende de e-mail para fluxos criticos:
 
-## Próximas prioridades
+- Codigo de cadastro/validacao de usuario.
+- Codigo de recuperacao de senha.
+- Notificacoes operacionais futuras ou ja existentes.
 
-1. Corrigir rotas quebradas.
-2. Criar modelos individuais para cada página mas manter e padronizar CSS.
-3. Melhorar permissões com decorators.
-4. Deixar o sistema de login com mais segurança e criar uma forma eficiente de cadastrar emails e permissões sem depender de entrar no backend.
-5. Corrigir modelagem de OP, setor e tarefa.
-6. Implementar alta prioridade.
-7. Melhorar dashboard.
-8. Só depois refatorar o `app.py` em Blueprints.
+Toda logica de envio deve passar por `email_service.py`. Rotas nao devem montar SMTP diretamente nem conter credenciais.
 
-## Critério de conclusão
+Variaveis de ambiente esperadas:
 
-Antes de finalizar qualquer alteração:
+```env
+MAIL_ENABLED=false
+MAIL_SERVER=smtp.example.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=usuario@example.com
+MAIL_PASSWORD=senha-ou-token-do-provedor
+MAIL_DEFAULT_SENDER=sistema@example.com
+```
+
+Regras de seguranca para e-mail:
+
+- Em producao, habilitar envio real somente com `MAIL_ENABLED=true` e SMTP completo.
+- Em desenvolvimento/testes, manter envio real desativado quando nao for necessario.
+- Testes nunca devem enviar e-mails reais.
+- Nunca logar senha, token SMTP ou codigo completo de verificacao.
+- Erros SMTP devem gerar mensagem amigavel para o usuario.
+
+## Variaveis principais de ambiente
+
+```env
+APP_ENV=development
+SECRET_KEY=troque-por-um-valor-forte
+DATABASE_URL=postgresql://usuario:senha@host:5432/banco
+APP_BASE_URL=https://seu-servico.onrender.com
+MAIL_ENABLED=false
+MAIL_SERVER=smtp.example.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=usuario@example.com
+MAIL_PASSWORD=senha-ou-token-do-provedor
+MAIL_DEFAULT_SENDER=sistema@example.com
+```
+
+Nao preencher valores reais em arquivos versionados.
+
+## Comandos uteis
+
+Rodar testes:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Iniciar app localmente:
+
+```powershell
+$env:FLASK_APP = "app.py"
+$env:APP_ENV = "development"
+flask run
+```
+
+Rodar migracoes pendentes:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask db upgrade
+```
+
+Criar nova migracao:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask db migrate -m "descricao_da_migracao"
+```
+
+Aplicar migracao:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask db upgrade
+```
+
+Criar primeiro administrador:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask criar-admin
+```
+
+Testar SMTP real manualmente:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask testar-email --para email@dominio.com
+```
+
+## Criterio de conclusao
+
+Antes de finalizar qualquer alteracao:
 
 - O projeto deve rodar sem erro.
-- As páginas principais devem abrir.
+- As paginas principais devem abrir.
 - Nenhuma rota existente deve quebrar.
 - O visual claro/escuro deve continuar funcionando.
 - O fluxo de OP deve continuar coerente.
+- Testes relevantes devem passar.

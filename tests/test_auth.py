@@ -1,4 +1,5 @@
 from datetime import timedelta
+import re
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -6,8 +7,8 @@ from database.models import CadastroPendente, db, Notificacao, PasswordResetToke
 from tempo import agora_brasilia
 
 
-def configurar_email_fake(monkeypatch):
-    import app as app_module
+def configurar_email_fake(monkeypatch, enviado=True):
+    import email_service
 
     chamadas = []
 
@@ -20,17 +21,22 @@ def configurar_email_fake(monkeypatch):
         })
 
         class Resultado:
-            enviado = True
+            pass
 
-        return Resultado()
+        resultado = Resultado()
+        resultado.enviado = enviado
+        resultado.erro = None if enviado else "falha fake"
+        resultado.desativado = False
 
-    monkeypatch.setattr(app_module.security_module, "enviar_email", enviar_email_fake)
+        return resultado
+
+    monkeypatch.setattr(email_service, "enviar_email", enviar_email_fake)
     return chamadas
 
 
 def codigo_enviado(chamadas):
     texto = chamadas[-1]["texto"]
-    return texto.split("Codigo: ", 1)[1].splitlines()[0].strip()
+    return re.search(r"(?m)^\d{6}$", texto).group(0)
 
 
 def iniciar_cadastro(client, monkeypatch, email="cadastro@teste.com"):
@@ -119,7 +125,19 @@ def test_cadastro_novo_envia_codigo(client, monkeypatch):
     assert cadastro.codigo_hash != codigo
     assert check_password_hash(cadastro.codigo_hash, codigo)
     assert chamadas[0]["destinatarios"] == ["cadastro@teste.com"]
-    assert chamadas[0]["assunto"] == "Codigo de verificacao - Sistema OP"
+    assert chamadas[0]["assunto"] == "Codigo de verificacao - Sistema Prospera Producoes"
+
+
+def test_cadastro_falha_envio_nao_cria_pendente(client, monkeypatch):
+    chamadas = configurar_email_fake(monkeypatch, enviado=False)
+
+    resposta = client.post("/criar_conta", data={"email": "falha@teste.com"})
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert chamadas
+    assert "Nao foi possivel enviar o codigo agora" in html
+    assert CadastroPendente.query.filter_by(email="falha@teste.com").first() is None
 
 
 def test_codigo_correto_permite_avancar(client, monkeypatch):
@@ -354,24 +372,7 @@ def test_botao_mostrar_senha_aparece_nas_telas_de_senha(client, login_as):
 
 
 def test_esqueci_senha_chama_servico_de_email(client, app, monkeypatch):
-    import app as app_module
-
-    chamadas = []
-
-    def enviar_email_fake(destinatarios, assunto, texto, html=None):
-        chamadas.append({
-            "destinatarios": destinatarios,
-            "assunto": assunto,
-            "texto": texto,
-            "html": html,
-        })
-
-        class Resultado:
-            enviado = True
-
-        return Resultado()
-
-    monkeypatch.setattr(app_module.security_module, "enviar_email", enviar_email_fake)
+    chamadas = configurar_email_fake(monkeypatch)
 
     resposta = client.post("/esqueci_senha", data={"email": "admin@teste.com"})
 
@@ -381,8 +382,8 @@ def test_esqueci_senha_chama_servico_de_email(client, app, monkeypatch):
     assert token is not None
     assert chamadas
     assert chamadas[0]["destinatarios"] == ["admin@teste.com"]
-    assert chamadas[0]["assunto"] == "Redefinicao de senha - Sistema OP"
-    assert "Codigo:" in chamadas[0]["texto"]
+    assert chamadas[0]["assunto"] == "Codigo de recuperacao de senha - Prospera Producoes"
+    assert codigo in chamadas[0]["texto"]
 
     resposta_redefinir = client.post("/redefinir_senha", data={
         "codigo": codigo,
@@ -393,3 +394,19 @@ def test_esqueci_senha_chama_servico_de_email(client, app, monkeypatch):
 
     assert resposta_redefinir.status_code == 302
     assert check_password_hash(usuario.senha, "nova-recuperada")
+
+
+def test_esqueci_senha_falha_envio_nao_grava_token(client, monkeypatch):
+    chamadas = configurar_email_fake(monkeypatch, enviado=False)
+
+    resposta = client.post("/esqueci_senha", data={"email": "admin@teste.com"})
+    html = resposta.get_data(as_text=True)
+    token = PasswordResetToken.query.join(User).filter(User.email == "admin@teste.com").first()
+
+    assert resposta.status_code == 200
+    assert chamadas
+    assert "Nao foi possivel enviar o codigo agora" in html
+    assert token is None
+
+    with client.session_transaction() as sess:
+        assert "reset_email" not in sess

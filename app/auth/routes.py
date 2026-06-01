@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.models import CadastroPendente, db, PasswordResetToken, Setor, User
@@ -8,6 +8,10 @@ from tempo import agora_brasilia
 
 
 MAX_TENTATIVAS_CADASTRO = 5
+ERRO_ENVIO_CODIGO = (
+    "Nao foi possivel enviar o codigo agora. "
+    "Tente novamente em alguns instantes."
+)
 
 
 def create_auth_blueprint(
@@ -87,8 +91,20 @@ def create_auth_blueprint(
                     usado=False
                 )
                 db.session.add(token)
+                if not enviar_email_recuperacao(user.email, codigo):
+                    db.session.rollback()
+                    session.pop("reset_email", None)
+                    current_app.logger.warning(
+                        "codigo_recuperacao_email_nao_enviado user_id=%s",
+                        user.id,
+                    )
+                    return render_template(
+                        "auth/esqueci_senha.html",
+                        erro=ERRO_ENVIO_CODIGO,
+                        mostrar_redefinir=False
+                    )
+
                 db.session.commit()
-                enviar_email_recuperacao(user.email, codigo)
             else:
                 db.session.commit()
 
@@ -152,12 +168,10 @@ def create_auth_blueprint(
 
             if not enviar_email_cadastro(email, codigo):
                 db.session.rollback()
+                current_app.logger.warning("codigo_cadastro_email_nao_enviado")
                 return render_template(
                     "auth/criar_conta_email.html",
-                    erro=(
-                        "Não foi possível enviar o código agora. "
-                        "Tente novamente mais tarde."
-                    )
+                    erro=ERRO_ENVIO_CODIGO
                 )
 
             db.session.commit()
