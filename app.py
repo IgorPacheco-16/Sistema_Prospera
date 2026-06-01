@@ -94,12 +94,14 @@ registrar_historico = historico_module.registrar_historico
 link_op = notificacoes_module.link_op
 link_tarefa = notificacoes_module.link_tarefa
 query_notificacoes_usuario = notificacoes_module.query_notificacoes_usuario
+notificacao_pertence_ao_usuario_logado = notificacoes_module.notificacao_pertence_ao_usuario_logado
 criar_notificacao = notificacoes_module.criar_notificacao
 enviar_email_operacional = notificacoes_module.enviar_email_operacional
 gerar_notificacoes_pendentes = notificacoes_module.gerar_notificacoes_pendentes
 verificar_atrasos = notificacoes_module.verificar_atrasos
 mensagem_op = notificacoes_module.mensagem_op
 mensagem_tarefa = notificacoes_module.mensagem_tarefa
+usuarios_notificacao_validacao_tarefa = notificacoes_module.usuarios_notificacao_validacao_tarefa
 categoria_notificacao = notificacoes_module.categoria_notificacao
 create_notificacoes_blueprint = notificacoes_routes_module.create_notificacoes_blueprint
 create_auth_blueprint = auth_routes_module.create_auth_blueprint
@@ -209,6 +211,7 @@ notificacoes_bp = create_notificacoes_blueprint(
     is_setor=is_setor,
     gerar_notificacoes_pendentes=gerar_notificacoes_pendentes,
     query_notificacoes_usuario=query_notificacoes_usuario,
+    notificacao_pertence_ao_usuario_logado=notificacao_pertence_ao_usuario_logado,
     criar_notificacao=criar_notificacao,
     categoria_notificacao=categoria_notificacao
 )
@@ -253,6 +256,7 @@ tarefas_bp = create_tarefas_blueprint(
     mensagem_tarefa=mensagem_tarefa,
     link_tarefa=link_tarefa,
     enviar_email_operacional=enviar_email_operacional,
+    usuarios_notificacao_validacao_tarefa=usuarios_notificacao_validacao_tarefa,
     registrar_historico=registrar_historico
 )
 app.register_blueprint(tarefas_bp)

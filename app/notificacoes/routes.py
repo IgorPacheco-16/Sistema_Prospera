@@ -12,6 +12,7 @@ def create_notificacoes_blueprint(
     is_setor,
     gerar_notificacoes_pendentes,
     query_notificacoes_usuario,
+    notificacao_pertence_ao_usuario_logado,
     criar_notificacao,
     categoria_notificacao
 ):
@@ -41,10 +42,7 @@ def create_notificacoes_blueprint(
     def ler_notificacao(id):
         notif = Notificacao.query.get_or_404(id)
 
-        if notif.usuario != session.get("tipo"):
-            return "Acesso negado", 403
-
-        if is_setor() and notif.setor_id != session.get("setor_id"):
+        if not notificacao_pertence_ao_usuario_logado(notif):
             return "Acesso negado", 403
 
         notif.lida = True

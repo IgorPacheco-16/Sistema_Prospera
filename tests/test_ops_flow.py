@@ -622,7 +622,7 @@ def test_entrega_de_tarefa_notifica_atendente_e_pcp(client, login_as, tarefa):
     assert tarefa.enviada_validacao_em is not None
     assert tarefa.entregue_em is not None
     assert Notificacao.query.filter_by(
-        usuario="ATENDENTE",
+        usuario="atendente@teste.com",
         tarefa_id=tarefa.id,
         tipo_evento="tarefa_aguardando_validacao"
     ).first()
@@ -669,6 +669,63 @@ def test_entrega_de_tarefa_sem_observacao_continua_funcionando(client, login_as,
     assert resposta.status_code == 302
     assert tarefa.status == "EM VALIDAÇÃO"
     assert tarefa.observacao_entrega is None
+
+
+def test_entrega_de_tarefa_com_responsavel_notifica_validadores(client, login_as, tarefa, app, monkeypatch):
+    import app as app_module
+
+    app.config["EMAILS_OPERACIONAIS_ATIVOS"] = True
+    services = app_module.notificacoes_module
+    chamadas_email = []
+    responsavel = User(
+        email="responsavel.validacao@teste.com",
+        senha="hash",
+        tipo="SETOR",
+        setor_id=tarefa.setor_id,
+        ativo=True,
+    )
+    db.session.add(responsavel)
+    db.session.flush()
+    tarefa.responsaveis = [responsavel]
+    tarefa.status = "EM ANDAMENTO"
+    db.session.commit()
+    login_as("SETOR", email="responsavel.validacao@teste.com", setor_id=tarefa.setor_id)
+
+    monkeypatch.setattr(services, "smtp_configurado", lambda: True)
+
+    def enviar_email_fake(destinatarios, assunto, texto, html=None):
+        chamadas_email.append(destinatarios)
+
+        class Resultado:
+            enviado = True
+            erro = None
+
+        return Resultado()
+
+    monkeypatch.setattr(services, "enviar_email_smtp", enviar_email_fake)
+
+    resposta = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    assert resposta.status_code == 302
+    assert Notificacao.query.filter_by(
+        usuario="atendente@teste.com",
+        tarefa_id=tarefa.id,
+        tipo_evento="tarefa_aguardando_validacao"
+    ).first()
+    assert Notificacao.query.filter_by(
+        usuario="PCP",
+        tarefa_id=tarefa.id,
+        tipo_evento="tarefa_aguardando_validacao"
+    ).first()
+    assert not Notificacao.query.filter_by(
+        usuario="responsavel.validacao@teste.com",
+        tarefa_id=tarefa.id,
+        tipo_evento="tarefa_aguardando_validacao"
+    ).first()
+    assert chamadas_email == [["atendente@teste.com", "pcp@teste.com"]]
 
 
 def test_validacao_de_tarefa_notifica_setor(client, login_as, tarefa):
@@ -854,6 +911,111 @@ def test_api_notificacoes_lista_notificacoes_do_usuario(client, login_as, notifi
     assert resposta.status_code == 200
     assert dados["total"] == 1
     assert dados["notificacoes"][0]["id"] == notificacao.id
+
+
+def test_marcar_notificacao_individual_por_papel(client, login_as, notificacao):
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/ler_notificacao/{notificacao.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 200
+    assert notificacao.lida is True
+
+
+def test_marcar_notificacao_individual_por_email(client, login_as, tarefa):
+    notificacao = Notificacao(
+        usuario="atendente@teste.com",
+        mensagem="Notificacao por email",
+        op_id=tarefa.op_id,
+        tarefa_id=tarefa.id,
+        setor_id=tarefa.setor_id,
+        tipo_evento="tarefa_aguardando_validacao"
+    )
+    db.session.add(notificacao)
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/ler_notificacao/{notificacao.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 200
+    assert notificacao.lida is True
+
+
+def test_setor_marca_notificacao_individual_do_proprio_setor(client, login_as, tarefa):
+    notificacao = Notificacao(
+        usuario="SETOR",
+        mensagem="Notificacao do setor",
+        op_id=tarefa.op_id,
+        tarefa_id=tarefa.id,
+        setor_id=tarefa.setor_id,
+        tipo_evento="tarefa_criada"
+    )
+    db.session.add(notificacao)
+    db.session.commit()
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/ler_notificacao/{notificacao.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 200
+    assert notificacao.lida is True
+
+
+def test_setor_nao_marca_notificacao_individual_de_outro_setor(client, login_as, tarefa, setores):
+    notificacao = Notificacao(
+        usuario="SETOR",
+        mensagem="Notificacao de outro setor",
+        op_id=tarefa.op_id,
+        tarefa_id=tarefa.id,
+        setor_id=setores["PCP"].id,
+        tipo_evento="tarefa_criada"
+    )
+    db.session.add(notificacao)
+    db.session.commit()
+    login_as("SETOR", setor_id=tarefa.setor_id)
+
+    resposta = client.post(
+        f"/ler_notificacao/{notificacao.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 403
+    assert notificacao.lida is False
+
+
+def test_usuario_nao_marca_notificacao_individual_de_outro_email(client, login_as, tarefa):
+    notificacao = Notificacao(
+        usuario="pcp@teste.com",
+        mensagem="Notificacao de outro email",
+        op_id=tarefa.op_id,
+        tarefa_id=tarefa.id,
+        setor_id=tarefa.setor_id,
+        tipo_evento="tarefa_aguardando_validacao"
+    )
+    db.session.add(notificacao)
+    db.session.commit()
+    login_as("ATENDENTE")
+
+    resposta = client.post(
+        f"/ler_notificacao/{notificacao.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+
+    db.session.refresh(notificacao)
+    assert resposta.status_code == 403
+    assert notificacao.lida is False
 
 
 def test_marcar_todas_notificacoes_lidas_altera_apenas_usuario_logado(client, login_as, tarefa):

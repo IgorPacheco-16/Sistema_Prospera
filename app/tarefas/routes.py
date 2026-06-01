@@ -711,6 +711,7 @@ def create_tarefas_blueprint(
     mensagem_tarefa,
     link_tarefa,
     enviar_email_operacional,
+    usuarios_notificacao_validacao_tarefa,
     registrar_historico
 ):
     tarefas_bp = Blueprint("tarefas_bp", __name__)
@@ -1445,35 +1446,18 @@ def create_tarefas_blueprint(
         if op:
             mensagem = mensagem_tarefa("tarefa_aguardando_validacao", op, tarefa)
             link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
-            if responsaveis_ordenados(tarefa):
-                notificacoes = criar_notificacoes_tarefa(
-                    criar_notificacao,
-                    tarefa,
+            notificacoes = [
+                criar_notificacao(
+                    usuario,
                     mensagem,
-                    link,
-                    "tarefa_aguardando_validacao"
+                    link=link,
+                    op_id=op.id,
+                    tarefa_id=tarefa.id,
+                    setor_id=tarefa.setor_id,
+                    tipo_evento="tarefa_aguardando_validacao"
                 )
-            else:
-                notificacoes = [
-                    criar_notificacao(
-                        "ATENDENTE",
-                        mensagem,
-                        link=link,
-                        op_id=op.id,
-                        tarefa_id=tarefa.id,
-                        setor_id=tarefa.setor_id,
-                        tipo_evento="tarefa_aguardando_validacao"
-                    ),
-                    criar_notificacao(
-                        "PCP",
-                        mensagem,
-                        link=link,
-                        op_id=op.id,
-                        tarefa_id=tarefa.id,
-                        setor_id=tarefa.setor_id,
-                        tipo_evento="tarefa_aguardando_validacao"
-                    ),
-                ]
+                for usuario in usuarios_notificacao_validacao_tarefa(op)
+            ]
             enviar_email_operacional(
                 "tarefa_aguardando_validacao",
                 op=op,

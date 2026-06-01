@@ -174,6 +174,40 @@ def destinatarios_por_tipo(tipo):
     return emails_unicos(query.all(), contexto=f"tipo:{tipo}")
 
 
+def usuario_ativo_por_email(email):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    return User.query.filter_by(email=email, ativo=True).first()
+
+
+def destinatarios_validacao_tarefa(op=None):
+    usuarios = []
+
+    atendente_email = getattr(op, "atendente", None)
+    atendente = usuario_ativo_por_email(atendente_email)
+    if atendente and atendente.tipo == "ATENDENTE":
+        usuarios.append(atendente)
+
+    usuarios.extend(User.query.filter_by(tipo="PCP", ativo=True).all())
+
+    return emails_unicos(usuarios, contexto=f"validacao:op:{getattr(op, 'id', None)}")
+
+
+def usuarios_notificacao_validacao_tarefa(op=None):
+    usuarios = []
+
+    atendente_email = getattr(op, "atendente", None)
+    atendente = usuario_ativo_por_email(atendente_email)
+    if atendente and atendente.tipo == "ATENDENTE":
+        usuarios.append(atendente.email.strip().lower())
+    else:
+        usuarios.append("ATENDENTE")
+
+    usuarios.append("PCP")
+    return list(dict.fromkeys(usuarios))
+
+
 def destinatarios_por_setor(setor_id):
     if not setor_id:
         current_app.logger.warning(
@@ -223,12 +257,7 @@ def destinatarios_email_operacional(evento, op=None, tarefa=None):
         return destinatarios_por_tipo("ATENDENTE") + destinatarios_por_tipo("PCP")
 
     if evento == "tarefa_aguardando_validacao":
-        if responsaveis_ativos_ordenados(tarefa):
-            return destinatarios_por_responsaveis(
-                tarefa,
-                contexto=f"responsaveis:tarefa:{tarefa.id}",
-            )
-        return destinatarios_por_tipo("ATENDENTE") + destinatarios_por_tipo("PCP")
+        return destinatarios_validacao_tarefa(op)
 
     if evento == "tarefa_atrasada":
         if responsaveis_ativos_ordenados(tarefa):
@@ -365,6 +394,22 @@ def query_notificacoes_usuario():
         ))
 
     return query
+
+
+def notificacao_pertence_ao_usuario_logado(notificacao):
+    tipo = session.get("tipo")
+    email = (session.get("usuario") or "").strip().lower()
+    setor_id = session.get("setor_id")
+    destinatario = (getattr(notificacao, "usuario", None) or "").strip()
+    destinatario_normalizado = destinatario.lower()
+
+    if email and destinatario_normalizado == email:
+        return True
+
+    if tipo == "SETOR":
+        return destinatario == "SETOR" and notificacao.setor_id == setor_id
+
+    return bool(tipo and destinatario == tipo)
 
 
 def setores_da_op(op_id):
@@ -835,9 +880,7 @@ def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
         link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
         notificacoes = []
 
-        usuarios_notificacao = usuarios_notificacao_tarefa(tarefa)
-        if usuarios_notificacao == ["SETOR"]:
-            usuarios_notificacao = ["ATENDENTE", "PCP"]
+        usuarios_notificacao = usuarios_notificacao_validacao_tarefa(op)
 
         for usuario in usuarios_notificacao:
             adicionar_se_criada(notificacoes, criar_notificacao_sem_repetir(
