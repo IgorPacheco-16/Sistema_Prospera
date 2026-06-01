@@ -269,8 +269,56 @@
             </div>
 
         </div>
+        {% else %}
+        <div class="col-12">
+            <div class="dashboard-empty-state text-center">
+                Nenhuma OP encontrada com os filtros atuais.
+            </div>
+        </div>
         {% endfor %}
 
+    </div>
+
+    <div class="dashboard-pagination d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 mt-2 mb-4">
+        <div class="dashboard-pagination-summary">
+            {% if paginacao.total_itens %}
+                Mostrando {{ paginacao.inicio }}-{{ paginacao.fim }} de {{ paginacao.total_itens }}
+            {% else %}
+                Nenhum resultado
+            {% endif %}
+        </div>
+
+        <nav aria-label="Paginacao das OPs do dashboard">
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not paginacao.tem_anterior %}disabled{% endif %}">
+                    {% if paginacao.tem_anterior %}
+                    <a class="page-link"
+                       href="{{ url_for('dashboard', page=paginacao.pagina_anterior, **paginacao.argumentos) }}#ops-list">
+                        Anterior
+                    </a>
+                    {% else %}
+                    <span class="page-link">Anterior</span>
+                    {% endif %}
+                </li>
+
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        P&aacute;gina {{ paginacao.pagina_atual }} de {{ paginacao.total_paginas }}
+                    </span>
+                </li>
+
+                <li class="page-item {% if not paginacao.tem_proxima %}disabled{% endif %}">
+                    {% if paginacao.tem_proxima %}
+                    <a class="page-link"
+                       href="{{ url_for('dashboard', page=paginacao.pagina_proxima, **paginacao.argumentos) }}#ops-list">
+                        Pr&oacute;xima
+                    </a>
+                    {% else %}
+                    <span class="page-link">Pr&oacute;xima</span>
+                    {% endif %}
+                </li>
+            </ul>
+        </nav>
     </div>
 
 </div>

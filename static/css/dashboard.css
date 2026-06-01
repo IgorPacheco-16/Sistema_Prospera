@@ -164,6 +164,55 @@ html.dark-mode .dashboard-filters {
 
 
 /* Animação */
+.dashboard-empty-state {
+    background: var(--card-light);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--muted-light);
+    font-weight: 700;
+    padding: 18px;
+}
+
+.dashboard-pagination {
+    color: var(--muted-light);
+}
+
+.dashboard-pagination-summary {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.dashboard-pagination .page-link {
+    border-color: var(--border-light);
+    color: var(--text-light);
+}
+
+.dashboard-pagination .page-item.disabled .page-link {
+    background: rgba(0,0,0,0.03);
+    color: var(--muted-light);
+}
+
+html.dark-mode .dashboard-empty-state {
+    background: var(--card-dark);
+    border-color: var(--border-dark);
+    color: var(--muted-dark);
+}
+
+html.dark-mode .dashboard-pagination {
+    color: var(--muted-dark);
+}
+
+html.dark-mode .dashboard-pagination .page-link {
+    background: var(--card-dark);
+    border-color: var(--border-dark);
+    color: var(--text-dark);
+}
+
+html.dark-mode .dashboard-pagination .page-item.disabled .page-link {
+    background: rgba(255,255,255,0.05);
+    color: var(--muted-dark);
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }

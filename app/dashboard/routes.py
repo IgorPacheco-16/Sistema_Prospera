@@ -14,6 +14,9 @@ from metricas_responsaveis import (
 from tempo import hoje_brasilia
 
 
+OPS_POR_PAGINA_DASHBOARD = 20
+
+
 def contar_ops(query):
     return int(query.with_entities(func.count(OP.id)).order_by(None).scalar() or 0)
 
@@ -131,6 +134,9 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         status = request.args.get("status", "")
         atrasadas_filtro = request.args.get("atrasadas", "")
         filtro = request.args.get("filtro", "")
+        pagina_atual = request.args.get("page", 1, type=int) or 1
+        if pagina_atual < 1:
+            pagina_atual = 1
 
         if status == "FINALIZADA":
             filtro_dashboard = "finalizadas"
@@ -185,18 +191,25 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         else:
             query_ops = query.filter(OP.status == "EM ANDAMENTO")
 
-        ops = (
-            query_ops
-            .order_by(
-                case((OP.alta_prioridade.is_(True), 0), else_=1),
-                case((OP.status == "FINALIZADA", 1), else_=0),
-                case((OP.prazo_final.is_(None), 1), else_=0),
-                OP.prazo_final,
-                OP.id,
-            )
-            .all()
+        total_filtrado = contar_ops(query_ops)
+        marcar_tempo("ops_total_filtrado_ms")
+        total_paginas = max(
+            (total_filtrado + OPS_POR_PAGINA_DASHBOARD - 1) // OPS_POR_PAGINA_DASHBOARD,
+            1,
         )
-        marcar_tempo("ops_ms")
+        if pagina_atual > total_paginas:
+            pagina_atual = total_paginas
+
+        offset = (pagina_atual - 1) * OPS_POR_PAGINA_DASHBOARD
+        query_ops_ordenada = query_ops.order_by(
+            case((OP.alta_prioridade.is_(True), 0), else_=1),
+            case((OP.status == "FINALIZADA", 1), else_=0),
+            case((OP.prazo_final.is_(None), 1), else_=0),
+            OP.prazo_final,
+            OP.id,
+        )
+        ops = query_ops_ordenada.limit(OPS_POR_PAGINA_DASHBOARD).offset(offset).all()
+        marcar_tempo("ops_paginadas_ms")
 
         op_ids = [op.id for op in ops]
         tarefas_por_op = {}
@@ -246,6 +259,27 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
                 "validadas": validadas
             })
 
+        inicio_exibicao = offset + 1 if total_filtrado else 0
+        fim_exibicao = offset + len(lista_ops) if total_filtrado else 0
+        argumentos_paginacao = {
+            chave: valor
+            for chave, valor in request.args.items()
+            if chave != "page" and valor
+        }
+        paginacao = {
+            "pagina_atual": pagina_atual,
+            "total_paginas": total_paginas,
+            "por_pagina": OPS_POR_PAGINA_DASHBOARD,
+            "total_itens": total_filtrado,
+            "inicio": inicio_exibicao,
+            "fim": fim_exibicao,
+            "tem_anterior": pagina_atual > 1,
+            "tem_proxima": pagina_atual < total_paginas,
+            "pagina_anterior": pagina_atual - 1,
+            "pagina_proxima": pagina_atual + 1,
+            "argumentos": argumentos_paginacao,
+        }
+
         minhas_metricas = metricas_usuario_dashboard(usuario_logado, hoje)
         marcar_tempo("minhas_metricas_ms")
 
@@ -263,14 +297,18 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             status=status,
             filtro_ativo=filtro_ativo,
             atrasadas_filtro=bool(atrasadas_filtro),
-            filtro_dashboard=filtro_dashboard
+            filtro_dashboard=filtro_dashboard,
+            paginacao=paginacao,
         )
         marcar_tempo("render_ms")
 
         current_app.logger.info(
-            "dashboard_timing usuario_tipo=%s ops=%s total_ms=%.1f etapas=%s",
+            "dashboard_timing usuario_tipo=%s ops=%s total_filtrado=%s pagina=%s/%s total_ms=%.1f etapas=%s",
             tipo_usuario,
             len(lista_ops),
+            total_filtrado,
+            pagina_atual,
+            total_paginas,
             (time.perf_counter() - inicio_dashboard) * 1000,
             tempos,
         )
