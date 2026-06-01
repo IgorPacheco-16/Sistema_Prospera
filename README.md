@@ -130,7 +130,7 @@ Rode a suite com:
 
 A recuperacao de senha, o cadastro por codigo e as notificacoes operacionais usam as variaveis `MAIL_*`. As variaveis antigas `SMTP_*` ainda sao aceitas por compatibilidade local.
 
-Use `MAIL_ENABLED=true` para permitir envio SMTP real. Use `EMAILS_OPERACIONAIS_ATIVOS=true` para liberar emails operacionais gerados por notificacoes, atrasos e futuros relatorios consolidados. As duas condicoes devem estar ativas, com SMTP completo, para disparo real de email operacional.
+Use `MAIL_ENABLED=true` para permitir envio SMTP real. Use `EMAILS_OPERACIONAIS_ATIVOS=true` para liberar emails operacionais gerados por notificacoes, atrasos e relatorios consolidados. As duas condicoes devem estar ativas, com SMTP completo, para disparo real de email operacional.
 
 Em desenvolvimento e testes, mantenha `MAIL_ENABLED=false` ou `EMAILS_OPERACIONAIS_ATIVOS=false` quando nao quiser disparar mensagens reais. Testes devem usar mocks e nunca enviar emails reais.
 
@@ -150,7 +150,9 @@ Tarefa enviada para validacao deve notificar os validadores: o atendente ativo v
 
 ## Relatorios operacionais por email
 
-O digest consolidado ainda nao esta implementado nesta etapa. O desenho recomendado e criar um comando Flask novo, por exemplo:
+O sistema possui um relatorio operacional consolidado enviado individualmente por usuario. Ele nunca envia um email coletivo para um setor, nunca coloca varios usuarios no mesmo `to` e nao usa copia coletiva. Usuarios sem pendencias relevantes nao recebem email vazio.
+
+Comandos:
 
 ```powershell
 $env:FLASK_APP = "app.py"
@@ -158,29 +160,26 @@ flask enviar-relatorio-operacional --janela 10h
 flask enviar-relatorio-operacional --janela 15h
 ```
 
-O comando atual `flask verificar-atrasos --enviar-email` deve ser refatorado para compartilhar consultas e geracao de notificacoes, mas nao deve ser usado como digest final. Ele hoje trabalha por evento e pode gerar multiplos emails separados; o novo comando deve consolidar por destinatario.
+Regras de destinatario:
 
-Conteudo minimo do relatorio:
+- `SETOR`: recebe apenas tarefas do proprio setor. Se a tarefa possui responsaveis atribuidos, somente esses responsaveis recebem. Se a tarefa nao possui responsavel especifico, todos os usuarios ativos daquele setor recebem a tarefa em emails individuais.
+- `PCP`: cada PCP ativo recebe seu proprio relatorio com visao ampla de OPs, tarefas, validacoes e pendencias de planejamento.
+- `ATENDENTE`: recebe itens das OPs sob sua responsabilidade quando `OP.atendente` corresponde ao email do usuario.
+- `ADMIN`: nao entra automaticamente no relatorio operacional.
+- `ESPECTADOR`: nao recebe relatorio operacional.
 
-- OPs atrasadas.
-- Tarefas atrasadas.
-- Tarefas proximas do prazo.
-- Tarefas aguardando validacao.
-- OPs urgentes.
-- OPs abertas/criadas recentemente, se ajudar a operacao.
-- Pendencias relevantes por papel e permissao.
+O envio real exige todas as condicoes abaixo:
 
-Agrupamento e permissoes:
+- `MAIL_ENABLED=true`
+- `EMAILS_OPERACIONAIS_ATIVOS=true`
+- SMTP completo (`MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`)
 
-- `ATENDENTE`: receber itens das OPs sob sua responsabilidade e pendencias de validacao pertinentes.
-- `PCP`: receber visao consolidada de planejamento, atrasos, urgencias e validacoes.
-- `SETOR`: receber apenas tarefas e OPs vinculadas ao seu `setor_id`.
-- `ADMIN`: pode receber visao ampla se a regra de produto confirmar essa necessidade.
-- `ESPECTADOR`: deve ficar fora dos relatorios operacionais.
+Se qualquer condicao estiver falsa, o comando monta o relatorio, nao envia SMTP real e registra o motivo de forma segura. A diferenca principal e: `MAIL_ENABLED` liga/desliga o envio SMTP geral; `EMAILS_OPERACIONAIS_ATIVOS` libera especificamente emails operacionais, incluindo o relatorio consolidado.
 
-Para evitar spam, o comando deve enviar no maximo um email por destinatario em cada janela e nao deve disparar quando `MAIL_ENABLED=false`, `EMAILS_OPERACIONAIS_ATIVOS=false` ou SMTP estiver incompleto.
+Controle de duplicidade:
 
-Para evitar duplicidade robusta entre reexecucoes, a proxima etapa deve criar migration com uma tabela propria, por exemplo `notification_email_deliveries`, contendo destinatario, tipo do relatorio, janela (`10h` ou `15h`), data operacional em `America/Sao_Paulo`, hash/conteudo resumido, status, erro seguro e timestamps. Sem essa tabela, o sistema fica dependente apenas de logs/processo e nao consegue garantir idempotencia em retries.
+- A tabela `notification_email_deliveries` registra usuario, email destinatario, janela, data operacional em `America/Sao_Paulo`, hash/resumo do conteudo, status (`enviado`, `pulou`, `erro`), erro seguro e timestamps.
+- Se um relatorio ja foi enviado para o mesmo usuario na mesma janela e data operacional, uma nova execucao pula esse usuario e registra `duplicado`.
 
 Agendamento no Render:
 
@@ -189,4 +188,4 @@ Agendamento no Render:
 - Rodar `flask enviar-relatorio-operacional --janela 10h` as 13:00 UTC.
 - Rodar `flask enviar-relatorio-operacional --janela 15h` as 18:00 UTC.
 
-Timezone: o produto deve considerar `America/Sao_Paulo`. Em 2026-06-01, a conversao validada foi 10:00 Sao Paulo = 13:00 UTC e 15:00 Sao Paulo = 18:00 UTC. Como o Brasil normalmente opera em UTC-3, esses horarios devem ser revisados se houver mudanca legal de fuso ou horario de verao.
+Timezone: o produto considera `America/Sao_Paulo`. Em 2026-06-01, a conversao validada foi 10:00 Sao Paulo = 13:00 UTC e 15:00 Sao Paulo = 18:00 UTC. Como o Brasil normalmente opera em UTC-3, esses horarios devem ser revisados se houver mudanca legal de fuso ou horario de verao.

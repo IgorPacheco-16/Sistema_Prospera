@@ -299,6 +299,29 @@ class Notificacao(db.Model):
     )
 
 
+class NotificationEmailDelivery(db.Model):
+    __tablename__ = "notification_email_deliveries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    report_type = db.Column(db.String(50), nullable=False, default="relatorio_operacional")
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    recipient_email = db.Column(db.String(100), nullable=False)
+    janela = db.Column(db.String(10), nullable=False)
+    data_operacional = db.Column(db.Date, nullable=False)
+    content_hash = db.Column(db.String(64), nullable=True)
+    content_summary = db.Column(db.String(500), nullable=True)
+    status = db.Column(db.String(20), nullable=False)
+    erro = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        default=agora_brasilia,
+        nullable=False
+    )
+    sent_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship("User")
+
+
 #HISTORICO DE ACOES DA OP
 class HistoricoOP(db.Model):
     __tablename__ = "historico_op"

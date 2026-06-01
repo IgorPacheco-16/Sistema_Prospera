@@ -79,15 +79,52 @@ MAIL_USE_TLS=true
 MAIL_USERNAME=usuario@example.com
 MAIL_PASSWORD=senha-ou-token-do-provedor
 MAIL_DEFAULT_SENDER=sistema@example.com
+EMAILS_OPERACIONAIS_ATIVOS=false
 ```
 
 Regras de seguranca para e-mail:
 
 - Em producao, habilitar envio real somente com `MAIL_ENABLED=true` e SMTP completo.
+- E-mails operacionais consolidados tambem exigem `EMAILS_OPERACIONAIS_ATIVOS=true`.
 - Em desenvolvimento/testes, manter envio real desativado quando nao for necessario.
 - Testes nunca devem enviar e-mails reais.
 - Nunca logar senha, token SMTP ou codigo completo de verificacao.
 - Erros SMTP devem gerar mensagem amigavel para o usuario.
+
+## Relatorio operacional consolidado
+
+O comando do relatorio operacional e:
+
+```powershell
+$env:FLASK_APP = "app.py"
+flask enviar-relatorio-operacional --janela 10h
+flask enviar-relatorio-operacional --janela 15h
+```
+
+Regras obrigatorias:
+
+- O relatorio e sempre individual por usuario.
+- Nao enviar email coletivo para setor.
+- Nao colocar varios usuarios no mesmo `to` nem expor emails de outros usuarios.
+- Tarefa com responsavel especifico entra apenas no relatorio dos responsaveis atribuidos.
+- Tarefa sem responsavel especifico entra no relatorio individual de todos os usuarios ativos do setor vinculado.
+- `SETOR` nunca recebe tarefa de outro setor.
+- `PCP` recebe visao operacional ampla, sempre individual.
+- `ATENDENTE` recebe itens das OPs relacionadas a ele por `OP.atendente`.
+- `ADMIN` nao deve ser incluido automaticamente em tudo sem regra explicita.
+- `ESPECTADOR` nao recebe relatorio operacional.
+- Se nao houver pendencia relevante, nao enviar email vazio.
+
+Horarios:
+
+- 10h em `America/Sao_Paulo`, normalmente 13h UTC no Render.
+- 15h em `America/Sao_Paulo`, normalmente 18h UTC no Render.
+
+Controle:
+
+- A tabela `notification_email_deliveries` registra entregas e pulos por usuario, janela e data operacional.
+- O objetivo e impedir duplicidade de envio para o mesmo usuario na mesma janela/data.
+- `MAIL_ENABLED=false`, `EMAILS_OPERACIONAIS_ATIVOS=false` ou SMTP incompleto devem impedir envio real e registrar motivo seguro.
 
 ## Variaveis principais de ambiente
 
@@ -103,6 +140,7 @@ MAIL_USE_TLS=true
 MAIL_USERNAME=usuario@example.com
 MAIL_PASSWORD=senha-ou-token-do-provedor
 MAIL_DEFAULT_SENDER=sistema@example.com
+EMAILS_OPERACIONAIS_ATIVOS=false
 ```
 
 Nao preencher valores reais em arquivos versionados.

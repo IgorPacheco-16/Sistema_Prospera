@@ -63,6 +63,7 @@ config_module = carregar_modulo("pacheco_config", "app/config.py")
 security_module = carregar_modulo("pacheco_security", "app/security.py")
 historico_module = carregar_modulo("pacheco_historico_services", "app/historico/services.py")
 notificacoes_module = carregar_modulo("pacheco_notificacoes_services", "app/notificacoes/services.py")
+relatorio_module = carregar_modulo("pacheco_relatorio_service", "app/notificacoes/relatorio_service.py")
 notificacoes_routes_module = carregar_modulo("pacheco_notificacoes_routes", "app/notificacoes/routes.py")
 auth_routes_module = carregar_modulo("pacheco_auth_routes", "app/auth/routes.py")
 usuarios_routes_module = carregar_modulo("pacheco_usuarios_routes", "app/usuarios/routes.py")
@@ -103,6 +104,7 @@ mensagem_op = notificacoes_module.mensagem_op
 mensagem_tarefa = notificacoes_module.mensagem_tarefa
 usuarios_notificacao_validacao_tarefa = notificacoes_module.usuarios_notificacao_validacao_tarefa
 categoria_notificacao = notificacoes_module.categoria_notificacao
+enviar_relatorios_operacionais = relatorio_module.enviar_relatorios_operacionais
 create_notificacoes_blueprint = notificacoes_routes_module.create_notificacoes_blueprint
 create_auth_blueprint = auth_routes_module.create_auth_blueprint
 create_usuarios_blueprint = usuarios_routes_module.create_usuarios_blueprint
@@ -517,6 +519,30 @@ def verificar_atrasos_cli(enviar_email):
     )
     if not enviar_email:
         click.echo("Emails nao foram enviados. Use --enviar-email para disparar.")
+
+
+@app.cli.command("enviar-relatorio-operacional")
+@click.option(
+    "--janela",
+    required=True,
+    help="Janela operacional do relatorio. Use 10h ou 15h.",
+)
+def enviar_relatorio_operacional_cli(janela):
+    try:
+        resumo = enviar_relatorios_operacionais(janela)
+    except ValueError as erro:
+        raise click.ClickException(str(erro)) from erro
+
+    click.echo("Relatorio operacional processado.")
+    click.echo(f"Janela: {resumo['janela']}")
+    click.echo(f"Data operacional: {resumo['data_operacional']}")
+    click.echo(f"Usuarios avaliados: {resumo['usuarios_avaliados']}")
+    click.echo(f"Relatorios com pendencias: {resumo['relatorios_com_pendencias']}")
+    click.echo(f"Emails enviados: {resumo['enviados']}")
+    click.echo(f"Pulados: {resumo['pulados']}")
+    click.echo(f"Duplicados: {resumo['duplicados']}")
+    click.echo(f"Sem pendencias: {resumo['sem_pendencias']}")
+    click.echo(f"Erros: {resumo['erros']}")
 
 
 if __name__ == "__main__":
