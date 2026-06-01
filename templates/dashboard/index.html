@@ -1,4 +1,5 @@
 {% extends "base/base.html" %}
+{% from "base/components/pagination.html" import numeric_pagination %}
 
 {% block css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v={{ asset_version('css/dashboard.css') }}">
@@ -288,37 +289,7 @@
             {% endif %}
         </div>
 
-        <nav aria-label="Paginacao das OPs do dashboard">
-            <ul class="pagination mb-0">
-                <li class="page-item {% if not paginacao.tem_anterior %}disabled{% endif %}">
-                    {% if paginacao.tem_anterior %}
-                    <a class="page-link"
-                       href="{{ url_for('dashboard', page=paginacao.pagina_anterior, **paginacao.argumentos) }}#ops-list">
-                        Anterior
-                    </a>
-                    {% else %}
-                    <span class="page-link">Anterior</span>
-                    {% endif %}
-                </li>
-
-                <li class="page-item disabled">
-                    <span class="page-link">
-                        P&aacute;gina {{ paginacao.pagina_atual }} de {{ paginacao.total_paginas }}
-                    </span>
-                </li>
-
-                <li class="page-item {% if not paginacao.tem_proxima %}disabled{% endif %}">
-                    {% if paginacao.tem_proxima %}
-                    <a class="page-link"
-                       href="{{ url_for('dashboard', page=paginacao.pagina_proxima, **paginacao.argumentos) }}#ops-list">
-                        Pr&oacute;xima
-                    </a>
-                    {% else %}
-                    <span class="page-link">Pr&oacute;xima</span>
-                    {% endif %}
-                </li>
-            </ul>
-        </nav>
+        {{ numeric_pagination(paginacao, 'dashboard', 'ops-list', 'Paginacao das OPs do dashboard') }}
     </div>
 
 </div>

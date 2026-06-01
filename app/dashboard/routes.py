@@ -17,6 +17,26 @@ from tempo import hoje_brasilia
 OPS_POR_PAGINA_DASHBOARD = 18
 
 
+def paginas_numericas(pagina_atual, total_paginas, raio=1):
+    if total_paginas <= 7:
+        return list(range(1, total_paginas + 1))
+
+    paginas = {1, total_paginas}
+    for pagina in range(pagina_atual - raio, pagina_atual + raio + 1):
+        if 1 <= pagina <= total_paginas:
+            paginas.add(pagina)
+
+    resultado = []
+    pagina_anterior = None
+    for pagina in sorted(paginas):
+        if pagina_anterior is not None and pagina - pagina_anterior > 1:
+            resultado.append(None)
+        resultado.append(pagina)
+        pagina_anterior = pagina
+
+    return resultado
+
+
 def contar_ops(query):
     return int(query.with_entities(func.count(OP.id)).order_by(None).scalar() or 0)
 
@@ -261,11 +281,16 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
 
         inicio_exibicao = offset + 1 if total_filtrado else 0
         fim_exibicao = offset + len(lista_ops) if total_filtrado else 0
-        argumentos_paginacao = {
-            chave: valor
-            for chave, valor in request.args.items()
-            if chave != "page" and valor
-        }
+        argumentos_paginacao = {}
+        for chave, valores in request.args.lists():
+            if chave == "page":
+                continue
+            valores_validos = [valor for valor in valores if valor]
+            if len(valores_validos) == 1:
+                argumentos_paginacao[chave] = valores_validos[0]
+            elif valores_validos:
+                argumentos_paginacao[chave] = valores_validos
+
         paginacao = {
             "pagina_atual": pagina_atual,
             "total_paginas": total_paginas,
@@ -277,6 +302,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             "tem_proxima": pagina_atual < total_paginas,
             "pagina_anterior": pagina_atual - 1,
             "pagina_proxima": pagina_atual + 1,
+            "paginas": paginas_numericas(pagina_atual, total_paginas),
             "argumentos": argumentos_paginacao,
         }
 

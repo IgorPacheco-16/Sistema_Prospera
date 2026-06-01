@@ -1,0 +1,47 @@
+{% macro numeric_pagination(paginacao, endpoint, anchor=None, aria_label="Paginacao") %}
+<nav aria-label="{{ aria_label }}">
+    <ul class="pagination numeric-pagination mb-0">
+        <li class="page-item {% if not paginacao.tem_anterior %}disabled{% endif %}">
+            {% if paginacao.tem_anterior %}
+            <a class="page-link"
+               href="{{ url_for(endpoint, page=paginacao.pagina_anterior, **paginacao.argumentos) }}{% if anchor %}#{{ anchor }}{% endif %}">
+                Anterior
+            </a>
+            {% else %}
+            <span class="page-link">Anterior</span>
+            {% endif %}
+        </li>
+
+        {% for pagina in paginacao.paginas %}
+            {% if pagina %}
+                <li class="page-item {% if pagina == paginacao.pagina_atual %}active disabled{% endif %}"
+                    {% if pagina == paginacao.pagina_atual %}aria-current="page"{% endif %}>
+                    {% if pagina == paginacao.pagina_atual %}
+                    <span class="page-link">{{ pagina }}</span>
+                    {% else %}
+                    <a class="page-link"
+                       href="{{ url_for(endpoint, page=pagina, **paginacao.argumentos) }}{% if anchor %}#{{ anchor }}{% endif %}">
+                        {{ pagina }}
+                    </a>
+                    {% endif %}
+                </li>
+            {% else %}
+                <li class="page-item disabled numeric-pagination-ellipsis">
+                    <span class="page-link">&hellip;</span>
+                </li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if not paginacao.tem_proxima %}disabled{% endif %}">
+            {% if paginacao.tem_proxima %}
+            <a class="page-link"
+               href="{{ url_for(endpoint, page=paginacao.pagina_proxima, **paginacao.argumentos) }}{% if anchor %}#{{ anchor }}{% endif %}">
+                Pr&oacute;xima
+            </a>
+            {% else %}
+            <span class="page-link">Pr&oacute;xima</span>
+            {% endif %}
+        </li>
+    </ul>
+</nav>
+{% endmacro %}
