@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, TarefaSolicitacao, User
+from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaObservacao, TarefaResponsavel, TarefaSolicitacao, User
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -15,6 +15,7 @@ def create_ops_blueprint(
     is_atendente,
     usuario_pode_acionar_tarefa,
     usuario_pode_validar_tarefa,
+    usuario_pode_observar_tarefa,
     criar_notificacao,
     mensagem_op,
     link_op,
@@ -127,6 +128,9 @@ def create_ops_blueprint(
                 .selectinload(Tarefa.espera_solicitacoes)
                 .selectinload(TarefaEsperaSolicitacao.respondido_por),
                 selectinload(OP.tarefas).selectinload(Tarefa.espera_solicitacao_atual),
+                selectinload(OP.tarefas)
+                .selectinload(Tarefa.observacoes)
+                .selectinload(TarefaObservacao.autor),
                 selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.setor_solicitante),
                 selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.setor_destino),
                 selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.solicitado_por),
@@ -263,6 +267,15 @@ def create_ops_blueprint(
                     )
                 )
                 tarefa.pode_responder_espera = tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
+                tarefa.pode_adicionar_observacao = (
+                    usuario_pode_observar_tarefa(tarefa)
+                    and op_ativa_para_solicitacao
+                )
+                tarefa.observacoes_ativas = [
+                    observacao
+                    for observacao in getattr(tarefa, "observacoes", []) or []
+                    if observacao.deletada_em is None
+                ]
                 tarefa.responsaveis_ordenados = sorted(
                     list(getattr(tarefa, "responsaveis", []) or []),
                     key=lambda usuario: ((usuario.nome or usuario.email or "").casefold(), usuario.id),

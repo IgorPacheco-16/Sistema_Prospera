@@ -505,6 +505,54 @@
                             </div>
                             {% endif %}
 
+                            <div class="task-observations">
+                                <div class="task-observations-header">
+                                    <h3>Observacoes</h3>
+                                    <span>{{ t.observacoes_ativas|length }} registro{% if t.observacoes_ativas|length != 1 %}s{% endif %}</span>
+                                </div>
+
+                                <div class="task-observation-list">
+                                    {% for observacao in t.observacoes_ativas %}
+                                    <div class="task-observation-item">
+                                        <p>{{ observacao.texto }}</p>
+                                        <div class="task-observation-meta">
+                                            <span>{{ observacao.autor.nome or observacao.autor.email if observacao.autor else "Sistema" }}</span>
+                                            <span>{{ observacao.criada_em|data_hora_brasilia }}</span>
+                                        </div>
+                                        {% if tipo == "ADMIN" %}
+                                        <form method="POST" action="{{ url_for('excluir_observacao_tarefa', observacao_id=observacao.id) }}">
+                                            <button class="btn btn-outline-danger btn-sm"
+                                                    type="submit"
+                                                    onclick="return confirm('Excluir esta observacao do historico da tarefa?')">
+                                                Excluir observacao
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <div class="task-observation-empty">
+                                        Nenhuma observacao registrada.
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
+                                {% if t.pode_adicionar_observacao %}
+                                <form method="POST" action="{{ url_for('adicionar_observacao_tarefa', id=t.id) }}" class="task-observation-form">
+                                    <label class="form-label visually-hidden" for="textoObservacao{{ t.id }}">Nova observacao</label>
+                                    <textarea id="textoObservacao{{ t.id }}"
+                                              name="texto"
+                                              class="form-control form-control-sm"
+                                              rows="2"
+                                              maxlength="1000"
+                                              placeholder="Adicionar observacao"
+                                              required></textarea>
+                                    <button class="btn btn-outline-primary btn-sm" type="submit">
+                                        Registrar observacao
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+
                             <div class="task-actions">
                                 <div class="task-secondary-actions">
                                     {% if mostrar_detalhes_repasse %}

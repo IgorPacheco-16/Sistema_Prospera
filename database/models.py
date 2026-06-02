@@ -244,6 +244,41 @@ class Tarefa(db.Model):
     )
 
 
+    observacoes = db.relationship(
+        "TarefaObservacao",
+        back_populates="tarefa",
+        cascade="all, delete-orphan",
+        order_by="TarefaObservacao.criada_em.desc(), TarefaObservacao.id.desc()",
+    )
+
+
+class TarefaObservacao(db.Model):
+    __tablename__ = "tarefa_observacoes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tarefa_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tarefas.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    autor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    texto = db.Column(db.String(1000), nullable=False)
+    criada_em = db.Column(
+        db.DateTime,
+        default=agora_brasilia,
+        nullable=False,
+    )
+    deletada_em = db.Column(db.DateTime, nullable=True)
+    deletada_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    tarefa = db.relationship("Tarefa", back_populates="observacoes")
+    autor = db.relationship("User", foreign_keys=[autor_id])
+    deletada_por = db.relationship("User", foreign_keys=[deletada_por_id])
+
+    def ativa(self):
+        return self.deletada_em is None
+
+
 #NOTIFICAÇÕES
 class TarefaSolicitacao(db.Model):
     __tablename__ = "tarefa_solicitacoes"

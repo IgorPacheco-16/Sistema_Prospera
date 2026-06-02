@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, session, url_for
 
-from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, TarefaSolicitacao, User
+from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaObservacao, TarefaResponsavel, TarefaSolicitacao, User
 from tempo import agora_brasilia
 
 
@@ -13,6 +13,7 @@ STATUS_EM_VALIDACAO = "EM VALIDAÇÃO"
 STATUS_ENTREGUE = "ENTREGUE"
 STATUS_EM_ESPERA = "EM ESPERA"
 MAX_RESPONSAVEIS_TAREFA = 4
+MAX_OBSERVACAO_TAREFA = 1000
 STATUS_RESPONSAVEL_PENDENTE = "PENDENTE"
 STATUS_RESPONSAVEL_ACEITO = "ACEITO"
 STATUS_RESPONSAVEL_APROVADO = "APROVADO"
@@ -770,6 +771,7 @@ def create_tarefas_blueprint(
     is_setor,
     usuario_pode_acionar_tarefa,
     usuario_pode_validar_tarefa,
+    usuario_pode_observar_tarefa,
     criar_notificacao,
     mensagem_tarefa,
     link_tarefa,
@@ -796,6 +798,14 @@ def create_tarefas_blueprint(
             return "Setor incorreto", 403
 
         return None
+
+    def validar_texto_observacao():
+        texto = request.form.get("texto", "").strip()
+        if not texto:
+            return None, ("Observacao obrigatoria", 400)
+        if len(texto) > MAX_OBSERVACAO_TAREFA:
+            return None, (f"Observacao deve ter no maximo {MAX_OBSERVACAO_TAREFA} caracteres", 400)
+        return texto, None
 
     @tarefas_bp.route("/ops/<int:op_id>/solicitacoes-tarefa", methods=["POST"])
     @tipos_permitidos("SETOR")
@@ -1558,6 +1568,58 @@ def create_tarefas_blueprint(
                 for usuario in usuarios
             ]
         })
+
+    @tarefas_bp.route("/tarefas/<int:id>/observacoes", methods=["POST"])
+    @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
+    def adicionar_observacao_tarefa(id):
+        tarefa = Tarefa.query.get_or_404(id)
+
+        if not usuario_pode_observar_tarefa(tarefa):
+            return "Acesso negado para observar esta tarefa", 403
+
+        if op_encerrada(tarefa.op):
+            return "OP finalizada ou arquivada nao permite adicionar observacao", 400
+
+        texto, erro = validar_texto_observacao()
+        if erro:
+            return erro
+
+        autor = usuario_logado_ativo()
+        observacao = TarefaObservacao(
+            tarefa_id=tarefa.id,
+            autor_id=autor.id if autor else None,
+            texto=texto,
+            criada_em=agora_brasilia(),
+        )
+        db.session.add(observacao)
+        db.session.commit()
+        flash("Observacao registrada.", "success")
+
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
+
+    @tarefas_bp.route("/tarefas/observacoes/<int:observacao_id>/excluir", methods=["POST"])
+    @tipos_permitidos("ADMIN")
+    def excluir_observacao_tarefa(observacao_id):
+        observacao = TarefaObservacao.query.get_or_404(observacao_id)
+        if observacao.deletada_em is None:
+            autor = usuario_logado_ativo()
+            observacao.deletada_em = agora_brasilia()
+            observacao.deletada_por_id = autor.id if autor else None
+            db.session.commit()
+            flash("Observacao excluida.", "info")
+
+        tarefa = observacao.tarefa
+        return redirect(request.referrer or url_for(
+            "ver_op",
+            id=tarefa.op_id,
+            setor=tarefa.setor_id,
+            tarefa=tarefa.id,
+        ))
 
     @tarefas_bp.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")

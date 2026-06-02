@@ -3,7 +3,7 @@ import secrets
 
 from flask import redirect, session, url_for
 
-from database.models import User
+from database.models import OPSetor, User
 from email_service import enviar_codigo_cadastro, enviar_codigo_recuperacao
 
 
@@ -82,6 +82,25 @@ def usuario_pode_validar_tarefa(tarefa):
         return True
 
     return usuario_pode_acionar_tarefa(tarefa)
+
+
+def usuario_pode_observar_tarefa(tarefa):
+    tipo = session.get("tipo")
+
+    if tipo in {"ADMIN", "PCP", "ATENDENTE"}:
+        return True
+
+    if tipo != "SETOR":
+        return False
+
+    setor_id = setor_id_logado()
+    if setor_id is None or setor_id != tarefa.setor_id:
+        return False
+
+    return OPSetor.query.filter_by(
+        op_id=tarefa.op_id,
+        setor_id=setor_id,
+    ).first() is not None
 
 
 def usuario_logado_ativo():

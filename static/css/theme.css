@@ -2320,6 +2320,7 @@ html.dark-mode .op-history-meta {
 
 .task-detail-panel,
 .task-delivery-note,
+.task-observations,
 .task-waiting-box,
 .task-waiting-note,
 .task-repass-box,
@@ -2451,6 +2452,78 @@ html.dark-mode .op-history-meta {
 .task-delivery-note p {
     margin: 0;
     overflow-wrap: anywhere;
+}
+
+.task-observations {
+    display: grid;
+    gap: 10px;
+}
+
+.task-observations-header {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.task-observations-header h3 {
+    color: var(--muted-light);
+    font-size: 0.76rem;
+    font-weight: 800;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.task-observations-header span,
+.task-observation-meta {
+    color: var(--muted-light);
+    font-size: 0.78rem;
+}
+
+.task-observation-list {
+    display: grid;
+    gap: 8px;
+}
+
+.task-observation-item {
+    background-color: rgba(15, 23, 42, 0.025);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 8px;
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+}
+
+.task-observation-item p {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.task-observation-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.task-observation-item form {
+    margin: 2px 0 0;
+}
+
+.task-observation-empty {
+    color: var(--muted-light);
+    font-size: 0.86rem;
+}
+
+.task-observation-form {
+    align-items: flex-end;
+    display: flex;
+    gap: 8px;
+    margin: 0;
+}
+
+.task-observation-form .form-control {
+    min-height: 38px;
+    resize: vertical;
 }
 
 .task-waiting-summary {
@@ -2599,6 +2672,7 @@ html.dark-mode .task-request-note {
 
 html.dark-mode .task-detail-panel,
 html.dark-mode .task-delivery-note,
+html.dark-mode .task-observations,
 html.dark-mode .task-waiting-box,
 html.dark-mode .task-waiting-note,
 html.dark-mode .task-repass-box,
@@ -2609,6 +2683,11 @@ html.dark-mode .task-actions {
 }
 
 html.dark-mode .task-detail-group {
+    background-color: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.08);
+}
+
+html.dark-mode .task-observation-item {
     background-color: rgba(255,255,255,0.035);
     border-color: rgba(255,255,255,0.08);
 }
@@ -2627,6 +2706,10 @@ html.dark-mode .task-detail-group h3,
 html.dark-mode .task-person-list small,
 html.dark-mode .task-person-list .task-detail-empty,
 html.dark-mode .task-delivery-note strong,
+html.dark-mode .task-observations-header h3,
+html.dark-mode .task-observations-header span,
+html.dark-mode .task-observation-meta,
+html.dark-mode .task-observation-empty,
 html.dark-mode .task-waiting-note small {
     color: var(--muted-dark);
 }
@@ -3700,6 +3783,7 @@ html.dark-mode .calendario-global-empty {
     }
 
     .task-delivery-form,
+    .task-observation-form,
     .task-refusal-form {
         flex-direction: column;
     }

@@ -83,6 +83,7 @@ is_atendente = security_module.is_atendente
 is_setor = security_module.is_setor
 usuario_pode_acionar_tarefa = security_module.usuario_pode_acionar_tarefa
 usuario_pode_validar_tarefa = security_module.usuario_pode_validar_tarefa
+usuario_pode_observar_tarefa = security_module.usuario_pode_observar_tarefa
 login_required = security_module.login_required
 tipos_permitidos = security_module.tipos_permitidos
 normalizar_email = security_module.normalizar_email
@@ -159,6 +160,8 @@ BUILD_ONLY_ALIASES = [
     ("/recusar_tarefa/<int:id>", "recusar_tarefa"),
     ("/editar_tarefa/<int:id>", "editar_tarefa"),
     ("/excluir_tarefa/<int:id>", "excluir_tarefa"),
+    ("/tarefas/<int:id>/observacoes", "adicionar_observacao_tarefa"),
+    ("/tarefas/observacoes/<int:observacao_id>/excluir", "excluir_observacao_tarefa"),
     ("/ops/<int:op_id>/solicitacoes-tarefa", "solicitar_tarefa_op"),
     ("/tarefas/solicitacoes/<int:solicitacao_id>/aprovar", "aprovar_solicitacao_tarefa"),
     ("/tarefas/solicitacoes/<int:solicitacao_id>/recusar", "recusar_solicitacao_tarefa"),
@@ -244,6 +247,7 @@ ops_bp = create_ops_blueprint(
     is_atendente=is_atendente,
     usuario_pode_acionar_tarefa=usuario_pode_acionar_tarefa,
     usuario_pode_validar_tarefa=usuario_pode_validar_tarefa,
+    usuario_pode_observar_tarefa=usuario_pode_observar_tarefa,
     criar_notificacao=criar_notificacao,
     mensagem_op=mensagem_op,
     link_op=link_op,
@@ -257,6 +261,7 @@ tarefas_bp = create_tarefas_blueprint(
     is_setor=is_setor,
     usuario_pode_acionar_tarefa=usuario_pode_acionar_tarefa,
     usuario_pode_validar_tarefa=usuario_pode_validar_tarefa,
+    usuario_pode_observar_tarefa=usuario_pode_observar_tarefa,
     criar_notificacao=criar_notificacao,
     mensagem_tarefa=mensagem_tarefa,
     link_tarefa=link_tarefa,
