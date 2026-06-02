@@ -129,6 +129,12 @@ class OP(db.Model):
         cascade="all, delete-orphan",
         lazy=True
     )
+    solicitacoes_tarefa = db.relationship(
+        "TarefaSolicitacao",
+        back_populates="op",
+        cascade="all, delete-orphan",
+        order_by="TarefaSolicitacao.solicitado_em, TarefaSolicitacao.id",
+    )
 
 
 #SETORES
@@ -239,6 +245,39 @@ class Tarefa(db.Model):
 
 
 #NOTIFICAÇÕES
+class TarefaSolicitacao(db.Model):
+    __tablename__ = "tarefa_solicitacoes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    op_id = db.Column(
+        db.Integer,
+        db.ForeignKey("ops.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    setor_solicitante_id = db.Column(db.Integer, db.ForeignKey("setor.id"), nullable=False)
+    setor_destino_id = db.Column(db.Integer, db.ForeignKey("setor.id"), nullable=False)
+    solicitado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    tarefa_id = db.Column(db.Integer, db.ForeignKey("tarefas.id"), nullable=True)
+    nome = db.Column(db.String(200), nullable=False)
+    justificativa = db.Column(db.String(1000), nullable=False)
+    prazo_sugerido = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="PENDENTE", server_default="PENDENTE")
+    solicitado_em = db.Column(db.DateTime, default=agora_brasilia, nullable=False)
+    respondido_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    respondido_em = db.Column(db.DateTime, nullable=True)
+    justificativa_resposta = db.Column(db.String(1000), nullable=True)
+
+    op = db.relationship("OP", back_populates="solicitacoes_tarefa")
+    setor_solicitante = db.relationship("Setor", foreign_keys=[setor_solicitante_id])
+    setor_destino = db.relationship("Setor", foreign_keys=[setor_destino_id])
+    solicitado_por = db.relationship("User", foreign_keys=[solicitado_por_id])
+    respondido_por = db.relationship("User", foreign_keys=[respondido_por_id])
+    tarefa = db.relationship("Tarefa")
+
+    def esta_pendente(self):
+        return self.status == "PENDENTE"
+
+
 class TarefaEsperaSolicitacao(db.Model):
     __tablename__ = "tarefa_espera_solicitacoes"
 

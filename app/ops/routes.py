@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, User
+from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, TarefaSolicitacao, User
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -127,6 +127,10 @@ def create_ops_blueprint(
                 .selectinload(Tarefa.espera_solicitacoes)
                 .selectinload(TarefaEsperaSolicitacao.respondido_por),
                 selectinload(OP.tarefas).selectinload(Tarefa.espera_solicitacao_atual),
+                selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.setor_solicitante),
+                selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.setor_destino),
+                selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.solicitado_por),
+                selectinload(OP.solicitacoes_tarefa).selectinload(TarefaSolicitacao.respondido_por),
             )
             .filter(OP.id == id)
             .first()
@@ -153,16 +157,57 @@ def create_ops_blueprint(
             setor_id: usuarios
             for setor_id, usuarios in agrupar_usuarios_ativos_por_setor().items()
         }
+        op_ativa_para_solicitacao = (
+            op.status not in {"FINALIZADA", "ARQUIVADA"}
+            and op.finalizada_em is None
+            and op.arquivada_em is None
+        )
+        pode_solicitar_tarefa_op = (
+            tipo_usuario == "SETOR"
+            and usuario_logado is not None
+            and usuario_logado.setor_id == setor_usuario_id
+            and op_ativa_para_solicitacao
+        )
+        setores_para_solicitar_tarefa = []
+        if pode_solicitar_tarefa_op:
+            setores_para_solicitar_tarefa = sorted(
+                [
+                    op_setor.setor
+                    for op_setor in op.op_setores
+                    if op_setor.setor and op_setor.setor_id != setor_usuario_id
+                ],
+                key=lambda setor: setor.nome.casefold(),
+            )
+
+        solicitacoes_visiveis = []
+        for solicitacao in op.solicitacoes_tarefa:
+            if tipo_usuario == "SETOR":
+                if not usuario_logado or solicitacao.solicitado_por_id != usuario_logado.id:
+                    continue
+            solicitacao.pode_responder = (
+                tipo_usuario in {"ADMIN", "PCP"}
+                and solicitacao.status == "PENDENTE"
+            )
+            solicitacoes_visiveis.append(solicitacao)
+
+        solicitacoes_por_setor = defaultdict(list)
+        for solicitacao in sorted(
+            solicitacoes_visiveis,
+            key=lambda item: (item.solicitado_em, item.id),
+        ):
+            solicitacoes_por_setor[solicitacao.setor_destino_id].append(solicitacao)
 
         op_setores = sorted(
             op.op_setores,
             key=lambda op_setor: (op_setor.setor.nome if op_setor.setor else "").casefold()
         )
         if tipo_usuario == "SETOR":
+            setores_visiveis = {setor_usuario_id}
+            setores_visiveis.update(solicitacao.setor_destino_id for solicitacao in solicitacoes_visiveis)
             op_setores = [
                 op_setor
                 for op_setor in op_setores
-                if op_setor.setor_id == setor_usuario_id
+                if op_setor.setor_id in setores_visiveis
             ]
 
         tarefas_por_setor = defaultdict(list)
@@ -273,6 +318,7 @@ def create_ops_blueprint(
             estrutura.append({
                 "setor": setor,
                 "tarefas": tarefas,
+                "solicitacoes_tarefa": solicitacoes_por_setor.get(setor.id, []),
                 "usuarios": usuarios_por_setor.get(setor.id, []),
                 "total": len(tarefas),
                 "validadas": sum(1 for t in tarefas if t.validado),
@@ -295,6 +341,8 @@ def create_ops_blueprint(
             estrutura=estrutura,
             historico=historico,
             setores=Setor.query.order_by(Setor.nome).all(),
+            pode_solicitar_tarefa_op=pode_solicitar_tarefa_op,
+            setores_para_solicitar_tarefa=setores_para_solicitar_tarefa,
             tipo=tipo_usuario,
             today=hoje_brasilia(),
             focus_setor_id=request.args.get("setor", type=int),

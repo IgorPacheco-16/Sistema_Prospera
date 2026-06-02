@@ -39,6 +39,15 @@
         </div>
 
         <div class="op-detail-actions">
+            {% if pode_solicitar_tarefa_op and setores_para_solicitar_tarefa %}
+            <button class="btn btn-outline-primary"
+                    type="button"
+                    data-bs-toggle="modal"
+                    data-bs-target="#solicitarTarefaOPModal">
+                Solicitar tarefa
+            </button>
+            {% endif %}
+
             {% if tipo in ["ATENDENTE", "ADMIN"] %}
             <a href="{{ url_for('editar_op', id=op.id) }}" class="btn btn-outline-primary">
                 Editar OP
@@ -69,6 +78,71 @@
             {{ mensagem }}
         </div>
     {% endfor %}
+
+    {% if pode_solicitar_tarefa_op and setores_para_solicitar_tarefa %}
+    <div class="modal fade task-modal" id="solicitarTarefaOPModal" tabindex="-1" aria-labelledby="solicitarTarefaOPModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title fs-5" id="solicitarTarefaOPModalLabel">Solicitar tarefa</h2>
+                        <p class="modal-subtitle">Pedido enviado ao PCP para aprova&ccedil;&atilde;o</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="{{ url_for('solicitar_tarefa_op', op_id=op.id) }}" class="task-request-form">
+                        <div>
+                            <label class="form-label" for="setorDestinoSolicitacao">Setor de destino</label>
+                            <select id="setorDestinoSolicitacao" name="setor_destino_id" class="form-select" required>
+                                {% for setor in setores_para_solicitar_tarefa %}
+                                <option value="{{ setor.id }}">{{ setor.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="nomeSolicitacaoTarefa">Descri&ccedil;&atilde;o da tarefa</label>
+                            <input id="nomeSolicitacaoTarefa"
+                                   type="text"
+                                   name="nome"
+                                   class="form-control"
+                                   maxlength="200"
+                                   required>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="justificativaSolicitacaoTarefa">Justificativa</label>
+                            <textarea id="justificativaSolicitacaoTarefa"
+                                      name="justificativa"
+                                      class="form-control"
+                                      rows="3"
+                                      maxlength="1000"
+                                      required></textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="prazoSolicitacaoTarefa">Prazo sugerido</label>
+                            <input id="prazoSolicitacaoTarefa"
+                                   type="date"
+                                   name="prazo_sugerido"
+                                   class="form-control">
+                        </div>
+
+                        <div class="task-request-actions">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                Enviar solicita&ccedil;&atilde;o
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% if op.caminho_pasta %}
     <div class="op-folder-compact">
@@ -173,6 +247,105 @@
                         </div>
                         <button type="submit" class="btn btn-primary-custom">Adicionar</button>
                     </form>
+                    {% endif %}
+
+                    {% if item.solicitacoes_tarefa %}
+                    <div class="task-request-list">
+                    {% for solicitacao in item.solicitacoes_tarefa %}
+                        <div class="task-request-item {% if solicitacao.status == 'PENDENTE' %}is-pending{% endif %}">
+                            <div class="task-card-header">
+                                <div class="task-card-title-group">
+                                    <span class="nome">{{ solicitacao.nome }}</span>
+                                    {% if solicitacao.prazo_sugerido %}
+                                        <span class="task-deadline prazo">Prazo sugerido: {{ solicitacao.prazo_sugerido.strftime('%d/%m/%Y') }}</span>
+                                    {% else %}
+                                        <span class="task-deadline prazo">Prazo sugerido n&atilde;o definido</span>
+                                    {% endif %}
+                                </div>
+                                <div class="task-status-area">
+                                    {% if solicitacao.status == "PENDENTE" %}
+                                        <span class="sector-status-badge status-waiting">Aguardando aprova&ccedil;&atilde;o do PCP</span>
+                                    {% elif solicitacao.status == "APROVADA" %}
+                                        <span class="sector-status-badge status-success">Aprovada</span>
+                                    {% elif solicitacao.status == "RECUSADA" %}
+                                        <span class="sector-status-badge status-danger">Recusada</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="task-responsible-summary">
+                                <span>
+                                    Solicitante:
+                                    {{ solicitacao.solicitado_por.nome or solicitacao.solicitado_por.email if solicitacao.solicitado_por else "Sistema" }}
+                                </span>
+                                <span class="task-summary-dot" aria-hidden="true"></span>
+                                <span>
+                                    Origem:
+                                    {{ solicitacao.setor_solicitante.nome if solicitacao.setor_solicitante else "Setor n&atilde;o informado" }}
+                                </span>
+                            </div>
+
+                            <div class="task-request-note">
+                                <strong>Justificativa</strong>
+                                <p>{{ solicitacao.justificativa }}</p>
+                                <small>Solicitada em {{ solicitacao.solicitado_em|data_hora_brasilia }}</small>
+                            </div>
+
+                            {% if solicitacao.justificativa_resposta %}
+                            <div class="task-request-note">
+                                <strong>Resposta</strong>
+                                <p>{{ solicitacao.justificativa_resposta }}</p>
+                            </div>
+                            {% endif %}
+
+                            {% if solicitacao.pode_responder %}
+                            <div class="task-actions">
+                                <div class="task-secondary-actions">
+                                    <form method="POST" action="{{ url_for('aprovar_solicitacao_tarefa', solicitacao_id=solicitacao.id) }}">
+                                        <button class="btn btn-outline-primary btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Aprovar esta solicita&ccedil;&atilde;o e criar a tarefa?')">
+                                            Aprovar solicita&ccedil;&atilde;o
+                                        </button>
+                                    </form>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#recusarSolicitacaoTarefa{{ solicitacao.id }}"
+                                            aria-expanded="false"
+                                            aria-controls="recusarSolicitacaoTarefa{{ solicitacao.id }}">
+                                        Recusar solicita&ccedil;&atilde;o
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="collapse task-waiting-box" id="recusarSolicitacaoTarefa{{ solicitacao.id }}">
+                                <form method="POST" action="{{ url_for('recusar_solicitacao_tarefa', solicitacao_id=solicitacao.id) }}" class="task-waiting-form">
+                                    <h3>Recusar solicita&ccedil;&atilde;o</h3>
+                                    <label class="form-label" for="justificativaSolicitacao{{ solicitacao.id }}">Justificativa opcional</label>
+                                    <textarea id="justificativaSolicitacao{{ solicitacao.id }}"
+                                              name="justificativa_resposta"
+                                              class="form-control form-control-sm"
+                                              rows="2"
+                                              maxlength="1000"></textarea>
+                                    <div class="task-waiting-actions">
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#recusarSolicitacaoTarefa{{ solicitacao.id }}">
+                                            Cancelar
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                type="submit"
+                                                onclick="return confirm('Recusar solicita&ccedil;&atilde;o de tarefa?')">
+                                            Recusar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    </div>
                     {% endif %}
 
                     <div class="task-list">

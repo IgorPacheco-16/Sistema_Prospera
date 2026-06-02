@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, session, url_for
 
-from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, User
+from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaResponsavel, TarefaSolicitacao, User
 from tempo import agora_brasilia
 
 
@@ -36,6 +36,10 @@ STATUS_ESPERA_PENDENTE = "PENDENTE"
 STATUS_ESPERA_APROVADA = "APROVADA"
 STATUS_ESPERA_RECUSADA = "RECUSADA"
 STATUS_ESPERA_CANCELADA = "CANCELADA"
+STATUS_SOLICITACAO_TAREFA_PENDENTE = "PENDENTE"
+STATUS_SOLICITACAO_TAREFA_APROVADA = "APROVADA"
+STATUS_SOLICITACAO_TAREFA_RECUSADA = "RECUSADA"
+STATUS_OP_INATIVA = {"FINALIZADA", "ARQUIVADA"}
 
 
 def status_atual_tarefa(tarefa):
@@ -169,6 +173,65 @@ def usuario_logado_ativo():
 
 def nome_usuario(usuario):
     return (getattr(usuario, "nome", None) or getattr(usuario, "email", None) or "").strip()
+
+
+def op_encerrada(op):
+    return (
+        not op
+        or op.status in STATUS_OP_INATIVA
+        or op.finalizada_em is not None
+        or op.arquivada_em is not None
+    )
+
+
+def setor_id_usuario_setor(usuario):
+    if usuario and usuario.setor_id:
+        return usuario.setor_id
+    try:
+        return int(session.get("setor_id"))
+    except (TypeError, ValueError):
+        return None
+
+
+def usuario_pode_solicitar_tarefa_op(op, usuario):
+    if session.get("tipo") != "SETOR":
+        return False
+    setor_id = setor_id_usuario_setor(usuario)
+    if not setor_id or op_encerrada(op):
+        return False
+    return OPSetor.query.filter_by(op_id=op.id, setor_id=setor_id).first() is not None
+
+
+def usuario_pode_responder_solicitacao_tarefa():
+    return session.get("tipo") in {"ADMIN", "PCP"}
+
+
+def link_solicitacao_tarefa(op_id, setor_id):
+    return f"/op/{op_id}?setor={setor_id}"
+
+
+def mensagem_solicitacao_tarefa(evento, op, solicitacao, usuario=None, tarefa=None, justificativa=None):
+    titulos = {
+        "criada": "SOLICITACAO DE TAREFA",
+        "aprovada": "SOLICITACAO DE TAREFA APROVADA",
+        "recusada": "SOLICITACAO DE TAREFA RECUSADA",
+    }
+    setor_destino = solicitacao.setor_destino.nome if solicitacao.setor_destino else solicitacao.setor_destino_id
+    mensagem = (
+        f"{titulos.get(evento, 'SOLICITACAO DE TAREFA')}\n"
+        f"OP: {op.nome if op else solicitacao.op_id}\n"
+        f"Tarefa solicitada: {solicitacao.nome}\n"
+        f"Setor destino: {setor_destino}"
+    )
+    if solicitacao.justificativa:
+        mensagem += f"\nJustificativa: {solicitacao.justificativa}"
+    if tarefa:
+        mensagem += f"\nTarefa criada: {tarefa.nome}"
+    if usuario:
+        mensagem += f"\nPor: {nome_usuario(usuario)}"
+    if justificativa:
+        mensagem += f"\nResposta: {justificativa}"
+    return mensagem
 
 
 def vinculos_responsaveis_aceitos(tarefa):
@@ -733,6 +796,201 @@ def create_tarefas_blueprint(
             return "Setor incorreto", 403
 
         return None
+
+    @tarefas_bp.route("/ops/<int:op_id>/solicitacoes-tarefa", methods=["POST"])
+    @tipos_permitidos("SETOR")
+    def solicitar_tarefa_op(op_id):
+        op = db.session.get(OP, op_id)
+        if not op:
+            return "OP nao encontrada", 404
+
+        solicitante = usuario_logado_ativo()
+        if not usuario_pode_solicitar_tarefa_op(op, solicitante):
+            return "Acesso negado para solicitar tarefa nesta OP", 403
+
+        nome = request.form.get("nome", "").strip()
+        justificativa = request.form.get("justificativa", "").strip()
+        setor_destino_valor = request.form.get("setor_destino_id", "").strip()
+        prazo = request.form.get("prazo_sugerido", "").strip()
+
+        if not nome:
+            return "Descricao da tarefa obrigatoria", 400
+        if not justificativa:
+            return "Justificativa obrigatoria", 400
+
+        try:
+            setor_destino_id = int(setor_destino_valor)
+        except (TypeError, ValueError):
+            return "Setor de destino obrigatorio", 400
+
+        setor_solicitante_id = setor_id_usuario_setor(solicitante)
+        if setor_destino_id == setor_solicitante_id:
+            return "Selecione outro setor como destino", 400
+
+        vinculo_destino = OPSetor.query.filter_by(
+            op_id=op.id,
+            setor_id=setor_destino_id,
+        ).first()
+        if not vinculo_destino:
+            return "Setor de destino nao vinculado a esta OP", 400
+        setor_destino = vinculo_destino.setor
+
+        prazo_convertido = None
+        if prazo:
+            try:
+                prazo_convertido = datetime.strptime(prazo, "%Y-%m-%d").date()
+            except ValueError:
+                return "Prazo sugerido invalido", 400
+
+        solicitacao = TarefaSolicitacao(
+            op_id=op.id,
+            setor_solicitante_id=setor_solicitante_id,
+            setor_destino_id=setor_destino_id,
+            solicitado_por_id=solicitante.id,
+            nome=nome,
+            justificativa=justificativa,
+            prazo_sugerido=prazo_convertido,
+            status=STATUS_SOLICITACAO_TAREFA_PENDENTE,
+            solicitado_em=agora_brasilia(),
+        )
+        db.session.add(solicitacao)
+        db.session.flush()
+
+        link = link_solicitacao_tarefa(op.id, setor_destino_id)
+        criar_notificacao(
+            "PCP",
+            mensagem_solicitacao_tarefa("criada", op, solicitacao, solicitante),
+            link=link,
+            op_id=op.id,
+            setor_id=setor_destino_id,
+            tipo_evento=f"tarefa_solicitacao_criada_{solicitacao.id}",
+        )
+        registrar_historico(
+            op.id,
+            "Tarefa solicitada",
+            (
+                f"{nome_usuario(solicitante) or 'Sistema'} solicitou a tarefa "
+                f"'{solicitacao.nome}' para o setor {setor_destino.nome if setor_destino else setor_destino_id}."
+            )
+        )
+        db.session.commit()
+        flash("Solicitacao de tarefa enviada ao PCP.", "info")
+        return redirect(request.referrer or url_for("ver_op", id=op.id, setor=setor_destino_id))
+
+    @tarefas_bp.route("/tarefas/solicitacoes/<int:solicitacao_id>/aprovar", methods=["POST"])
+    @tipos_permitidos("PCP", "ADMIN")
+    def aprovar_solicitacao_tarefa(solicitacao_id):
+        solicitacao = TarefaSolicitacao.query.get_or_404(solicitacao_id)
+        if not usuario_pode_responder_solicitacao_tarefa():
+            return "Acesso negado para aprovar solicitacao de tarefa", 403
+        if not solicitacao.esta_pendente():
+            return "Esta solicitacao de tarefa nao esta pendente", 400
+
+        op = solicitacao.op
+        if op_encerrada(op):
+            return "OP finalizada ou arquivada nao permite aprovar solicitacao", 400
+        vinculo_destino = OPSetor.query.filter_by(
+            op_id=solicitacao.op_id,
+            setor_id=solicitacao.setor_destino_id,
+        ).first()
+        if not vinculo_destino:
+            return "Setor de destino nao vinculado a esta OP", 400
+
+        responsavel = usuario_logado_ativo()
+        agora = agora_brasilia()
+        tarefa = Tarefa(
+            op_id=solicitacao.op_id,
+            setor_id=solicitacao.setor_destino_id,
+            nome=solicitacao.nome,
+            prazo=solicitacao.prazo_sugerido,
+            status=STATUS_PENDENTE,
+            liberada=True,
+            criada_em=agora,
+        )
+        db.session.add(tarefa)
+        db.session.flush()
+
+        solicitacao.status = STATUS_SOLICITACAO_TAREFA_APROVADA
+        solicitacao.tarefa_id = tarefa.id
+        solicitacao.respondido_por_id = responsavel.id if responsavel else None
+        solicitacao.respondido_em = agora
+
+        link = link_tarefa(op.id, tarefa.setor_id, tarefa.id)
+        solicitante_email = (solicitacao.solicitado_por.email or "").strip().lower()
+        if solicitante_email:
+            criar_notificacao(
+                solicitante_email,
+                mensagem_solicitacao_tarefa("aprovada", op, solicitacao, responsavel, tarefa=tarefa),
+                link=link,
+                op_id=op.id,
+                tarefa_id=tarefa.id,
+                setor_id=tarefa.setor_id,
+                tipo_evento=f"tarefa_solicitacao_aprovada_{solicitacao.id}",
+            )
+        criar_notificacoes_tarefa(
+            criar_notificacao,
+            tarefa,
+            mensagem_tarefa("tarefa_criada", op, tarefa),
+            link,
+            f"tarefa_criada_solicitacao_{solicitacao.id}",
+        )
+        registrar_historico(
+            op.id,
+            "Solicitacao de tarefa aprovada",
+            (
+                f"{nome_usuario(responsavel) or 'Sistema'} aprovou a solicitacao "
+                f"e criou a tarefa '{tarefa.nome}'."
+            )
+        )
+        db.session.commit()
+        flash("Solicitacao aprovada e tarefa criada.", "success")
+        return redirect(request.referrer or url_for("ver_op", id=op.id, setor=tarefa.setor_id, tarefa=tarefa.id))
+
+    @tarefas_bp.route("/tarefas/solicitacoes/<int:solicitacao_id>/recusar", methods=["POST"])
+    @tipos_permitidos("PCP", "ADMIN")
+    def recusar_solicitacao_tarefa(solicitacao_id):
+        solicitacao = TarefaSolicitacao.query.get_or_404(solicitacao_id)
+        if not usuario_pode_responder_solicitacao_tarefa():
+            return "Acesso negado para recusar solicitacao de tarefa", 403
+        if not solicitacao.esta_pendente():
+            return "Esta solicitacao de tarefa nao esta pendente", 400
+
+        justificativa = request.form.get("justificativa_resposta", "").strip() or None
+        responsavel = usuario_logado_ativo()
+        solicitacao.status = STATUS_SOLICITACAO_TAREFA_RECUSADA
+        solicitacao.respondido_por_id = responsavel.id if responsavel else None
+        solicitacao.respondido_em = agora_brasilia()
+        solicitacao.justificativa_resposta = justificativa
+
+        op = solicitacao.op
+        link = link_solicitacao_tarefa(solicitacao.op_id, solicitacao.setor_destino_id)
+        solicitante_email = (solicitacao.solicitado_por.email or "").strip().lower()
+        if solicitante_email:
+            criar_notificacao(
+                solicitante_email,
+                mensagem_solicitacao_tarefa(
+                    "recusada",
+                    op,
+                    solicitacao,
+                    responsavel,
+                    justificativa=justificativa,
+                ),
+                link=link,
+                op_id=solicitacao.op_id,
+                setor_id=solicitacao.setor_destino_id,
+                tipo_evento=f"tarefa_solicitacao_recusada_{solicitacao.id}",
+            )
+        registrar_historico(
+            solicitacao.op_id,
+            "Solicitacao de tarefa recusada",
+            (
+                f"{nome_usuario(responsavel) or 'Sistema'} recusou a solicitacao "
+                f"da tarefa '{solicitacao.nome}'."
+            )
+        )
+        db.session.commit()
+        flash("Solicitacao de tarefa recusada.", "info")
+        return redirect(request.referrer or url_for("ver_op", id=solicitacao.op_id, setor=solicitacao.setor_destino_id))
 
     @tarefas_bp.route("/tarefas/<int:id>/espera/solicitar", methods=["POST"])
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")

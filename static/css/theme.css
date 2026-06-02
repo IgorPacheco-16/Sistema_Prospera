@@ -2140,6 +2140,61 @@ html.dark-mode .btn-close {
     gap: 12px;
 }
 
+.task-request-form {
+    display: grid;
+    gap: 12px;
+}
+
+.task-request-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.task-request-list {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.task-request-item {
+    background-color: rgba(13, 202, 240, 0.06);
+    border: 1px dashed rgba(13, 202, 240, 0.55);
+    border-radius: 8px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+    padding: 14px;
+}
+
+.task-request-item.is-pending {
+    opacity: 0.78;
+}
+
+.task-request-note {
+    border-left: 4px solid #0dcaf0;
+    color: var(--text-light);
+    display: grid;
+    gap: 4px;
+    margin-top: 12px;
+    padding-left: 12px;
+}
+
+.task-request-note strong {
+    color: #087990;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.task-request-note p {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.task-request-note small {
+    color: var(--muted-light);
+}
+
 .tarefa,
 .task-edit-item {
     background-color: var(--card-light);
@@ -2525,6 +2580,11 @@ html.dark-mode .task-edit-item {
     box-shadow: 0 14px 30px rgba(0,0,0,0.26);
 }
 
+html.dark-mode .task-request-item {
+    background-color: rgba(123, 223, 242, 0.08);
+    border-color: rgba(123, 223, 242, 0.45);
+}
+
 html.dark-mode .task-responsible-summary {
     color: var(--muted-dark);
 }
@@ -2532,7 +2592,8 @@ html.dark-mode .task-responsible-summary {
 html.dark-mode .task-responsible-summary > span:first-child,
 html.dark-mode .task-person-list span,
 html.dark-mode .task-delivery-note,
-html.dark-mode .task-waiting-note {
+html.dark-mode .task-waiting-note,
+html.dark-mode .task-request-note {
     color: var(--text-dark);
 }
 
@@ -2572,14 +2633,20 @@ html.dark-mode .task-waiting-note small {
 
 html.dark-mode .task-repass-form .form-label,
 html.dark-mode .task-waiting-form .form-label,
+html.dark-mode .task-request-form .form-label,
 html.dark-mode .task-repass-info {
     color: var(--muted-dark);
 }
 
 html.dark-mode .task-waiting-summary,
 html.dark-mode .task-waiting-note strong,
-html.dark-mode .task-waiting-form h3 {
+html.dark-mode .task-waiting-form h3,
+html.dark-mode .task-request-note strong {
     color: #7bdff2;
+}
+
+html.dark-mode .task-request-note small {
+    color: var(--muted-dark);
 }
 
 .status.validado {
