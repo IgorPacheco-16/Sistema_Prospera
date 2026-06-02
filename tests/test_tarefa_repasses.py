@@ -299,6 +299,18 @@ def test_usuario_sem_permissao_nao_consegue_repassar(client, login_as, tarefa):
     assert TarefaResponsavel.query.filter_by(tarefa_id=tarefa.id, usuario_id=destino.id).first() is None
 
 
+def test_setor_nao_consegue_repassar_tarefa_de_outro_setor(client, login_as, tarefa, setores):
+    atual = criar_usuario("atual.outro.setor@teste.com", tarefa.setor, "Atual Outro Setor")
+    destino = criar_usuario("destino.outro.setor@teste.com", tarefa.setor, "Destino Outro Setor")
+    atribuir(tarefa, [atual])
+    login_as("SETOR", setor_id=setores["PCP"].id)
+
+    resposta = proposta_repasse(client, tarefa, [destino], [atual])
+
+    assert resposta.status_code == 403
+    assert TarefaResponsavel.query.filter_by(tarefa_id=tarefa.id, usuario_id=destino.id, tipo="REPASSE").first() is None
+
+
 def test_repassar_nao_permite_usuario_inativo(client, login_as, tarefa):
     atual = criar_usuario("atual.inativo.repasse@teste.com", tarefa.setor, "Atual Inativo")
     destino = criar_usuario("inativo.repasse@teste.com", tarefa.setor, "Inativo Repasse", ativo=False)

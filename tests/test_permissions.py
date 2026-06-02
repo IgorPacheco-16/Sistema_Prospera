@@ -134,23 +134,33 @@ def test_setor_nao_pode_iniciar_tarefa_de_outro_setor(client, login_as, tarefa, 
     assert b"Setor incorreto" in resposta.data
 
 
-def test_setor_nao_acessa_detalhe_op_sem_vinculo(client, login_as, setores):
+def test_setor_acessa_detalhe_op_sem_vinculo_para_visualizar_panorama(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op = OP(
-        nome="OP Sem Vinculo Setor",
+        nome="OP Panorama Sem Vinculo",
         status="EM ANDAMENTO",
         atendente="atendente@teste.com"
     )
     db.session.add(op)
     db.session.flush()
     db.session.add(OPSetor(op_id=op.id, setor_id=pcp.id))
+    db.session.add(Tarefa(
+        op_id=op.id,
+        setor_id=pcp.id,
+        nome="Tarefa visivel de outro setor",
+        status="PENDENTE",
+        liberada=True
+    ))
     db.session.commit()
 
     login_as("SETOR", setor_id=acabamento.id)
     resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
 
-    assert resposta.status_code == 403
+    assert resposta.status_code == 200
+    assert "OP Panorama Sem Vinculo" in html
+    assert "Tarefa visivel de outro setor" in html
 
 
 def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_com_setor, setores):
@@ -174,18 +184,18 @@ def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_
     db.session.add_all([tarefa_acabamento, tarefa_pcp])
     db.session.commit()
 
-    login_as("SETOR", setor_id=pcp.id)
+    login_as("SETOR", setor_id=acabamento.id)
     resposta = client.get(f"/op/{op.id}")
     html = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
     assert "Tarefa PCP" in html
-    assert "Tarefa Acabamento" not in html
-    assert f'action="/iniciar_tarefa/{tarefa_pcp.id}"' in html
-    assert f'action="/iniciar_tarefa/{tarefa_acabamento.id}"' not in html
+    assert "Tarefa Acabamento" in html
+    assert f'action="/iniciar_tarefa/{tarefa_acabamento.id}"' in html
+    assert f'action="/iniciar_tarefa/{tarefa_pcp.id}"' not in html
 
 
-def test_dashboard_setor_lista_apenas_ops_vinculadas(client, login_as, setores):
+def test_dashboard_setor_lista_panorama_geral_de_ops_ativas(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op_acabamento = OP(
@@ -198,11 +208,23 @@ def test_dashboard_setor_lista_apenas_ops_vinculadas(client, login_as, setores):
         status="EM ANDAMENTO",
         atendente="atendente@teste.com"
     )
-    db.session.add_all([op_acabamento, op_pcp])
+    op_finalizada = OP(
+        nome="OP Dashboard Finalizada",
+        status="FINALIZADA",
+        atendente="atendente@teste.com"
+    )
+    op_arquivada = OP(
+        nome="OP Dashboard Arquivada",
+        status="ARQUIVADA",
+        atendente="atendente@teste.com"
+    )
+    db.session.add_all([op_acabamento, op_pcp, op_finalizada, op_arquivada])
     db.session.flush()
     db.session.add_all([
         OPSetor(op_id=op_acabamento.id, setor_id=acabamento.id),
         OPSetor(op_id=op_pcp.id, setor_id=pcp.id),
+        OPSetor(op_id=op_finalizada.id, setor_id=acabamento.id),
+        OPSetor(op_id=op_arquivada.id, setor_id=acabamento.id),
         Tarefa(
             op_id=op_acabamento.id,
             setor_id=acabamento.id,
@@ -226,9 +248,14 @@ def test_dashboard_setor_lista_apenas_ops_vinculadas(client, login_as, setores):
 
     assert resposta.status_code == 200
     assert "OP Dashboard Acabamento" in html
-    assert "OP Dashboard PCP" not in html
+    assert "OP Dashboard PCP" in html
+    assert "OP Dashboard Finalizada" not in html
+    assert "OP Dashboard Arquivada" not in html
     assert "Arquivar" not in html
     assert "Arquivadas" not in html
+
+    finalizadas = client.get("/dashboard?status=FINALIZADA").get_data(as_text=True)
+    assert "OP Dashboard Finalizada" not in finalizadas
 
 
 def test_setor_nao_acessa_arquivadas(client, login_as, setores):

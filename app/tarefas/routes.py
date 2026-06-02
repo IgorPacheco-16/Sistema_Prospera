@@ -207,6 +207,21 @@ def usuario_pode_responder_solicitacao_tarefa():
     return session.get("tipo") in {"ADMIN", "PCP"}
 
 
+def usuario_setor_pode_atuar_tarefa(tarefa):
+    if session.get("tipo") != "SETOR":
+        return False
+
+    responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
+    if responsaveis:
+        usuario = usuario_logado_ativo()
+        return bool(usuario and any(responsavel.id == usuario.id for responsavel in responsaveis))
+
+    try:
+        return int(session.get("setor_id")) == tarefa.setor_id
+    except (TypeError, ValueError):
+        return False
+
+
 def link_solicitacao_tarefa(op_id, setor_id):
     return f"/op/{op_id}?setor={setor_id}"
 
@@ -334,10 +349,7 @@ def usuario_pode_repassar_tarefa(tarefa):
     if tipo in {"ADMIN", "PCP"}:
         return True
     if tipo == "SETOR":
-        try:
-            return int(session.get("setor_id")) == tarefa.setor_id
-        except (TypeError, ValueError):
-            return False
+        return usuario_setor_pode_atuar_tarefa(tarefa)
     return False
 
 
@@ -354,10 +366,7 @@ def usuario_pode_solicitar_espera(tarefa):
         return True
 
     if tipo == "SETOR":
-        try:
-            return int(session.get("setor_id")) == tarefa.setor_id
-        except (TypeError, ValueError):
-            return False
+        return usuario_setor_pode_atuar_tarefa(tarefa)
 
     return False
 

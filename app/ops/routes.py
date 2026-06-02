@@ -149,11 +149,11 @@ def create_ops_blueprint(
             ativo=True
         ).first()
         if tipo_usuario == "SETOR":
-            vinculo_setor = OPSetor.query.filter_by(
-                op_id=op.id,
-                setor_id=setor_usuario_id
-            ).first()
-            if not vinculo_setor:
+            if (
+                op.status in {"FINALIZADA", "ARQUIVADA"}
+                or op.finalizada_em is not None
+                or op.arquivada_em is not None
+            ):
                 abort(403)
 
         estrutura = []
@@ -185,9 +185,6 @@ def create_ops_blueprint(
 
         solicitacoes_visiveis = []
         for solicitacao in op.solicitacoes_tarefa:
-            if tipo_usuario == "SETOR":
-                if not usuario_logado or solicitacao.solicitado_por_id != usuario_logado.id:
-                    continue
             solicitacao.pode_responder = (
                 tipo_usuario in {"ADMIN", "PCP"}
                 and solicitacao.status == "PENDENTE"
@@ -205,19 +202,9 @@ def create_ops_blueprint(
             op.op_setores,
             key=lambda op_setor: (op_setor.setor.nome if op_setor.setor else "").casefold()
         )
-        if tipo_usuario == "SETOR":
-            setores_visiveis = {setor_usuario_id}
-            setores_visiveis.update(solicitacao.setor_destino_id for solicitacao in solicitacoes_visiveis)
-            op_setores = [
-                op_setor
-                for op_setor in op_setores
-                if op_setor.setor_id in setores_visiveis
-            ]
 
         tarefas_por_setor = defaultdict(list)
         for tarefa in op.tarefas:
-            if tipo_usuario == "SETOR" and tarefa.setor_id != setor_usuario_id:
-                continue
             tarefas_por_setor[tarefa.setor_id].append(tarefa)
 
         for op_setor in op_setores:
@@ -234,7 +221,7 @@ def create_ops_blueprint(
                     tipo_usuario in {"ADMIN", "PCP"}
                     or (
                         tipo_usuario == "SETOR"
-                        and setor_usuario_id == tarefa.setor_id
+                        and usuario_pode_acionar_tarefa(tarefa)
                     )
                 )
                 tarefa.espera_pendente = next(
@@ -254,17 +241,7 @@ def create_ops_blueprint(
                 )
                 tarefa.pode_solicitar_espera = (
                     tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
-                    or (
-                        tipo_usuario == "SETOR"
-                        and setor_usuario_id == tarefa.setor_id
-                    )
-                    or (
-                        usuario_logado
-                        and any(
-                            responsavel.id == usuario_logado.id
-                            for responsavel in getattr(tarefa, "responsaveis", []) or []
-                        )
-                    )
+                    or (tipo_usuario == "SETOR" and usuario_pode_acionar_tarefa(tarefa))
                 )
                 tarefa.pode_responder_espera = tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
                 tarefa.pode_adicionar_observacao = (

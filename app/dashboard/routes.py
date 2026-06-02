@@ -3,7 +3,7 @@ import time
 from flask import Blueprint, current_app, render_template, request, session
 from sqlalchemy import and_, case, func, not_, or_
 
-from database.models import db, OP, OPSetor, Tarefa, TarefaResponsavel, User
+from database.models import db, OP, Tarefa, TarefaResponsavel, User
 from metricas_responsaveis import (
     STATUS_EM_ANDAMENTO,
     STATUS_EM_VALIDACAO,
@@ -175,14 +175,10 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
 
         query = OP.query.filter(OP.status != "ARQUIVADA")
         tipo_usuario = session.get("tipo")
-        setor_usuario_id = session.get("setor_id")
         usuario_logado = User.query.filter_by(email=session.get("usuario")).first()
 
         if tipo_usuario == "SETOR":
-            ops_setor = db.session.query(OPSetor.op_id).filter(
-                OPSetor.setor_id == setor_usuario_id
-            )
-            query = query.filter(OP.id.in_(ops_setor))
+            query = query.filter(OP.status != "FINALIZADA", OP.finalizada_em.is_(None))
 
         if busca:
             termo_busca = f"%{busca}%"
@@ -246,9 +242,6 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
                     0
                 ).label("validadas"),
             ).filter(Tarefa.op_id.in_(op_ids))
-
-            if tipo_usuario == "SETOR":
-                tarefas_query = tarefas_query.filter(Tarefa.setor_id == setor_usuario_id)
 
             tarefas_por_op = {
                 linha.op_id: {

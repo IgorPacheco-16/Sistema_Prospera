@@ -217,7 +217,7 @@ def test_dashboard_paginacao_preserva_busca_por_cliente(client, login_as, setore
     assert "OP Cliente Excluido" not in segunda_pagina
 
 
-def test_dashboard_setor_nao_enxerga_op_de_outro_setor_por_busca_cliente(client, login_as, setores):
+def test_dashboard_setor_enxerga_ops_de_outros_setores_por_busca_cliente(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     criar_op_dashboard("OP Cliente Permitido Setor", setor=acabamento, cliente="Cliente Restrito")
@@ -230,7 +230,43 @@ def test_dashboard_setor_nao_enxerga_op_de_outro_setor_por_busca_cliente(client,
 
     assert resposta.status_code == 200
     assert "OP Cliente Permitido Setor" in html
-    assert "OP Cliente Outro Setor" not in html
+    assert "OP Cliente Outro Setor" in html
+
+
+def test_dashboard_setor_paginacao_preserva_filtros_no_panorama_geral(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+    for indice in range(22):
+        criar_op_dashboard(
+            f"OP Setor Paginada {indice:02d}",
+            setor=acabamento if indice % 2 == 0 else pcp,
+            cliente="Cliente Setor Paginado",
+            status="ABERTA",
+        )
+    criar_op_dashboard(
+        "OP Setor Fora Da Busca",
+        setor=pcp,
+        cliente="Outro Cliente",
+        status="ABERTA",
+    )
+    db.session.commit()
+    login_as("SETOR", setor_id=acabamento.id)
+
+    resposta = client.get("/dashboard?busca=Cliente%20Setor%20Paginado&status=ABERTA")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert html.count("Ver OP") == 18
+    assert "OP Setor Fora Da Busca" not in html
+    assert 'href="/dashboard?page=2&amp;busca=Cliente+Setor+Paginado&amp;status=ABERTA#ops-list"' in html
+
+    segunda_pagina = client.get(
+        "/dashboard?busca=Cliente%20Setor%20Paginado&status=ABERTA&page=2"
+    ).get_data(as_text=True)
+    assert segunda_pagina.count("Ver OP") == 4
+    assert "OP Setor Paginada 18" in segunda_pagina
+    assert "OP Setor Paginada 21" in segunda_pagina
+    assert "OP Setor Fora Da Busca" not in segunda_pagina
 
 
 def test_dashboard_cliente_vazio_ou_nulo_nao_quebra_busca(client, login_as, setores):

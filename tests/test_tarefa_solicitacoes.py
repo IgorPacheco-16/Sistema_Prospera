@@ -217,6 +217,46 @@ def test_setor_nao_consegue_aprovar_solicitacao(client, login_as, op_com_setor):
     assert Tarefa.query.count() == 0
 
 
+def test_setor_visualiza_solicitacao_de_outro_setor_sem_acoes(client, login_as, op_com_setor):
+    op, setor_origem = op_com_setor
+    destino = criar_setor_destino(op)
+    login_as("SETOR", setor_id=setor_origem.id)
+    solicitar(client, op, destino, nome="Solicitacao visivel no panorama")
+    solicitacao = solicitacao_unica()
+    usuario_destino = User(
+        nome="Usuario Destino",
+        email="setor.destino@teste.com",
+        senha="123",
+        tipo="SETOR",
+        setor_id=destino.id,
+        ativo=True,
+    )
+    db.session.add(usuario_destino)
+    db.session.commit()
+
+    login_as("SETOR", email=usuario_destino.email, setor_id=destino.id)
+    html = client.get(f"/op/{op.id}").get_data(as_text=True)
+
+    assert "Solicitacao visivel no panorama" in html
+    assert f'action="/tarefas/solicitacoes/{solicitacao.id}/aprovar"' not in html
+    assert f'action="/tarefas/solicitacoes/{solicitacao.id}/recusar"' not in html
+
+
+def test_setor_nao_consegue_recusar_solicitacao(client, login_as, op_com_setor):
+    op, setor_origem = op_com_setor
+    destino = criar_setor_destino(op)
+    login_as("SETOR", setor_id=setor_origem.id)
+    solicitar(client, op, destino)
+    solicitacao = solicitacao_unica()
+
+    resposta = client.post(f"/tarefas/solicitacoes/{solicitacao.id}/recusar")
+
+    assert resposta.status_code == 403
+    db.session.refresh(solicitacao)
+    assert solicitacao.status == "PENDENTE"
+    assert Tarefa.query.count() == 0
+
+
 def test_pcp_consegue_recusar_sem_criar_tarefa_e_notifica_solicitante(client, login_as, op_com_setor):
     op, setor_origem = op_com_setor
     destino = criar_setor_destino(op)

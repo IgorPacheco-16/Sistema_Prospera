@@ -89,6 +89,16 @@ def test_usuario_responsavel_consegue_solicitar_espera_com_motivo(client, login_
     assert HistoricoOP.query.filter_by(op_id=tarefa.op_id, acao="Espera solicitada").first()
 
 
+def test_setor_nao_consegue_solicitar_espera_em_tarefa_de_outro_setor(client, login_as, tarefa, setores):
+    login_as("SETOR", setor_id=setores["PCP"].id)
+
+    resposta = solicitar(client, tarefa, "Tentativa fora do setor")
+
+    assert resposta.status_code == 403
+    assert "Acesso negado para solicitar espera" in resposta.get_data(as_text=True)
+    assert TarefaEsperaSolicitacao.query.count() == 0
+
+
 def test_nao_permite_solicitar_espera_sem_motivo(client, login_as, tarefa):
     login_as("ADMIN")
 

@@ -65,6 +65,37 @@ def test_setor_nao_adiciona_observacao_em_tarefa_sem_acesso(client, login_as, op
     assert TarefaObservacao.query.count() == 0
 
 
+def test_setor_visualiza_observacao_de_tarefa_de_outro_setor_sem_acoes(client, login_as, op_com_setor, setores):
+    op, acabamento = op_com_setor
+    setor_pcp = setores["PCP"]
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor_pcp.id))
+    tarefa_pcp = Tarefa(
+        op_id=op.id,
+        setor_id=setor_pcp.id,
+        nome="Tarefa observavel de outro setor",
+        status="PENDENTE",
+        liberada=True,
+    )
+    db.session.add(tarefa_pcp)
+    db.session.flush()
+    observacao = TarefaObservacao(
+        tarefa_id=tarefa_pcp.id,
+        autor_id=User.query.filter_by(email="pcp@teste.com").first().id,
+        texto="Observacao visivel no panorama.",
+        criada_em=agora_brasilia(),
+    )
+    db.session.add(observacao)
+    db.session.commit()
+
+    login_as("SETOR", setor_id=acabamento.id)
+    html = client.get(f"/op/{op.id}").get_data(as_text=True)
+
+    assert "Tarefa observavel de outro setor" in html
+    assert "Observacao visivel no panorama." in html
+    assert f'action="/tarefas/{tarefa_pcp.id}/observacoes"' not in html
+    assert f'action="/tarefas/observacoes/{observacao.id}/excluir"' not in html
+
+
 def test_nao_aceita_observacao_vazia_ou_acima_do_limite(client, login_as, tarefa):
     login_as("ADMIN")
 
