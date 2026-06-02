@@ -150,7 +150,7 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
 
         hoje = hoje_brasilia()
 
-        busca = request.args.get("busca", "")
+        busca = (request.args.get("busca", "") or "").strip()
         status = request.args.get("status", "")
         atrasadas_filtro = request.args.get("atrasadas", "")
         filtro = request.args.get("filtro", "")
@@ -185,7 +185,11 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             query = query.filter(OP.id.in_(ops_setor))
 
         if busca:
-            query = query.filter(OP.nome.ilike(f"%{busca}%"))
+            termo_busca = f"%{busca}%"
+            query = query.filter(or_(
+                OP.nome.ilike(termo_busca),
+                OP.cliente.ilike(termo_busca),
+            ))
 
         atrasada = condicao_op_atrasada(hoje)
         total = contar_ops(query.filter(or_(

@@ -48,6 +48,21 @@ def limpar_config_email(flask_app):
         flask_app.config.pop(chave, None)
 
 
+def criar_op_dashboard(nome, setor=None, cliente=None, status="EM ANDAMENTO"):
+    op = OP(
+        nome=nome,
+        status=status,
+        atendente="atendente@teste.com",
+        cliente=cliente,
+        prazo_final=date(2026, 5, 20),
+    )
+    db.session.add(op)
+    db.session.flush()
+    if setor:
+        db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+    return op
+
+
 def test_dashboard_carrega_logado(client, login_as):
     login_as("ADMIN")
 
@@ -85,6 +100,152 @@ def test_dashboard_mostra_cliente_nos_cards(client, login_as, setores):
     assert resposta.status_code == 200
     assert "Cliente: Cliente Dashboard" in html
     assert "Cliente: Não informado" in html
+
+
+def test_dashboard_busca_por_cliente_retorna_op_correta(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard("OP Campanha Institucional", setor=setor, cliente="Cliente Alvo")
+    criar_op_dashboard("OP Campanha Varejo", setor=setor, cliente="Cliente Diferente")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=Alvo")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Campanha Institucional" in html
+    assert "Cliente: Cliente Alvo" in html
+    assert "OP Campanha Varejo" not in html
+
+
+def test_dashboard_busca_parcial_por_cliente_funciona(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard("OP Evento Corporativo", setor=setor, cliente="Nestle Brasil")
+    criar_op_dashboard("OP Evento Interno", setor=setor, cliente="Outro Cliente")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=nest")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Evento Corporativo" in html
+    assert "Cliente: Nestle Brasil" in html
+    assert "OP Evento Interno" not in html
+
+
+def test_dashboard_busca_por_cliente_e_case_insensitive(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard("OP Stand Feira", setor=setor, cliente="MEGACORP")
+    criar_op_dashboard("OP Stand Concorrente", setor=setor, cliente="Cliente Concorrente")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=megacorp")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Stand Feira" in html
+    assert "Cliente: MEGACORP" in html
+    assert "OP Stand Concorrente" not in html
+
+
+def test_dashboard_busca_por_nome_da_op_continua_funcionando(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard("OP Nome Encontravel", setor=setor, cliente="Cliente Um")
+    criar_op_dashboard("OP Nome Fora", setor=setor, cliente="Cliente Dois")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=Nome%20Encontravel")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Nome Encontravel" in html
+    assert "OP Nome Fora" not in html
+
+
+def test_dashboard_busca_por_cliente_combinada_com_status(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard(
+        "OP Cliente Status Finalizada",
+        setor=setor,
+        cliente="Cliente Status",
+        status="FINALIZADA",
+    )
+    criar_op_dashboard(
+        "OP Cliente Status Andamento",
+        setor=setor,
+        cliente="Cliente Status",
+        status="EM ANDAMENTO",
+    )
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=Cliente%20Status&status=FINALIZADA")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Cliente Status Finalizada" in html
+    assert "OP Cliente Status Andamento" not in html
+
+
+def test_dashboard_paginacao_preserva_busca_por_cliente(client, login_as, setores):
+    setor = setores["Acabamento"]
+    for indice in range(22):
+        criar_op_dashboard(
+            f"OP Paginado {indice:02d}",
+            setor=setor,
+            cliente="Cliente Paginado",
+        )
+    criar_op_dashboard("OP Cliente Excluido", setor=setor, cliente="Outro Cliente")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=Cliente%20Paginado")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert html.count("Ver OP") == 18
+    assert "OP Cliente Excluido" not in html
+    assert 'href="/dashboard?page=2&amp;busca=Cliente+Paginado#ops-list"' in html
+
+    segunda_pagina = client.get("/dashboard?busca=Cliente%20Paginado&page=2").get_data(as_text=True)
+    assert segunda_pagina.count("Ver OP") == 4
+    assert "OP Paginado 18" in segunda_pagina
+    assert "OP Paginado 21" in segunda_pagina
+    assert "OP Cliente Excluido" not in segunda_pagina
+
+
+def test_dashboard_setor_nao_enxerga_op_de_outro_setor_por_busca_cliente(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+    criar_op_dashboard("OP Cliente Permitido Setor", setor=acabamento, cliente="Cliente Restrito")
+    criar_op_dashboard("OP Cliente Outro Setor", setor=pcp, cliente="Cliente Restrito")
+    db.session.commit()
+    login_as("SETOR", setor_id=acabamento.id)
+
+    resposta = client.get("/dashboard?busca=Cliente%20Restrito")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Cliente Permitido Setor" in html
+    assert "OP Cliente Outro Setor" not in html
+
+
+def test_dashboard_cliente_vazio_ou_nulo_nao_quebra_busca(client, login_as, setores):
+    setor = setores["Acabamento"]
+    criar_op_dashboard("OP Cliente Nulo", setor=setor, cliente=None)
+    criar_op_dashboard("OP Cliente Vazio", setor=setor, cliente="")
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get("/dashboard?busca=OP%20Cliente")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "OP Cliente Nulo" in html
+    assert "OP Cliente Vazio" in html
 
 
 def test_dashboard_limita_listagem_a_dezoito_ops_por_pagina(client, login_as):
