@@ -11,7 +11,7 @@
                 Dashboard
             </a>
 
-            {% if session.get("tipo") not in ["SETOR", "ESPECTADOR"] %}
+            {% if session.get("tipo") in ["ADMIN", "ATENDENTE"] %}
             <a href="{{ url_for('arquivadas') }}" class="nav-link">
                 Arquivadas
             </a>

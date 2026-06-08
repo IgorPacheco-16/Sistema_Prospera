@@ -134,7 +134,7 @@ def test_setor_nao_pode_iniciar_tarefa_de_outro_setor(client, login_as, tarefa, 
     assert b"Setor incorreto" in resposta.data
 
 
-def test_setor_acessa_detalhe_op_sem_vinculo_para_visualizar_panorama(client, login_as, setores):
+def test_setor_nao_acessa_detalhe_op_sem_vinculo(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op = OP(
@@ -156,11 +156,8 @@ def test_setor_acessa_detalhe_op_sem_vinculo_para_visualizar_panorama(client, lo
 
     login_as("SETOR", setor_id=acabamento.id)
     resposta = client.get(f"/op/{op.id}")
-    html = resposta.get_data(as_text=True)
 
-    assert resposta.status_code == 200
-    assert "OP Panorama Sem Vinculo" in html
-    assert "Tarefa visivel de outro setor" in html
+    assert resposta.status_code == 403
 
 
 def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_com_setor, setores):
@@ -195,7 +192,7 @@ def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_
     assert f'action="/iniciar_tarefa/{tarefa_pcp.id}"' not in html
 
 
-def test_dashboard_setor_lista_panorama_geral_de_ops_ativas(client, login_as, setores):
+def test_dashboard_setor_lista_apenas_ops_vinculadas_ao_proprio_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op_acabamento = OP(
@@ -248,7 +245,7 @@ def test_dashboard_setor_lista_panorama_geral_de_ops_ativas(client, login_as, se
 
     assert resposta.status_code == 200
     assert "OP Dashboard Acabamento" in html
-    assert "OP Dashboard PCP" in html
+    assert "OP Dashboard PCP" not in html
     assert "OP Dashboard Finalizada" not in html
     assert "OP Dashboard Arquivada" not in html
     assert "Arquivar" not in html

@@ -52,7 +52,15 @@
             <a href="{{ url_for('editar_op', id=op.id) }}" class="btn btn-outline-primary">
                 Editar OP
             </a>
+            {% endif %}
 
+            {% if tipo in ["ATENDENTE", "PCP", "ADMIN"] %}
+            <a href="{{ url_for('configurar_setores_op', id=op.id) }}" class="btn btn-outline-primary">
+                Configurar setores
+            </a>
+            {% endif %}
+
+            {% if tipo in ["ATENDENTE", "ADMIN"] %}
             <button class="btn btn-outline-secondary"
                     type="button"
                     data-bs-toggle="modal"

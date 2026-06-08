@@ -104,7 +104,7 @@
             📅 Calendário
         </a>
 
-        {% if tipo not in ["SETOR", "ESPECTADOR"] %}
+        {% if tipo in ["ATENDENTE", "ADMIN"] %}
         <a href="{{ url_for('arquivadas') }}" class="btn btn-outline-secondary btn-sm">
             📁 Arquivadas
         </a>
@@ -243,17 +243,24 @@
                     </div>
 
                     <!-- AÇÕES -->
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
 
                         <a href="{{ url_for('ver_op', id=item.op.id) }}"
-                           class="btn btn-primary btn-sm {% if tipo in ['SETOR', 'ESPECTADOR'] %}w-100{% else %}w-50{% endif %}">
+                           class="btn btn-primary btn-sm flex-fill">
                             Ver OP
                         </a>
 
-                        {% if tipo not in ["SETOR", "ESPECTADOR"] %}
+                        {% if tipo in ["ATENDENTE", "PCP", "ADMIN"] %}
+                        <a href="{{ url_for('configurar_setores_op', id=item.op.id) }}"
+                           class="btn btn-outline-primary btn-sm flex-fill">
+                            Setores
+                        </a>
+                        {% endif %}
+
+                        {% if tipo in ["ATENDENTE", "ADMIN"] %}
                         <form action="{{ url_for('arquivar_op', id=item.op.id) }}"
                               method="POST"
-                              class="w-50">
+                              class="flex-fill">
 
                             <button class="btn btn-warning btn-sm w-100"
                                     type="submit"

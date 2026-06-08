@@ -148,6 +148,7 @@ BUILD_ONLY_ALIASES = [
     ("/arquivadas", "arquivadas"),
     ("/criar_op", "criar_op"),
     ("/op/<int:id>", "ver_op"),
+    ("/op/<int:id>/setores", "configurar_setores_op"),
     ("/editar_op/<int:id>", "editar_op"),
     ("/arquivar_op/<int:id>", "arquivar_op"),
     ("/desarquivar_op/<int:id>", "desarquivar_op"),

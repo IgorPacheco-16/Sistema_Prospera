@@ -217,7 +217,7 @@ def test_dashboard_paginacao_preserva_busca_por_cliente(client, login_as, setore
     assert "OP Cliente Excluido" not in segunda_pagina
 
 
-def test_dashboard_setor_enxerga_ops_de_outros_setores_por_busca_cliente(client, login_as, setores):
+def test_dashboard_setor_busca_apenas_ops_do_proprio_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     criar_op_dashboard("OP Cliente Permitido Setor", setor=acabamento, cliente="Cliente Restrito")
@@ -230,16 +230,16 @@ def test_dashboard_setor_enxerga_ops_de_outros_setores_por_busca_cliente(client,
 
     assert resposta.status_code == 200
     assert "OP Cliente Permitido Setor" in html
-    assert "OP Cliente Outro Setor" in html
+    assert "OP Cliente Outro Setor" not in html
 
 
-def test_dashboard_setor_paginacao_preserva_filtros_no_panorama_geral(client, login_as, setores):
+def test_dashboard_setor_paginacao_preserva_filtros_no_proprio_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     for indice in range(22):
         criar_op_dashboard(
             f"OP Setor Paginada {indice:02d}",
-            setor=acabamento if indice % 2 == 0 else pcp,
+            setor=acabamento,
             cliente="Cliente Setor Paginado",
             status="ABERTA",
         )
@@ -535,6 +535,132 @@ def test_edicao_de_op_altera_cliente(client, login_as, op_com_setor):
     assert resposta.status_code == 302
     assert resposta.headers["Location"].endswith(f"/op/{op.id}")
     assert op.cliente == "Cliente Atualizado"
+
+
+def test_pcp_consegue_incluir_setor_em_op(client, login_as, op_com_setor, setores):
+    op, setor_atual = op_com_setor
+    setor_novo = setores["PCP"]
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(setor_atual.id), str(setor_novo.id)]},
+        follow_redirects=True,
+    )
+
+    assert resposta.status_code == 200
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=setor_novo.id).first()
+    assert "Setores da OP atualizados." in resposta.get_data(as_text=True)
+
+
+def test_pcp_consegue_remover_setor_sem_tarefas(client, login_as, op_com_setor, setores):
+    op, setor_removido = op_com_setor
+    setor_mantido = setores["PCP"]
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor_mantido.id))
+    db.session.commit()
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(setor_mantido.id)]},
+        follow_redirects=True,
+    )
+
+    assert resposta.status_code == 200
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=setor_removido.id).first() is None
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=setor_mantido.id).first()
+
+
+def test_pcp_nao_remove_setor_com_tarefas_vinculadas(client, login_as, tarefa, setores):
+    op = db.session.get(OP, tarefa.op_id)
+    setor_bloqueado = setores["Acabamento"]
+    setor_mantido = setores["PCP"]
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor_mantido.id))
+    db.session.commit()
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(setor_mantido.id)]},
+        follow_redirects=True,
+    )
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=setor_bloqueado.id).first()
+    assert "tarefas vinculadas" in html
+
+
+def test_espectador_nao_consegue_editar_setores_da_op(client, login_as, op_com_setor, setores):
+    op, setor = op_com_setor
+    login_as("ESPECTADOR")
+
+    resposta_get = client.get(f"/op/{op.id}/setores")
+    resposta_post = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(setor.id), str(setores["PCP"].id)]},
+    )
+
+    assert resposta_get.status_code == 403
+    assert resposta_post.status_code == 403
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=setores["PCP"].id).first() is None
+
+
+def test_setor_passa_a_ver_op_quando_seu_setor_e_incluido(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+    op = OP(
+        nome="OP Visibilidade Setor Incluido",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=pcp.id))
+    db.session.commit()
+
+    login_as("SETOR", setor_id=acabamento.id)
+    assert "OP Visibilidade Setor Incluido" not in client.get("/dashboard").get_data(as_text=True)
+    assert client.get(f"/op/{op.id}").status_code == 403
+
+    login_as("PCP")
+    resposta_configuracao = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(pcp.id), str(acabamento.id)]},
+    )
+    assert resposta_configuracao.status_code == 302
+
+    login_as("SETOR", setor_id=acabamento.id)
+    dashboard = client.get("/dashboard").get_data(as_text=True)
+    detalhe = client.get(f"/op/{op.id}")
+
+    assert "OP Visibilidade Setor Incluido" in dashboard
+    assert detalhe.status_code == 200
+
+
+def test_setor_deixa_de_ver_op_quando_seu_setor_e_removido(client, login_as, op_com_setor, setores):
+    op, acabamento = op_com_setor
+    pcp = setores["PCP"]
+    db.session.add(OPSetor(op_id=op.id, setor_id=pcp.id))
+    db.session.commit()
+
+    login_as("SETOR", setor_id=acabamento.id)
+    assert "OP Teste" in client.get("/dashboard").get_data(as_text=True)
+    assert client.get(f"/op/{op.id}").status_code == 200
+
+    login_as("PCP")
+    resposta_configuracao = client.post(
+        f"/op/{op.id}/setores",
+        data={"setores": [str(pcp.id)]},
+    )
+    assert resposta_configuracao.status_code == 302
+
+    login_as("SETOR", setor_id=acabamento.id)
+    dashboard = client.get("/dashboard").get_data(as_text=True)
+    detalhe = client.get(f"/op/{op.id}")
+
+    assert "OP Teste" not in dashboard
+    assert detalhe.status_code == 403
 
 
 def test_detalhe_de_op_mostra_cliente(client, login_as, op_com_setor):
@@ -1142,6 +1268,34 @@ def test_arquivamento_de_op_registra_data(client, login_as, op_com_setor):
     assert resposta.status_code == 302
     assert op.status == "ARQUIVADA"
     assert op.arquivada_em is not None
+
+
+def test_pcp_nao_consegue_arquivar_op(client, login_as, op_com_setor):
+    op, _ = op_com_setor
+    login_as("PCP")
+
+    resposta = client.post(
+        f"/arquivar_op/{op.id}",
+        headers={"Referer": "/dashboard"}
+    )
+
+    db.session.refresh(op)
+    assert resposta.status_code == 403
+    assert op.status == "EM ANDAMENTO"
+    assert op.arquivada_em is None
+
+    resposta_arquivadas = client.get("/arquivadas")
+    assert resposta_arquivadas.status_code == 403
+
+
+def test_pcp_nao_ve_acoes_de_arquivamento_no_dashboard(client, login_as, op_com_setor):
+    login_as("PCP")
+
+    html = client.get("/dashboard").get_data(as_text=True)
+
+    assert "Setores" in html
+    assert "Arquivar" not in html
+    assert "Arquivadas" not in html
 
 
 def test_api_notificacoes_lista_notificacoes_do_usuario(client, login_as, notificacao):

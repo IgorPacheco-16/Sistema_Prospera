@@ -24,12 +24,63 @@ def create_ops_blueprint(
 ):
     ops_bp = Blueprint("ops_bp", __name__)
 
-    @ops_bp.route("/arquivadas")
-    @login_required
-    def arquivadas():
-        if session.get("tipo") in ["SETOR", "ESPECTADOR"]:
-            abort(403)
+    def sincronizar_setores_op(op):
+        setores_selecionados = {
+            int(setor_id)
+            for setor_id in request.form.getlist("setores")
+            if setor_id
+        }
+        setores_atuais = {op_setor.setor_id for op_setor in op.op_setores}
+        setores_bloqueados = []
 
+        for setor_id in setores_selecionados - setores_atuais:
+            setor = db.session.get(Setor, setor_id)
+            if not setor:
+                continue
+
+            db.session.add(OPSetor(
+                op_id=op.id,
+                setor_id=setor_id
+            ))
+            registrar_historico(
+                op.id,
+                "Setor adicionado",
+                f"Setor {setor.nome} adicionado a OP."
+            )
+
+        for op_setor in list(op.op_setores):
+            if op_setor.setor_id in setores_selecionados:
+                continue
+
+            tem_tarefas = Tarefa.query.filter_by(
+                op_id=op.id,
+                setor_id=op_setor.setor_id
+            ).first()
+
+            if tem_tarefas:
+                nome_setor = op_setor.setor.nome if op_setor.setor else op_setor.setor_id
+                setores_bloqueados.append(nome_setor)
+                continue
+
+            nome_setor = op_setor.setor.nome if op_setor.setor else op_setor.setor_id
+            db.session.delete(op_setor)
+            registrar_historico(
+                op.id,
+                "Setor removido",
+                f"Setor {nome_setor} removido da OP."
+            )
+
+        if setores_bloqueados:
+            flash(
+                "Nao foi possivel remover setor(es) com tarefas vinculadas: "
+                + ", ".join(str(setor) for setor in setores_bloqueados)
+                + ".",
+                "warning"
+            )
+
+    @ops_bp.route("/arquivadas")
+    @tipos_permitidos("ATENDENTE", "ADMIN")
+    def arquivadas():
         ops = OP.query.filter_by(status="ARQUIVADA").all()
         return render_template("arquivadas/index.html", ops=ops)
 
@@ -154,6 +205,11 @@ def create_ops_blueprint(
                 or op.finalizada_em is not None
                 or op.arquivada_em is not None
             ):
+                abort(403)
+            if not setor_usuario_id or not OPSetor.query.filter_by(
+                op_id=op.id,
+                setor_id=setor_usuario_id,
+            ).first():
                 abort(403)
 
         estrutura = []
@@ -418,42 +474,7 @@ def create_ops_blueprint(
             else:
                 op.prazo_final = None
 
-            setores_selecionados = {int(setor_id) for setor_id in request.form.getlist("setores")}
-            setores_atuais = {op_setor.setor_id for op_setor in op.op_setores}
-
-            for setor_id in setores_selecionados - setores_atuais:
-                setor = db.session.get(Setor, setor_id)
-                db.session.add(OPSetor(
-                    op_id=op.id,
-                    setor_id=setor_id
-                ))
-                registrar_historico(
-                    op.id,
-                    "Setor adicionado",
-                    f"Setor {setor.nome if setor else setor_id} adicionado à OP."
-                )
-
-            for op_setor in list(op.op_setores):
-                if op_setor.setor_id in setores_selecionados:
-                    continue
-
-                tem_tarefas = Tarefa.query.filter_by(
-                    op_id=op.id,
-                    setor_id=op_setor.setor_id
-                ).first()
-
-                if tem_tarefas:
-                    flash(
-                        "Um ou mais setores com tarefas foram mantidos para proteger os dados da OP."
-                    )
-                else:
-                    nome_setor = op_setor.setor.nome if op_setor.setor else op_setor.setor_id
-                    db.session.delete(op_setor)
-                    registrar_historico(
-                        op.id,
-                        "Setor removido",
-                        f"Setor {nome_setor} removido da OP."
-                    )
+            sincronizar_setores_op(op)
 
             mudancas = []
             if nome_anterior != op.nome:
@@ -483,6 +504,28 @@ def create_ops_blueprint(
             setores=setores,
             tipo=session.get("tipo"),
             pode_editar_op=pode_editar_op
+        )
+
+    @ops_bp.route("/op/<int:id>/setores", methods=["GET", "POST"])
+    @tipos_permitidos("ATENDENTE", "PCP", "ADMIN")
+    def configurar_setores_op(id):
+        op = db.session.get(OP, id)
+        if not op:
+            abort(404)
+
+        setores = Setor.query.order_by(Setor.nome).all()
+
+        if request.method == "POST":
+            sincronizar_setores_op(op)
+            db.session.commit()
+            flash("Setores da OP atualizados.", "success")
+            return redirect(url_for("ver_op", id=op.id))
+
+        return render_template(
+            "op/setores.html",
+            op=op,
+            setores=setores,
+            tipo=session.get("tipo"),
         )
 
     @ops_bp.route("/finalizar_op/<int:id>", methods=["POST"])

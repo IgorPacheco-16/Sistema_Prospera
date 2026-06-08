@@ -1,0 +1,65 @@
+{% extends "base/base.html" %}
+
+{% block css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/criar_op.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4 criar-op-page">
+
+    <h2 class="mb-4 text-center fw-bold">Configurar setores da OP</h2>
+
+    <div class="card shadow-sm form-card">
+        <div class="card-body">
+            <div class="mb-4">
+                <h3 class="h5 mb-1">{{ op.nome }}</h3>
+                <p class="text-muted mb-0">Selecione os setores vinculados a esta OP.</p>
+            </div>
+
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Setores participantes</label>
+
+                    <div class="row g-3">
+                        {% for setor in setores %}
+                        <div class="col-md-6">
+                            <label class="setor-card">
+                                <input type="checkbox"
+                                       name="setores"
+                                       value="{{ setor.id }}"
+                                       {% for op_setor in op.op_setores %}
+                                           {% if op_setor.setor_id == setor.id %}
+                                               checked
+                                           {% endif %}
+                                       {% endfor %}>
+
+                                <span class="setor-label">
+                                    {{ setor.nome }}
+                                </span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="form-text mt-2">
+                        Setores com tarefas vinculadas nao podem ser removidos.
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{{ url_for('ver_op', id=op.id) }}" class="btn btn-outline-secondary">
+                        Cancelar
+                    </a>
+
+                    <button type="submit" class="btn btn-success">
+                        Salvar setores
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
