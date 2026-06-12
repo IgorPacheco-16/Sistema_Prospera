@@ -436,7 +436,14 @@ def create_calendario_blueprint(login_required):
         )
 
         if tipo == "SETOR":
-            query = query.filter(Tarefa.setor_id == setor_usuario_id)
+            query = (
+                query
+                .join(OPSetor, OPSetor.op_id == OP.id)
+                .filter(
+                    OPSetor.setor_id == setor_usuario_id,
+                    Tarefa.setor_id == setor_usuario_id,
+                )
+            )
             filtros["setores"] = [setor_usuario_id] if setor_usuario_id else []
         elif filtros["setores"]:
             setores_validos = {
@@ -522,7 +529,14 @@ def create_calendario_blueprint(login_required):
             )
         )
         if tipo == "SETOR":
-            ops_query = ops_query.filter(Tarefa.setor_id == setor_usuario_id)
+            ops_query = (
+                ops_query
+                .join(OPSetor, OPSetor.op_id == OP.id)
+                .filter(
+                    OPSetor.setor_id == setor_usuario_id,
+                    Tarefa.setor_id == setor_usuario_id,
+                )
+            )
         ops_disponiveis = ops_query.distinct().order_by(OP.nome).all()
 
         clientes_query = (
@@ -537,7 +551,14 @@ def create_calendario_blueprint(login_required):
             )
         )
         if tipo == "SETOR":
-            clientes_query = clientes_query.filter(Tarefa.setor_id == setor_usuario_id)
+            clientes_query = (
+                clientes_query
+                .join(OPSetor, OPSetor.op_id == OP.id)
+                .filter(
+                    OPSetor.setor_id == setor_usuario_id,
+                    Tarefa.setor_id == setor_usuario_id,
+                )
+            )
         clientes_disponiveis = [
             cliente
             for cliente, in clientes_query.distinct().order_by(OP.cliente).all()

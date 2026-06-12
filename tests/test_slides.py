@@ -107,12 +107,37 @@ def test_slides_js_relogio_usa_timezone_brasilia():
     assert 'timeZone: "America/Sao_Paulo"' in js
 
 
-def test_slides_setor_nao_acessa(client, login_as, setores):
+def test_slides_setor_acessa(client, login_as, setores):
     login_as("SETOR", setor_id=setores["Acabamento"].id)
 
     resposta = client.get("/slides")
 
-    assert resposta.status_code == 403
+    assert resposta.status_code == 200
+    assert "Painel de entregas" in resposta.get_data(as_text=True)
+
+
+def test_api_slides_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, setores):
+    hoje = hoje_brasilia()
+    criar_tarefa_slide(
+        "OP Slide Acabamento",
+        "Tarefa slide acabamento",
+        setores["Acabamento"],
+        hoje,
+    )
+    criar_tarefa_slide(
+        "OP Slide PCP",
+        "Tarefa slide pcp",
+        setores["PCP"],
+        hoje,
+    )
+    login_as("SETOR", setor_id=setores["Acabamento"].id)
+
+    resposta = client.get("/api/slides")
+    dados = resposta.get_json()
+
+    assert resposta.status_code == 200
+    assert "Tarefa slide acabamento" in nomes_itens(dados["categorias"]["hoje"])
+    assert "Tarefa slide pcp" not in nomes_itens(dados["categorias"]["hoje"])
 
 
 def test_api_slides_retorna_categorias(client, login_as, setores):

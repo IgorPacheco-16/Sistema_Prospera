@@ -169,6 +169,7 @@ def create_ops_blueprint(
             .options(
                 selectinload(OP.op_setores).selectinload(OPSetor.setor),
                 selectinload(OP.tarefas).selectinload(Tarefa.responsaveis),
+                selectinload(OP.tarefas).selectinload(Tarefa.criado_por),
                 selectinload(OP.tarefas)
                 .selectinload(Tarefa.responsavel_vinculos)
                 .selectinload(TarefaResponsavel.usuario),

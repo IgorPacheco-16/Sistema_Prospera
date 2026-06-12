@@ -211,15 +211,18 @@ def usuario_setor_pode_atuar_tarefa(tarefa):
     if session.get("tipo") != "SETOR":
         return False
 
-    responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
-    if responsaveis:
-        usuario = usuario_logado_ativo()
-        return bool(usuario and any(responsavel.id == usuario.id for responsavel in responsaveis))
-
     try:
-        return int(session.get("setor_id")) == tarefa.setor_id
+        setor_id = int(session.get("setor_id"))
     except (TypeError, ValueError):
         return False
+
+    if setor_id != tarefa.setor_id:
+        return False
+
+    return OPSetor.query.filter_by(
+        op_id=tarefa.op_id,
+        setor_id=setor_id,
+    ).first() is not None
 
 
 def link_solicitacao_tarefa(op_id, setor_id):
@@ -925,6 +928,7 @@ def create_tarefas_blueprint(
             status=STATUS_PENDENTE,
             liberada=True,
             criada_em=agora,
+            criado_por_id=responsavel.id if responsavel else None,
         )
         db.session.add(tarefa)
         db.session.flush()
@@ -1677,6 +1681,7 @@ def create_tarefas_blueprint(
                 tarefa=tarefa_duplicada.id
             ))
 
+        criador = usuario_logado_ativo()
         nova = Tarefa(
             op_id=op_id,
             setor_id=setor_id,
@@ -1684,7 +1689,8 @@ def create_tarefas_blueprint(
             prazo=prazo_convertido,
             status=STATUS_PENDENTE,
             liberada=True,
-            criada_em=agora_brasilia()
+            criada_em=agora_brasilia(),
+            criado_por_id=criador.id if criador else None,
         )
 
         db.session.add(nova)

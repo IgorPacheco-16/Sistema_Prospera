@@ -38,7 +38,12 @@ def nome_setor_tarefa(tarefa):
 def usuario_pode_acionar_tarefa_por_setor(tarefa, tipo):
     setor_id = setor_id_logado()
     if setor_id is not None:
-        return setor_id == tarefa.setor_id
+        if setor_id != tarefa.setor_id:
+            return False
+        return OPSetor.query.filter_by(
+            op_id=tarefa.op_id,
+            setor_id=setor_id,
+        ).first() is not None
 
     setores_padrao = {
         "PCP": "pcp",
@@ -61,6 +66,9 @@ def usuario_pode_acionar_tarefa(tarefa):
     if tipo == "ESPECTADOR":
         return False
 
+    if tipo == "SETOR":
+        return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
+
     responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
     if responsaveis:
         usuario = usuario_logado_ativo()
@@ -80,6 +88,9 @@ def usuario_pode_validar_tarefa(tarefa):
 
     if tipo in {"ADMIN", "PCP"}:
         return True
+
+    if tipo in {"SETOR", "ESPECTADOR"}:
+        return False
 
     return usuario_pode_acionar_tarefa(tarefa)
 

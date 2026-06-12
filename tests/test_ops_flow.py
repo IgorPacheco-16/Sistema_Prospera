@@ -915,6 +915,7 @@ def test_criacao_de_tarefa_notifica_setor(client, login_as, op_com_setor):
     assert tarefa.nome == "Imprimir material"
     assert tarefa.status == "PENDENTE"
     assert tarefa.criada_em is not None
+    assert tarefa.criado_por.email == "pcp@teste.com"
     assert Notificacao.query.filter_by(
         usuario="SETOR",
         op_id=op.id,
@@ -946,6 +947,19 @@ def test_criacao_duplicada_de_tarefa_em_sequencia_nao_cria_duas(client, login_as
     assert segunda.status_code == 200
     assert len(tarefas) == 1
     assert "Esta ação já foi processada." in segunda.get_data(as_text=True)
+
+
+def test_detalhe_tarefa_sem_criador_nao_quebra_e_mostra_fallback(client, login_as, tarefa):
+    tarefa.criado_por_id = None
+    db.session.commit()
+    login_as("ADMIN")
+
+    resposta = client.get(f"/op/{tarefa.op_id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Criada por:" in html
+    assert "nao registrado" in html
 
 
 def test_setor_inicia_tarefa_pendente(client, login_as, tarefa):
@@ -1223,7 +1237,7 @@ def test_fluxo_completo_status_tarefa(client, login_as, tarefa):
     assert resposta.status_code == 302
     assert tarefa.status == "EM VALIDAÇÃO"
 
-    login_as("SETOR", setor_id=tarefa.setor_id)
+    login_as("ADMIN")
     resposta = client.post(
         f"/validar_tarefa/{tarefa.id}",
         headers={"Referer": f"/op/{tarefa.op_id}"}

@@ -25,7 +25,7 @@
                 Kanban
             </a>
 
-            {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP", "ESPECTADOR"] %}
+            {% if session.get("tipo") in ["ADMIN", "ATENDENTE", "PCP", "SETOR", "ESPECTADOR"] %}
             <a href="{{ url_for('slides') }}" class="nav-link">
                 Slides
             </a>

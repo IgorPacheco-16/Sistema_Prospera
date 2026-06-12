@@ -2,10 +2,10 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, render_template, url_for
+from flask import Blueprint, current_app, jsonify, render_template, session, url_for
 from sqlalchemy.orm import selectinload
 
-from database.models import OP, Tarefa
+from database.models import OP, OPSetor, Tarefa
 from tempo import hoje_brasilia
 
 
@@ -68,6 +68,13 @@ def data_br(valor):
     return valor.strftime("%d/%m/%Y") if valor else "Sem prazo"
 
 
+def setor_id_sessao():
+    try:
+        return int(session.get("setor_id"))
+    except (TypeError, ValueError):
+        return None
+
+
 def cliente_op(op):
     cliente = (getattr(op, "cliente", None) or "").strip() if op else ""
     return cliente or "Não informado"
@@ -117,8 +124,8 @@ def ordenar_tarefas(tarefa):
     return (prazo_ordem, prioridade, tarefa.op.nome if tarefa.op else "", tarefa.id)
 
 
-def tarefas_ativas():
-    return (
+def tarefas_ativas(setor_id=None):
+    query = (
         Tarefa.query
         .options(
             selectinload(Tarefa.op),
@@ -130,8 +137,19 @@ def tarefas_ativas():
             OP.status.notin_(["FINALIZADA", "ARQUIVADA"]),
             Tarefa.validado.is_(False),
         )
-        .all()
     )
+
+    if setor_id is not None:
+        query = (
+            query
+            .join(OPSetor, OPSetor.op_id == OP.id)
+            .filter(
+                OPSetor.setor_id == setor_id,
+                Tarefa.setor_id == setor_id,
+            )
+        )
+
+    return query.all()
 
 
 def limitar_itens(tarefas, hoje, limite):
@@ -188,11 +206,11 @@ def paginar_slides_tarefas(
     return slides
 
 
-def montar_payload_slides():
+def montar_payload_slides(setor_id=None):
     hoje = hoje_brasilia()
     amanha = hoje + timedelta(days=1)
     limite_15 = hoje + timedelta(days=15)
-    tarefas = tarefas_ativas()
+    tarefas = tarefas_ativas(setor_id=setor_id)
 
     atrasadas = [t for t in tarefas if t.prazo and t.prazo < hoje]
     hoje_lista = [t for t in tarefas if t.prazo == hoje]
@@ -284,7 +302,7 @@ def create_slides_blueprint(tipos_permitidos):
     slides_bp = Blueprint("slides_bp", __name__)
 
     @slides_bp.route("/slides")
-    @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "ESPECTADOR")
+    @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "SETOR", "ESPECTADOR")
     def slides():
         return render_template(
             "slides/index.html",
@@ -292,10 +310,15 @@ def create_slides_blueprint(tipos_permitidos):
         )
 
     @slides_bp.route("/api/slides")
-    @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "ESPECTADOR")
+    @tipos_permitidos("ADMIN", "ATENDENTE", "PCP", "SETOR", "ESPECTADOR")
     def api_slides():
         inicio_slides = time.perf_counter()
-        payload = montar_payload_slides()
+        setor_id = None
+        if session.get("tipo") == "SETOR":
+            setor_id = setor_id_sessao()
+            if setor_id is None:
+                setor_id = -1
+        payload = montar_payload_slides(setor_id=setor_id)
         resposta = jsonify(payload)
         current_app.logger.info(
             "api_slides_timing slides=%s total_ms=%.1f",

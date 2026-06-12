@@ -190,6 +190,7 @@ class Tarefa(db.Model):
     recusada_em = db.Column(db.DateTime, nullable=True)
     entregue_em = db.Column(db.DateTime, nullable=True)
     concluida_em = db.Column(db.DateTime, nullable=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     observacao_entrega = db.Column(db.String(1000), nullable=True)
     motivo_recusa = db.Column(db.String(255), nullable=True)
     em_espera = db.Column(db.Boolean, default=False, nullable=False, server_default="0")
@@ -206,6 +207,10 @@ class Tarefa(db.Model):
         nullable=True,
     )
     setor = db.relationship('Setor')
+    criado_por = db.relationship(
+        "User",
+        foreign_keys=[criado_por_id],
+    )
     espera_aprovada_por = db.relationship(
         "User",
         foreign_keys=[espera_aprovada_por_id],

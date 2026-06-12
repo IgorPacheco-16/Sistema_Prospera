@@ -194,7 +194,7 @@ def test_modal_responsaveis_usa_controle_compacto(client, login_as, tarefa):
     assert "Geral do setor" in html
 
 
-def test_qualquer_responsavel_consegue_iniciar_entregar_e_validar(client, login_as, tarefa):
+def test_qualquer_usuario_do_setor_consegue_iniciar_e_entregar_com_responsaveis(client, login_as, tarefa):
     primeiro = criar_usuario("primeiro.fluxo@teste.com", tarefa.setor, nome="Primeiro")
     segundo = criar_usuario("segundo.fluxo@teste.com", tarefa.setor, nome="Segundo")
     atribuir_responsaveis(tarefa, [primeiro, segundo])
@@ -214,7 +214,7 @@ def test_qualquer_responsavel_consegue_iniciar_entregar_e_validar(client, login_
     )
     assert resposta.status_code == 302
 
-    login_as("SETOR", email=segundo.email, setor_id=tarefa.setor_id)
+    login_as("ADMIN")
     resposta = client.post(
         f"/validar_tarefa/{tarefa.id}",
         headers={"Referer": f"/op/{tarefa.op_id}"}
@@ -226,7 +226,7 @@ def test_qualquer_responsavel_consegue_iniciar_entregar_e_validar(client, login_
     assert tarefa.status == "ENTREGUE"
 
 
-def test_usuario_mesmo_setor_nao_marcado_nao_movimenta(client, login_as, tarefa):
+def test_usuario_mesmo_setor_nao_marcado_movimenta_por_vinculo_do_setor(client, login_as, tarefa):
     responsavel = criar_usuario("responsavel.bloqueio@teste.com", tarefa.setor)
     colega = criar_usuario("colega.bloqueio@teste.com", tarefa.setor)
     atribuir_responsaveis(tarefa, [responsavel])
@@ -238,8 +238,8 @@ def test_usuario_mesmo_setor_nao_marcado_nao_movimenta(client, login_as, tarefa)
     )
     db.session.refresh(tarefa)
 
-    assert resposta.status_code == 403
-    assert tarefa.status == "PENDENTE"
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
 
 
 def test_admin_continua_podendo_movimentar_tarefa_com_responsaveis(client, login_as, tarefa):

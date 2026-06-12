@@ -421,6 +421,15 @@
                                 </span>
                                 <span class="task-summary-dot" aria-hidden="true"></span>
                                 <span>{{ responsaveis_count or 1 }} ativo{% if (responsaveis_count or 1) != 1 %}s{% endif %}</span>
+                                <span class="task-summary-dot" aria-hidden="true"></span>
+                                <span>
+                                    Criada por:
+                                    {% if t.criado_por %}
+                                        {{ t.criado_por.nome or t.criado_por.email or "nao registrado" }}
+                                    {% else %}
+                                        nao registrado
+                                    {% endif %}
+                                </span>
                                 {% if t.espera_pendente %}
                                     <span class="task-summary-dot" aria-hidden="true"></span>
                                     <span class="task-waiting-summary">Solicita&ccedil;&atilde;o de espera pendente</span>

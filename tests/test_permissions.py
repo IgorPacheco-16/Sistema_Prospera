@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from database.models import db, OP, OPSetor, Tarefa
+from database.models import db, OP, OPSetor, Setor, Tarefa, User
 from tempo import hoje_brasilia
 
 
@@ -192,6 +192,59 @@ def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_
     assert f'action="/iniciar_tarefa/{tarefa_pcp.id}"' not in html
 
 
+def test_setor_criacao_ve_e_aciona_tarefa_mesmo_sem_ser_responsavel(client, login_as):
+    criacao = Setor(nome="Criacao")
+    db.session.add(criacao)
+    db.session.flush()
+    usuario_criacao = User(
+        email="criacao@teste.com",
+        nome="Usuario Criacao",
+        tipo="SETOR",
+        setor_id=criacao.id,
+        ativo=True,
+    )
+    outro_usuario_criacao = User(
+        email="outro.criacao@teste.com",
+        nome="Outro Criacao",
+        tipo="SETOR",
+        setor_id=criacao.id,
+        ativo=True,
+    )
+    op = OP(
+        nome="OP Criacao Vinculada",
+        status="EM ANDAMENTO",
+        atendente="atendente@teste.com",
+    )
+    db.session.add_all([usuario_criacao, outro_usuario_criacao, op])
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=criacao.id))
+    tarefa = Tarefa(
+        op_id=op.id,
+        setor_id=criacao.id,
+        nome="Tarefa Criacao Geral",
+        status="PENDENTE",
+        liberada=True,
+    )
+    tarefa.responsaveis = [outro_usuario_criacao]
+    db.session.add(tarefa)
+    db.session.commit()
+
+    login_as("SETOR", email=usuario_criacao.email, setor_id=criacao.id)
+    dashboard = client.get("/dashboard").get_data(as_text=True)
+    detalhe = client.get(f"/op/{op.id}").get_data(as_text=True)
+    resposta = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{op.id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert "OP Criacao Vinculada" in dashboard
+    assert "Tarefa Criacao Geral" in detalhe
+    assert f'action="/iniciar_tarefa/{tarefa.id}"' in detalhe
+    assert resposta.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
+
+
 def test_dashboard_setor_lista_apenas_ops_vinculadas_ao_proprio_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
@@ -358,6 +411,26 @@ def test_pcp_valida_tarefa_de_outro_setor_sem_iniciar(client, login_as, setores)
     assert resposta.status_code == 302
     assert tarefa.status == "ENTREGUE"
     assert tarefa.validado is True
+
+
+def test_setor_nao_valida_tarefa_do_proprio_setor(client, login_as, setores):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    login_as("SETOR", setor_id=setores["Acabamento"].id)
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.status == "EM VALIDAÃ‡ÃƒO"
+    assert tarefa.validado is False
 
 
 def test_atendente_nao_valida_tarefa_de_outro_setor(client, login_as, setores):

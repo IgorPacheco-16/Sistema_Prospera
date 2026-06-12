@@ -97,16 +97,17 @@ def test_espectador_nao_ve_botoes_de_acao_principais(client, login_as, setores):
     assert f'action="/iniciar_tarefa/{tarefa.id}"' not in detalhe
 
 
-def test_link_slides_aparece_para_perfis_permitidos_e_nao_para_setor(client, login_as, setores):
-    for tipo in ["ADMIN", "PCP", "ATENDENTE", "ESPECTADOR"]:
-        login_as(tipo)
+def test_link_slides_aparece_para_perfis_permitidos(client, login_as, setores):
+    perfis = [
+        ("ADMIN", None),
+        ("PCP", None),
+        ("ATENDENTE", None),
+        ("SETOR", setores["Acabamento"].id),
+        ("ESPECTADOR", None),
+    ]
+    for tipo, setor_id in perfis:
+        login_as(tipo, setor_id=setor_id)
         html = client.get("/dashboard").get_data(as_text=True)
 
         assert 'href="/slides"' in html
         assert "Slides" in html
-
-    login_as("SETOR", setor_id=setores["Acabamento"].id)
-    html = client.get("/dashboard").get_data(as_text=True)
-
-    assert 'href="/slides"' not in html
-    assert "Slides" not in html

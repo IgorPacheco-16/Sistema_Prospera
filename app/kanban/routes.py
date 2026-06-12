@@ -307,7 +307,14 @@ def create_kanban_blueprint(login_required):
         )
 
         if tipo == "SETOR":
-            query = query.filter(Tarefa.setor_id == setor_usuario_id)
+            query = (
+                query
+                .join(OPSetor, OPSetor.op_id == OP.id)
+                .filter(
+                    OPSetor.setor_id == setor_usuario_id,
+                    Tarefa.setor_id == setor_usuario_id,
+                )
+            )
             filtros["setores"] = [setor_usuario_id] if setor_usuario_id else []
         elif filtros["setores"]:
             query = query.filter(Tarefa.setor_id.in_(filtros["setores"]))
