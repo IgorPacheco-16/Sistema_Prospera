@@ -1908,7 +1908,7 @@ def create_tarefas_blueprint(
         tarefa = Tarefa.query.get_or_404(id)
         motivo_recusa = request.form.get("motivo_recusa", "").strip()
 
-        acesso_negado = exigir_permissao_tarefa(tarefa)
+        acesso_negado = exigir_permissao_validacao(tarefa)
         if acesso_negado:
             return acesso_negado
 

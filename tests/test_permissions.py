@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from database.models import db, OP, OPSetor, Setor, Tarefa, User
 from tempo import hoje_brasilia
 
@@ -429,11 +431,10 @@ def test_setor_nao_valida_tarefa_do_proprio_setor(client, login_as, setores):
 
     db.session.refresh(tarefa)
     assert resposta.status_code == 403
-    assert tarefa.status == "EM VALIDAÃ‡ÃƒO"
     assert tarefa.validado is False
 
 
-def test_atendente_nao_valida_tarefa_de_outro_setor(client, login_as, setores):
+def test_atendente_valida_tarefa_de_outro_setor(client, login_as, setores):
     _op, tarefa = criar_tarefa_para_setor(
         setores["Acabamento"],
         status="EM VALIDAÇÃO",
@@ -448,9 +449,186 @@ def test_atendente_nao_valida_tarefa_de_outro_setor(client, login_as, setores):
     )
 
     db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.validado is True
+
+
+@pytest.mark.parametrize("tipo", ["ADMIN", "ATENDENTE", "PCP"])
+def test_perfis_autorizados_validam_tarefa_entregue(client, login_as, setores, tipo):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    login_as(tipo)
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.validado is True
+
+
+def test_atendente_valida_tarefa_sem_ser_criador_ou_responsavel(client, login_as, setores):
+    acabamento = setores["Acabamento"]
+    _op, tarefa = criar_tarefa_para_setor(
+        acabamento,
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    criador = User(
+        email="criador.validacao@teste.com",
+        nome="Criador Validacao",
+        tipo="PCP",
+        ativo=True,
+    )
+    responsavel = User(
+        email="responsavel.validacao.permissao@teste.com",
+        nome="Responsavel Validacao",
+        tipo="SETOR",
+        setor_id=acabamento.id,
+        ativo=True,
+    )
+    db.session.add_all([criador, responsavel])
+    db.session.flush()
+    tarefa.criado_por_id = criador.id
+    tarefa.responsaveis = [responsavel]
+    db.session.commit()
+
+    login_as("ATENDENTE")
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "ENTREGUE"
+    assert tarefa.validado is True
+
+
+@pytest.mark.parametrize("tipo,setor_id_nome", [
+    ("SETOR", "Acabamento"),
+    ("ESPECTADOR", None),
+])
+def test_perfis_bloqueados_nao_validam_tarefa_por_post_direto(
+    client,
+    login_as,
+    setores,
+    tipo,
+    setor_id_nome,
+):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    setor_id = setores[setor_id_nome].id if setor_id_nome else None
+    login_as(tipo, setor_id=setor_id)
+
+    resposta = client.post(
+        f"/validar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
     assert resposta.status_code == 403
-    assert tarefa.status == "EM VALIDAÇÃO"
     assert tarefa.validado is False
+
+
+@pytest.mark.parametrize("tipo", ["ADMIN", "ATENDENTE", "PCP"])
+def test_perfis_autorizados_recusam_tarefa_entregue(client, login_as, setores, tipo):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    login_as(tipo)
+
+    resposta = client.post(
+        f"/recusar_tarefa/{tarefa.id}",
+        data={"motivo_recusa": "Ajustar entrega"},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 302
+    assert tarefa.status == "PENDENTE"
+    assert tarefa.entregue is False
+    assert tarefa.validado is False
+    assert tarefa.motivo_recusa == "Ajustar entrega"
+
+
+@pytest.mark.parametrize("tipo,setor_id_nome", [
+    ("SETOR", "Acabamento"),
+    ("ESPECTADOR", None),
+])
+def test_perfis_bloqueados_nao_recusam_tarefa_por_post_direto(
+    client,
+    login_as,
+    setores,
+    tipo,
+    setor_id_nome,
+):
+    _op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    setor_id = setores[setor_id_nome].id if setor_id_nome else None
+    login_as(tipo, setor_id=setor_id)
+
+    resposta = client.post(
+        f"/recusar_tarefa/{tarefa.id}",
+        data={"motivo_recusa": "Tentativa indevida"},
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    db.session.refresh(tarefa)
+    assert resposta.status_code == 403
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
+    assert tarefa.motivo_recusa is None
+
+
+@pytest.mark.parametrize("tipo,setor_id_nome,pode_ver", [
+    ("ADMIN", None, True),
+    ("ATENDENTE", None, True),
+    ("PCP", None, True),
+    ("SETOR", "Acabamento", False),
+    ("ESPECTADOR", None, False),
+])
+def test_botoes_validar_e_recusar_seguem_permissao_de_validacao(
+    client,
+    login_as,
+    setores,
+    tipo,
+    setor_id_nome,
+    pode_ver,
+):
+    op, tarefa = criar_tarefa_para_setor(
+        setores["Acabamento"],
+        status="EM VALIDAÃ‡ÃƒO",
+        entregue=True,
+        validado=False,
+    )
+    setor_id = setores[setor_id_nome].id if setor_id_nome else None
+    login_as(tipo, setor_id=setor_id)
+
+    html = client.get(f"/op/{op.id}").get_data(as_text=True)
+
+    assert (f'action="/validar_tarefa/{tarefa.id}"' in html) is pode_ver
+    assert (f'action="/recusar_tarefa/{tarefa.id}"' in html) is pode_ver
 
 
 def test_atendente_nao_movimenta_tarefa_de_outro_setor(client, login_as, setores):

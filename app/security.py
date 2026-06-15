@@ -85,14 +85,7 @@ def usuario_pode_acionar_tarefa(tarefa):
 
 def usuario_pode_validar_tarefa(tarefa):
     tipo = session.get("tipo")
-
-    if tipo in {"ADMIN", "PCP"}:
-        return True
-
-    if tipo in {"SETOR", "ESPECTADOR"}:
-        return False
-
-    return usuario_pode_acionar_tarefa(tarefa)
+    return tipo in {"ADMIN", "ATENDENTE", "PCP"}
 
 
 def usuario_pode_observar_tarefa(tarefa):
