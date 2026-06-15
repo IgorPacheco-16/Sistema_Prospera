@@ -5,6 +5,7 @@ from database.models import db, Notificacao, Setor, User
 from tempo import formatar_data_hora_brasilia
 import importlib.util
 import os
+import sys
 import time
 import unicodedata
 from pathlib import Path
@@ -53,6 +54,7 @@ def carregar_modulo(nome, caminho_relativo):
     caminho = BASE_DIR / caminho_relativo
     spec = importlib.util.spec_from_file_location(nome, caminho)
     modulo = importlib.util.module_from_spec(spec)
+    sys.modules[nome] = modulo
     spec.loader.exec_module(modulo)
     return modulo
 

@@ -5,6 +5,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, s
 from sqlalchemy.orm import selectinload
 
 from database.models import db, HistoricoOP, Notificacao, OP, OPSetor, Setor, Tarefa, TarefaEsperaSolicitacao, TarefaObservacao, TarefaResponsavel, TarefaSolicitacao, User
+from pacheco_security import exigir_op_mutavel, op_esta_encerrada
 from tempo import agora_brasilia, hoje_brasilia
 
 
@@ -200,17 +201,9 @@ def create_ops_blueprint(
             email=session.get("usuario"),
             ativo=True
         ).first()
+        op_mutavel = not op_esta_encerrada(op)
         if tipo_usuario == "SETOR":
-            if (
-                op.status in {"FINALIZADA", "ARQUIVADA"}
-                or op.finalizada_em is not None
-                or op.arquivada_em is not None
-            ):
-                abort(403)
-            if not setor_usuario_id or not OPSetor.query.filter_by(
-                op_id=op.id,
-                setor_id=setor_usuario_id,
-            ).first():
+            if not op_mutavel:
                 abort(403)
 
         estrutura = []
@@ -218,16 +211,16 @@ def create_ops_blueprint(
             setor_id: usuarios
             for setor_id, usuarios in agrupar_usuarios_ativos_por_setor().items()
         }
-        op_ativa_para_solicitacao = (
-            op.status not in {"FINALIZADA", "ARQUIVADA"}
-            and op.finalizada_em is None
-            and op.arquivada_em is None
-        )
+        op_ativa_para_solicitacao = op_mutavel
         pode_solicitar_tarefa_op = (
             tipo_usuario == "SETOR"
             and usuario_logado is not None
             and usuario_logado.setor_id == setor_usuario_id
             and op_ativa_para_solicitacao
+            and OPSetor.query.filter_by(
+                op_id=op.id,
+                setor_id=setor_usuario_id,
+            ).first() is not None
         )
         setores_para_solicitar_tarefa = []
         if pode_solicitar_tarefa_op:
@@ -272,13 +265,15 @@ def create_ops_blueprint(
                 key=lambda tarefa: tarefa.id
             )
             for tarefa in tarefas:
-                tarefa.pode_acionar = usuario_pode_acionar_tarefa(tarefa)
-                tarefa.pode_validar = usuario_pode_validar_tarefa(tarefa)
+                tarefa.pode_acionar = op_mutavel and usuario_pode_acionar_tarefa(tarefa)
+                tarefa.pode_validar = op_mutavel and usuario_pode_validar_tarefa(tarefa)
                 tarefa.pode_repassar = (
-                    tipo_usuario in {"ADMIN", "PCP"}
-                    or (
-                        tipo_usuario == "SETOR"
-                        and usuario_pode_acionar_tarefa(tarefa)
+                    op_mutavel and (
+                        tipo_usuario in {"ADMIN", "PCP"}
+                        or (
+                            tipo_usuario == "SETOR"
+                            and usuario_pode_acionar_tarefa(tarefa)
+                        )
                     )
                 )
                 tarefa.espera_pendente = next(
@@ -297,10 +292,13 @@ def create_ops_blueprint(
                     else None
                 )
                 tarefa.pode_solicitar_espera = (
-                    tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
-                    or (tipo_usuario == "SETOR" and usuario_pode_acionar_tarefa(tarefa))
+                    op_mutavel
+                    and (
+                        tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
+                        or (tipo_usuario == "SETOR" and usuario_pode_acionar_tarefa(tarefa))
+                    )
                 )
-                tarefa.pode_responder_espera = tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
+                tarefa.pode_responder_espera = op_mutavel and tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
                 tarefa.pode_adicionar_observacao = (
                     usuario_pode_observar_tarefa(tarefa)
                     and op_ativa_para_solicitacao
@@ -388,6 +386,12 @@ def create_ops_blueprint(
             estrutura=estrutura,
             historico=historico,
             setores=Setor.query.order_by(Setor.nome).all(),
+            op_mutavel=op_mutavel,
+            pode_finalizar_op=(
+                op_mutavel
+                and tipo_usuario in {"ATENDENTE", "ADMIN"}
+                and all(tarefa.validado for tarefa in op.tarefas)
+            ),
             pode_solicitar_tarefa_op=pode_solicitar_tarefa_op,
             setores_para_solicitar_tarefa=setores_para_solicitar_tarefa,
             tipo=tipo_usuario,
@@ -458,6 +462,10 @@ def create_ops_blueprint(
         setores = Setor.query.order_by(Setor.nome).all()
 
         if request.method == "POST":
+            op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite edicao")
+            if op_bloqueada:
+                return op_bloqueada
+
             nome_anterior = op.nome
             cliente_anterior = op.cliente
             prazo_anterior = op.prazo_final
@@ -517,6 +525,10 @@ def create_ops_blueprint(
         setores = Setor.query.order_by(Setor.nome).all()
 
         if request.method == "POST":
+            op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite configurar setores")
+            if op_bloqueada:
+                return op_bloqueada
+
             sincronizar_setores_op(op)
             db.session.commit()
             flash("Setores da OP atualizados.", "success")
@@ -535,6 +547,9 @@ def create_ops_blueprint(
         op = db.session.get(OP, id)
         if not op:
             abort(404)
+        op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite finalizar")
+        if op_bloqueada:
+            return op_bloqueada
 
         tarefas = Tarefa.query.filter_by(op_id=id).all()
         if tarefas and not all(t.validado for t in tarefas):

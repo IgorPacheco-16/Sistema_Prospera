@@ -48,13 +48,13 @@
             </button>
             {% endif %}
 
-            {% if tipo in ["ATENDENTE", "ADMIN"] %}
+            {% if op_mutavel and tipo in ["ATENDENTE", "ADMIN"] %}
             <a href="{{ url_for('editar_op', id=op.id) }}" class="btn btn-outline-primary">
                 Editar OP
             </a>
             {% endif %}
 
-            {% if tipo in ["ATENDENTE", "PCP", "ADMIN"] %}
+            {% if op_mutavel and tipo in ["ATENDENTE", "PCP", "ADMIN"] %}
             <a href="{{ url_for('configurar_setores_op', id=op.id) }}" class="btn btn-outline-primary">
                 Configurar setores
             </a>
@@ -69,7 +69,7 @@
             </button>
             {% endif %}
 
-            {% if tipo == "ATENDENTE" %}
+            {% if pode_finalizar_op %}
             <form method="POST" action="{{ url_for('finalizar_op', id=op.id) }}">
                 <button class="btn-finalizar"
                         type="submit"
@@ -230,7 +230,7 @@
                 </div>
 
                 <div class="modal-body">
-                    {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                    {% if op_mutavel and tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                     <form method="POST" action="{{ url_for('criar_tarefa', op_id=op.id, setor_id=item.setor.id) }}" class="form-tarefa modal-add-task">
                         <input type="text" name="nome" class="form-control" placeholder="Nome da tarefa" required>
                         <input type="date" name="prazo" class="form-control">
@@ -536,7 +536,7 @@
                                             <span>{{ observacao.autor.nome or observacao.autor.email if observacao.autor else "Sistema" }}</span>
                                             <span>{{ observacao.criada_em|data_hora_brasilia }}</span>
                                         </div>
-                                        {% if tipo == "ADMIN" %}
+                                        {% if op_mutavel and tipo == "ADMIN" %}
                                         <form method="POST" action="{{ url_for('excluir_observacao_tarefa', observacao_id=observacao.id) }}">
                                             <button class="btn btn-outline-danger btn-sm"
                                                     type="submit"
@@ -616,7 +616,7 @@
                                     </button>
                                     {% endif %}
 
-                                    {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                                    {% if op_mutavel and tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                                     <button class="btn btn-outline-primary btn-sm"
                                             type="button"
                                             data-bs-toggle="collapse"
@@ -627,7 +627,7 @@
                                     </button>
                                     {% endif %}
 
-                                    {% if t.repasse_pendente_usuario %}
+                                    {% if op_mutavel and t.repasse_pendente_usuario %}
                                     <form method="POST" action="{{ url_for('recusar_tarefa_responsavel', vinculo_id=t.repasse_pendente_usuario.id) }}">
                                         <button class="btn btn-outline-danger btn-sm"
                                                 type="submit"
@@ -865,7 +865,7 @@
                             </div>
                             {% endif %}
 
-                            {% if tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
+                            {% if op_mutavel and tipo in ["PCP", "ATENDENTE", "ADMIN"] %}
                             <div class="collapse" id="editarTarefa{{ t.id }}">
                                 <form method="POST" action="{{ url_for('editar_tarefa', id=t.id) }}" class="form-editar-tarefa">
                                     <input type="text"

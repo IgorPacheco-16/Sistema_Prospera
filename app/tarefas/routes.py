@@ -4,6 +4,7 @@ from uuid import uuid4
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, session, url_for
 
 from database.models import db, OP, OPSetor, Tarefa, TarefaEsperaSolicitacao, TarefaObservacao, TarefaResponsavel, TarefaSolicitacao, User
+from pacheco_security import exigir_op_mutavel, op_esta_encerrada
 from tempo import agora_brasilia
 
 
@@ -40,8 +41,6 @@ STATUS_ESPERA_CANCELADA = "CANCELADA"
 STATUS_SOLICITACAO_TAREFA_PENDENTE = "PENDENTE"
 STATUS_SOLICITACAO_TAREFA_APROVADA = "APROVADA"
 STATUS_SOLICITACAO_TAREFA_RECUSADA = "RECUSADA"
-STATUS_OP_INATIVA = {"FINALIZADA", "ARQUIVADA"}
-
 
 def status_atual_tarefa(tarefa):
     if getattr(tarefa, "em_espera", False) or tarefa.status == STATUS_EM_ESPERA:
@@ -176,15 +175,6 @@ def nome_usuario(usuario):
     return (getattr(usuario, "nome", None) or getattr(usuario, "email", None) or "").strip()
 
 
-def op_encerrada(op):
-    return (
-        not op
-        or op.status in STATUS_OP_INATIVA
-        or op.finalizada_em is not None
-        or op.arquivada_em is not None
-    )
-
-
 def setor_id_usuario_setor(usuario):
     if usuario and usuario.setor_id:
         return usuario.setor_id
@@ -198,7 +188,7 @@ def usuario_pode_solicitar_tarefa_op(op, usuario):
     if session.get("tipo") != "SETOR":
         return False
     setor_id = setor_id_usuario_setor(usuario)
-    if not setor_id or op_encerrada(op):
+    if not setor_id or op_esta_encerrada(op):
         return False
     return OPSetor.query.filter_by(op_id=op.id, setor_id=setor_id).first() is not None
 
@@ -811,6 +801,9 @@ def create_tarefas_blueprint(
 
         return None
 
+    def exigir_tarefa_mutavel(tarefa, mensagem="OP finalizada ou arquivada nao permite alterar tarefa"):
+        return exigir_op_mutavel(getattr(tarefa, "op", None), mensagem)
+
     def validar_texto_observacao():
         texto = request.form.get("texto", "").strip()
         if not texto:
@@ -825,6 +818,9 @@ def create_tarefas_blueprint(
         op = db.session.get(OP, op_id)
         if not op:
             return "OP nao encontrada", 404
+        op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite solicitar tarefa")
+        if op_bloqueada:
+            return op_bloqueada
 
         solicitante = usuario_logado_ativo()
         if not usuario_pode_solicitar_tarefa_op(op, solicitante):
@@ -909,8 +905,9 @@ def create_tarefas_blueprint(
             return "Esta solicitacao de tarefa nao esta pendente", 400
 
         op = solicitacao.op
-        if op_encerrada(op):
-            return "OP finalizada ou arquivada nao permite aprovar solicitacao", 400
+        op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite aprovar solicitacao")
+        if op_bloqueada:
+            return op_bloqueada
         vinculo_destino = OPSetor.query.filter_by(
             op_id=solicitacao.op_id,
             setor_id=solicitacao.setor_destino_id,
@@ -978,6 +975,10 @@ def create_tarefas_blueprint(
         if not solicitacao.esta_pendente():
             return "Esta solicitacao de tarefa nao esta pendente", 400
 
+        op_bloqueada = exigir_op_mutavel(solicitacao.op, "OP finalizada ou arquivada nao permite recusar solicitacao")
+        if op_bloqueada:
+            return op_bloqueada
+
         justificativa = request.form.get("justificativa_resposta", "").strip() or None
         responsavel = usuario_logado_ativo()
         solicitacao.status = STATUS_SOLICITACAO_TAREFA_RECUSADA
@@ -1019,6 +1020,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def solicitar_espera_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite solicitar espera")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         if not usuario_pode_solicitar_espera(tarefa):
             return "Acesso negado para solicitar espera nesta tarefa", 403
@@ -1082,6 +1086,10 @@ def create_tarefas_blueprint(
             return "Esta solicitacao de espera nao esta pendente", 400
 
         tarefa = solicitacao.tarefa
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite aprovar espera")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         if status_atual_tarefa(tarefa) == STATUS_EM_ESPERA:
             return "A tarefa ja esta em espera", 400
 
@@ -1148,6 +1156,10 @@ def create_tarefas_blueprint(
         if not solicitacao.esta_pendente():
             return "Esta solicitacao de espera nao esta pendente", 400
 
+        tarefa_bloqueada = exigir_tarefa_mutavel(solicitacao.tarefa, "OP finalizada ou arquivada nao permite recusar espera")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         justificativa = request.form.get("justificativa_resposta", "").strip() or None
         responsavel = usuario_logado_ativo()
         solicitacao.status = STATUS_ESPERA_RECUSADA
@@ -1198,6 +1210,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def retomar_tarefa_em_espera(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite retomar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         if not usuario_pode_responder_espera():
             return "Acesso negado para retomar tarefa", 403
@@ -1255,6 +1270,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ADMIN")
     def repassar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite alterar responsaveis")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         if not usuario_pode_repassar_tarefa(tarefa):
             return "Acesso negado para repassar esta tarefa", 403
@@ -1427,6 +1445,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def aceitar_tarefa_responsavel(vinculo_id):
         vinculo = TarefaResponsavel.query.get_or_404(vinculo_id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(vinculo.tarefa, "OP finalizada ou arquivada nao permite responder repasse")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         if not usuario_pode_responder_vinculo(vinculo):
             return "Acesso negado para responder este repasse", 403
@@ -1504,6 +1525,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def recusar_tarefa_responsavel(vinculo_id):
         vinculo = TarefaResponsavel.query.get_or_404(vinculo_id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(vinculo.tarefa, "OP finalizada ou arquivada nao permite responder repasse")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         if not usuario_pode_responder_vinculo(vinculo):
             return "Acesso negado para responder este repasse", 403
@@ -1590,8 +1614,9 @@ def create_tarefas_blueprint(
         if not usuario_pode_observar_tarefa(tarefa):
             return "Acesso negado para observar esta tarefa", 403
 
-        if op_encerrada(tarefa.op):
-            return "OP finalizada ou arquivada nao permite adicionar observacao", 400
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite adicionar observacao")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         texto, erro = validar_texto_observacao()
         if erro:
@@ -1619,6 +1644,11 @@ def create_tarefas_blueprint(
     @tipos_permitidos("ADMIN")
     def excluir_observacao_tarefa(observacao_id):
         observacao = TarefaObservacao.query.get_or_404(observacao_id)
+        tarefa = observacao.tarefa
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite excluir observacao")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         if observacao.deletada_em is None:
             autor = usuario_logado_ativo()
             observacao.deletada_em = agora_brasilia()
@@ -1626,7 +1656,6 @@ def create_tarefas_blueprint(
             db.session.commit()
             flash("Observacao excluida.", "info")
 
-        tarefa = observacao.tarefa
         return redirect(request.referrer or url_for(
             "ver_op",
             id=tarefa.op_id,
@@ -1637,6 +1666,13 @@ def create_tarefas_blueprint(
     @tarefas_bp.route("/criar_tarefa/<int:op_id>/<int:setor_id>", methods=["POST"])
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def criar_tarefa(op_id, setor_id):
+        op = db.session.get(OP, op_id)
+        if not op:
+            return "OP nao encontrada", 404
+        op_bloqueada = exigir_op_mutavel(op, "OP finalizada ou arquivada nao permite criar tarefa")
+        if op_bloqueada:
+            return op_bloqueada
+
         setor_vinculado = OPSetor.query.filter_by(
             op_id=op_id,
             setor_id=setor_id
@@ -1697,7 +1733,6 @@ def create_tarefas_blueprint(
         db.session.flush()
         nova.responsaveis = responsaveis
 
-        op = db.session.get(OP, op_id)
         if op:
             criar_notificacoes_tarefa(
                 criar_notificacao,
@@ -1720,6 +1755,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def iniciar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite iniciar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         acesso_negado = exigir_permissao_tarefa(tarefa)
         if acesso_negado:
@@ -1762,6 +1800,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def entregar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite entregar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         acesso_negado = exigir_permissao_tarefa(tarefa)
         if acesso_negado:
@@ -1814,6 +1855,9 @@ def create_tarefas_blueprint(
     @tipos_permitidos("SETOR", "PCP", "ATENDENTE", "ADMIN")
     def validar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite validar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
 
         acesso_negado = exigir_permissao_validacao(tarefa)
         if acesso_negado:
@@ -1850,6 +1894,10 @@ def create_tarefas_blueprint(
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def editar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite editar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         nome_anterior = tarefa.nome
         prazo_anterior = tarefa.prazo
         responsaveis_anteriores_ids = {usuario.id for usuario in tarefa.responsaveis}
@@ -1888,6 +1936,10 @@ def create_tarefas_blueprint(
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def excluir_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite excluir tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         op_id = tarefa.op_id
         nome_tarefa = tarefa.nome
         nome_setor = tarefa.setor.nome if tarefa.setor else tarefa.setor_id
@@ -1906,6 +1958,10 @@ def create_tarefas_blueprint(
     @tipos_permitidos("PCP", "ATENDENTE", "ADMIN")
     def recusar_tarefa(id):
         tarefa = Tarefa.query.get_or_404(id)
+        tarefa_bloqueada = exigir_tarefa_mutavel(tarefa, "OP finalizada ou arquivada nao permite recusar tarefa")
+        if tarefa_bloqueada:
+            return tarefa_bloqueada
+
         motivo_recusa = request.form.get("motivo_recusa", "").strip()
 
         acesso_negado = exigir_permissao_validacao(tarefa)

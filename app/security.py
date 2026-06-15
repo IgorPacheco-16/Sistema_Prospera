@@ -6,6 +6,8 @@ from flask import redirect, session, url_for
 from database.models import OPSetor, User
 from email_service import enviar_codigo_cadastro, enviar_codigo_recuperacao
 
+STATUS_OP_ENCERRADA = {"FINALIZADA", "ARQUIVADA"}
+
 
 def is_admin():
     return session.get("tipo") == "ADMIN"
@@ -105,6 +107,21 @@ def usuario_pode_observar_tarefa(tarefa):
         op_id=tarefa.op_id,
         setor_id=setor_id,
     ).first() is not None
+
+
+def op_esta_encerrada(op):
+    return (
+        not op
+        or getattr(op, "status", None) in STATUS_OP_ENCERRADA
+        or getattr(op, "finalizada_em", None) is not None
+        or getattr(op, "arquivada_em", None) is not None
+    )
+
+
+def exigir_op_mutavel(op, mensagem="OP finalizada ou arquivada nao permite alteracoes"):
+    if op_esta_encerrada(op):
+        return mensagem, 400
+    return None
 
 
 def usuario_logado_ativo():

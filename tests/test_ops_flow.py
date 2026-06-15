@@ -217,7 +217,7 @@ def test_dashboard_paginacao_preserva_busca_por_cliente(client, login_as, setore
     assert "OP Cliente Excluido" not in segunda_pagina
 
 
-def test_dashboard_setor_busca_apenas_ops_do_proprio_setor(client, login_as, setores):
+def test_dashboard_setor_busca_ops_ativas_sem_limitar_por_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     criar_op_dashboard("OP Cliente Permitido Setor", setor=acabamento, cliente="Cliente Restrito")
@@ -230,7 +230,7 @@ def test_dashboard_setor_busca_apenas_ops_do_proprio_setor(client, login_as, set
 
     assert resposta.status_code == 200
     assert "OP Cliente Permitido Setor" in html
-    assert "OP Cliente Outro Setor" not in html
+    assert "OP Cliente Outro Setor" in html
 
 
 def test_dashboard_setor_paginacao_preserva_filtros_no_proprio_setor(client, login_as, setores):
@@ -606,7 +606,7 @@ def test_espectador_nao_consegue_editar_setores_da_op(client, login_as, op_com_s
     assert OPSetor.query.filter_by(op_id=op.id, setor_id=setores["PCP"].id).first() is None
 
 
-def test_setor_passa_a_ver_op_quando_seu_setor_e_incluido(client, login_as, setores):
+def test_setor_ve_op_ativa_sem_vinculo_mas_so_aciona_tarefa_do_proprio_setor(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op = OP(
@@ -617,28 +617,26 @@ def test_setor_passa_a_ver_op_quando_seu_setor_e_incluido(client, login_as, seto
     db.session.add(op)
     db.session.flush()
     db.session.add(OPSetor(op_id=op.id, setor_id=pcp.id))
+    tarefa_pcp = Tarefa(
+        op_id=op.id,
+        setor_id=pcp.id,
+        nome="Tarefa PCP sem acao para acabamento",
+        status="PENDENTE",
+        liberada=True,
+    )
+    db.session.add(tarefa_pcp)
     db.session.commit()
 
     login_as("SETOR", setor_id=acabamento.id)
-    assert "OP Visibilidade Setor Incluido" not in client.get("/dashboard").get_data(as_text=True)
-    assert client.get(f"/op/{op.id}").status_code == 403
-
-    login_as("PCP")
-    resposta_configuracao = client.post(
-        f"/op/{op.id}/setores",
-        data={"setores": [str(pcp.id), str(acabamento.id)]},
-    )
-    assert resposta_configuracao.status_code == 302
-
-    login_as("SETOR", setor_id=acabamento.id)
     dashboard = client.get("/dashboard").get_data(as_text=True)
-    detalhe = client.get(f"/op/{op.id}")
+    detalhe = client.get(f"/op/{op.id}").get_data(as_text=True)
 
     assert "OP Visibilidade Setor Incluido" in dashboard
-    assert detalhe.status_code == 200
+    assert "Tarefa PCP sem acao para acabamento" in detalhe
+    assert f'action="/iniciar_tarefa/{tarefa_pcp.id}"' not in detalhe
 
 
-def test_setor_deixa_de_ver_op_quando_seu_setor_e_removido(client, login_as, op_com_setor, setores):
+def test_setor_continua_vendo_op_ativa_quando_setor_e_removido_do_vinculo(client, login_as, op_com_setor, setores):
     op, acabamento = op_com_setor
     pcp = setores["PCP"]
     db.session.add(OPSetor(op_id=op.id, setor_id=pcp.id))
@@ -659,8 +657,8 @@ def test_setor_deixa_de_ver_op_quando_seu_setor_e_removido(client, login_as, op_
     dashboard = client.get("/dashboard").get_data(as_text=True)
     detalhe = client.get(f"/op/{op.id}")
 
-    assert "OP Teste" not in dashboard
-    assert detalhe.status_code == 403
+    assert "OP Teste" in dashboard
+    assert detalhe.status_code == 200
 
 
 def test_detalhe_de_op_mostra_cliente(client, login_as, op_com_setor):
@@ -1264,6 +1262,26 @@ def test_finalizacao_de_op_registra_data(client, login_as, tarefa):
     )
 
     op = db.session.get(OP, tarefa.op_id)
+    assert resposta.status_code == 302
+    assert op.status == "FINALIZADA"
+    assert op.finalizada_em is not None
+
+
+def test_admin_ve_botao_e_finaliza_op_quando_tarefas_validadas(client, login_as, tarefa):
+    tarefa.status = "ENTREGUE"
+    tarefa.entregue = True
+    tarefa.validado = True
+    db.session.commit()
+    login_as("ADMIN")
+
+    detalhe = client.get(f"/op/{tarefa.op_id}").get_data(as_text=True)
+    resposta = client.post(
+        f"/finalizar_op/{tarefa.op_id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"}
+    )
+
+    op = db.session.get(OP, tarefa.op_id)
+    assert f'action="/finalizar_op/{tarefa.op_id}"' in detalhe
     assert resposta.status_code == 302
     assert op.status == "FINALIZADA"
     assert op.finalizada_em is not None

@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from database.models import db, OP, OPSetor, Setor, Tarefa, User
+from database.models import db, OP, OPSetor, Setor, Tarefa, TarefaResponsavel, User
 from tempo import hoje_brasilia
 
 
@@ -136,7 +136,7 @@ def test_setor_nao_pode_iniciar_tarefa_de_outro_setor(client, login_as, tarefa, 
     assert b"Setor incorreto" in resposta.data
 
 
-def test_setor_nao_acessa_detalhe_op_sem_vinculo(client, login_as, setores):
+def test_setor_acessa_detalhe_op_ativa_sem_vinculo(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op = OP(
@@ -158,8 +158,12 @@ def test_setor_nao_acessa_detalhe_op_sem_vinculo(client, login_as, setores):
 
     login_as("SETOR", setor_id=acabamento.id)
     resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
 
-    assert resposta.status_code == 403
+    assert resposta.status_code == 200
+    assert "Tarefa visivel de outro setor" in html
+    assert "/iniciar_tarefa/" not in html
+    assert "/validar_tarefa/" not in html
 
 
 def test_detalhe_op_setor_ve_acoes_apenas_do_proprio_setor(client, login_as, op_com_setor, setores):
@@ -247,7 +251,7 @@ def test_setor_criacao_ve_e_aciona_tarefa_mesmo_sem_ser_responsavel(client, logi
     assert tarefa.status == "EM ANDAMENTO"
 
 
-def test_dashboard_setor_lista_apenas_ops_vinculadas_ao_proprio_setor(client, login_as, setores):
+def test_dashboard_setor_lista_ops_ativas_sem_limitar_por_vinculo(client, login_as, setores):
     acabamento = setores["Acabamento"]
     pcp = setores["PCP"]
     op_acabamento = OP(
@@ -300,7 +304,7 @@ def test_dashboard_setor_lista_apenas_ops_vinculadas_ao_proprio_setor(client, lo
 
     assert resposta.status_code == 200
     assert "OP Dashboard Acabamento" in html
-    assert "OP Dashboard PCP" not in html
+    assert "OP Dashboard PCP" in html
     assert "OP Dashboard Finalizada" not in html
     assert "OP Dashboard Arquivada" not in html
     assert "Arquivar" not in html
@@ -663,3 +667,87 @@ def test_admin_movimenta_tarefa_de_qualquer_setor(client, login_as, setores):
     _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
 
     executar_fluxo_operacional(client, tarefa, login_as, "ADMIN")
+
+
+@pytest.mark.parametrize("status_op", ["FINALIZADA", "ARQUIVADA"])
+def test_op_finalizada_ou_arquivada_bloqueia_posts_operacionais(
+    client,
+    login_as,
+    setores,
+    status_op,
+):
+    acabamento = setores["Acabamento"]
+    pcp = setores["PCP"]
+    op = OP(
+        nome=f"OP Bloqueada {status_op}",
+        status=status_op,
+        atendente="atendente@teste.com",
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=acabamento.id))
+    tarefa = Tarefa(
+        op_id=op.id,
+        setor_id=acabamento.id,
+        nome="Tarefa bloqueada",
+        status="EM VALIDAÇÃO",
+        entregue=True,
+        validado=False,
+        liberada=True,
+    )
+    responsavel = User(
+        email=f"bloqueado.{status_op.lower()}@teste.com",
+        nome="Responsavel Bloqueado",
+        tipo="SETOR",
+        setor_id=acabamento.id,
+        ativo=True,
+    )
+    db.session.add_all([tarefa, responsavel])
+    db.session.commit()
+
+    login_as("ADMIN")
+    operacoes = [
+        client.post(
+            f"/criar_tarefa/{op.id}/{acabamento.id}",
+            data={"nome": "Nova bloqueada", "prazo": ""},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+        client.post(
+            f"/editar_tarefa/{tarefa.id}",
+            data={"nome": "Editada bloqueada", "prazo": ""},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+        client.post(f"/excluir_tarefa/{tarefa.id}", headers={"Referer": f"/op/{op.id}"}),
+        client.post(f"/iniciar_tarefa/{tarefa.id}", headers={"Referer": f"/op/{op.id}"}),
+        client.post(f"/entregar_tarefa/{tarefa.id}", headers={"Referer": f"/op/{op.id}"}),
+        client.post(f"/validar_tarefa/{tarefa.id}", headers={"Referer": f"/op/{op.id}"}),
+        client.post(
+            f"/recusar_tarefa/{tarefa.id}",
+            data={"motivo_recusa": "Bloqueado"},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+        client.post(
+            f"/tarefas/{tarefa.id}/espera/solicitar",
+            data={"motivo": "Bloqueado"},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+        client.post(
+            f"/tarefas/{tarefa.id}/responsaveis",
+            data={"tipo": "INCLUSAO", "usuario_ids": [str(responsavel.id)]},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+        client.post(
+            f"/op/{op.id}/setores",
+            data={"setores": [str(acabamento.id), str(pcp.id)]},
+            headers={"Referer": f"/op/{op.id}"},
+        ),
+    ]
+
+    assert all(resposta.status_code == 400 for resposta in operacoes)
+    assert Tarefa.query.filter_by(op_id=op.id).count() == 1
+    db.session.refresh(tarefa)
+    assert tarefa.nome == "Tarefa bloqueada"
+    assert tarefa.validado is False
+    assert tarefa.motivo_recusa is None
+    assert TarefaResponsavel.query.filter_by(tarefa_id=tarefa.id).count() == 0
+    assert OPSetor.query.filter_by(op_id=op.id, setor_id=pcp.id).first() is None

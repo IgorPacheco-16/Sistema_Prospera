@@ -83,13 +83,13 @@ def test_nao_permite_solicitacao_em_op_finalizada_ou_arquivada(client, login_as,
     op.status = "FINALIZADA"
     op.finalizada_em = agora_brasilia()
     db.session.commit()
-    assert solicitar(client, op, destino).status_code == 403
+    assert solicitar(client, op, destino).status_code == 400
 
     op.status = "ARQUIVADA"
     op.finalizada_em = None
     op.arquivada_em = agora_brasilia()
     db.session.commit()
-    assert solicitar(client, op, destino).status_code == 403
+    assert solicitar(client, op, destino).status_code == 400
     assert TarefaSolicitacao.query.count() == 0
 
 
