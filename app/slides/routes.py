@@ -4,8 +4,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, render_template, session, url_for
-from sqlalchemy import event
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import selectinload
 
 from database.models import OP, OPSetor, Tarefa
 from tempo import hoje_brasilia
@@ -23,10 +22,6 @@ _slides_cache = {}
 
 def limpar_cache_slides(*args, **kwargs):
     _slides_cache.clear()
-
-
-event.listen(Session, "after_commit", limpar_cache_slides)
-event.listen(Session, "after_rollback", limpar_cache_slides)
 
 
 def slides_cache_ttl_seconds():
@@ -52,20 +47,31 @@ def chave_cache_slides(setor_id):
 def obter_payload_slides_cache(setor_id):
     ttl = slides_cache_ttl_seconds()
     if ttl <= 0:
-        return montar_payload_slides(setor_id=setor_id), False
+        return montar_payload_slides(setor_id=setor_id), False, ttl
 
     chave = chave_cache_slides(setor_id)
     agora = time.monotonic()
     entrada = _slides_cache.get(chave)
     if entrada and entrada["expira_em"] > agora:
-        return entrada["payload"], True
+        return entrada["payload"], True, ttl
 
     payload = montar_payload_slides(setor_id=setor_id)
     _slides_cache[chave] = {
         "payload": payload,
         "expira_em": agora + ttl,
     }
-    return payload, False
+    return payload, False, ttl
+
+
+def log_cache_slides(cache_hit, ttl, setor_id):
+    current_app.logger.info(
+        "API SLIDES cache_hit=%s ttl=%s cache_size=%s key_tipo=%s key_setor=%s",
+        str(bool(cache_hit)).lower(),
+        ttl,
+        len(_slides_cache),
+        session.get("tipo") or "anonimo",
+        setor_id if setor_id is not None else "all",
+    )
 
 
 def slides_asset_version():
@@ -369,8 +375,9 @@ def create_slides_blueprint(tipos_permitidos):
             setor_id = setor_id_sessao()
             if setor_id is None:
                 setor_id = -1
-        payload, cache_hit = obter_payload_slides_cache(setor_id=setor_id)
+        payload, cache_hit, ttl = obter_payload_slides_cache(setor_id=setor_id)
         resposta = jsonify(payload)
+        log_cache_slides(cache_hit=cache_hit, ttl=ttl, setor_id=setor_id)
         current_app.logger.info(
             "api_slides_timing slides=%s cache_hit=%s total_ms=%.1f",
             len(payload.get("slides", [])),

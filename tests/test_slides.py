@@ -116,6 +116,121 @@ def test_slides_setor_acessa(client, login_as, setores):
     assert "Painel de entregas" in resposta.get_data(as_text=True)
 
 
+def test_api_slides_reaproveita_cache_dentro_do_ttl(client, login_as, monkeypatch):
+    chamadas = []
+
+    def montar_payload_fake(setor_id=None):
+        chamadas.append(setor_id)
+        return {
+            "slides": [{"id": f"slide-{len(chamadas)}"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("ADMIN")
+
+    primeira = client.get("/api/slides").get_json()
+    segunda = client.get("/api/slides").get_json()
+
+    assert chamadas == [None]
+    assert primeira == segunda
+
+
+def test_api_slides_commit_externo_nao_invalida_cache(client, login_as, monkeypatch):
+    chamadas = []
+
+    def montar_payload_fake(setor_id=None):
+        chamadas.append(setor_id)
+        return {
+            "slides": [{"id": f"slide-{len(chamadas)}"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("ADMIN")
+
+    primeira = client.get("/api/slides").get_json()
+    db.session.commit()
+    segunda = client.get("/api/slides").get_json()
+
+    assert chamadas == [None]
+    assert primeira == segunda
+
+
+def test_api_slides_ttl_zero_desativa_cache(client, login_as, monkeypatch):
+    chamadas = []
+
+    def montar_payload_fake(setor_id=None):
+        chamadas.append(setor_id)
+        return {
+            "slides": [{"id": f"slide-{len(chamadas)}"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "0")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("ADMIN")
+
+    primeira = client.get("/api/slides").get_json()
+    segunda = client.get("/api/slides").get_json()
+
+    assert chamadas == [None, None]
+    assert primeira != segunda
+
+
+def test_api_slides_ttl_expirado_remonta_payload(client, login_as, monkeypatch):
+    chamadas = []
+    tempos = iter([100.0, 161.0])
+
+    def montar_payload_fake(setor_id=None):
+        chamadas.append(setor_id)
+        return {
+            "slides": [{"id": f"slide-{len(chamadas)}"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module.time,
+        "monotonic",
+        lambda: next(tempos),
+    )
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("ADMIN")
+
+    primeira = client.get("/api/slides").get_json()
+    segunda = client.get("/api/slides").get_json()
+
+    assert chamadas == [None, None]
+    assert primeira != segunda
+
+
 def test_api_slides_setor_ve_apenas_tarefas_do_proprio_setor(client, login_as, setores):
     hoje = hoje_brasilia()
     criar_tarefa_slide(

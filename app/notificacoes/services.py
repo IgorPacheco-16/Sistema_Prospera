@@ -851,12 +851,51 @@ def geracao_pendente_em_intervalo(intervalo_segundos):
     return False
 
 
+def contar_alteracoes_pendentes_sessao():
+    novas = len(db.session.new)
+    atualizadas = sum(
+        1
+        for objeto in db.session.dirty
+        if db.session.is_modified(objeto, include_collections=False)
+    )
+    removidas = len(db.session.deleted)
+    return novas, atualizadas, removidas
+
+
+def log_perf_notificacoes(etapa, inicio_etapa, **dados):
+    extras = " ".join(
+        f"{chave}={valor}"
+        for chave, valor in dados.items()
+    )
+    mensagem = "NOTIFICACOES PERF etapa=%s elapsed_ms=%.1f"
+    argumentos = [
+        etapa,
+        (time.perf_counter() - inicio_etapa) * 1000,
+    ]
+    if extras:
+        mensagem = f"{mensagem} {extras}"
+    current_app.logger.info(mensagem, *argumentos)
+
+
 def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
-    if not forcar and geracao_pendente_em_intervalo(intervalo_notificacoes_pendentes()):
+    inicio_total = time.perf_counter()
+    intervalo = intervalo_notificacoes_pendentes()
+    if not forcar and geracao_pendente_em_intervalo(intervalo):
+        current_app.logger.info(
+            "NOTIFICACOES PERF total_ms=%.1f pulou_por_intervalo=true",
+            (time.perf_counter() - inicio_total) * 1000,
+        )
         return False
 
-    verificar_atrasos(enviar_emails=enviar_emails)
+    inicio_etapa = time.perf_counter()
+    resumo_atrasos = verificar_atrasos(enviar_emails=enviar_emails)
+    log_perf_notificacoes(
+        "verificar_atrasos",
+        inicio_etapa,
+        criadas=resumo_atrasos.get("notificacoes_criadas", 0),
+    )
 
+    inicio_etapa = time.perf_counter()
     tarefas_entregues = (
         Tarefa.query
         .options(selectinload(Tarefa.op), selectinload(Tarefa.responsaveis))
@@ -871,6 +910,7 @@ def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
         tarefa_ids=[tarefa.id for tarefa in tarefas_entregues]
     )
 
+    notificacoes_criadas_validacao = 0
     for tarefa in tarefas_entregues:
         op = tarefa.op
         if not op:
@@ -893,6 +933,7 @@ def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
                 setor_id=tarefa.setor_id,
                 tipo_evento="tarefa_aguardando_validacao"
             ))
+        notificacoes_criadas_validacao += contar_notificacoes_criadas(notificacoes)
         if enviar_emails:
             enviar_email_operacional(
                 "tarefa_aguardando_validacao",
@@ -901,6 +942,28 @@ def gerar_notificacoes_pendentes(forcar=False, enviar_emails=True):
                 link=link,
                 notificacoes=notificacoes
             )
+    log_perf_notificacoes(
+        "validacoes_pendentes",
+        inicio_etapa,
+        tarefas=len(tarefas_entregues),
+        criadas=notificacoes_criadas_validacao,
+    )
 
-    db.session.commit()
+    novas, atualizadas, removidas = contar_alteracoes_pendentes_sessao()
+    inicio_etapa = time.perf_counter()
+    commit_executado = bool(novas or atualizadas or removidas)
+    if commit_executado:
+        db.session.commit()
+    log_perf_notificacoes(
+        "commit",
+        inicio_etapa,
+        executado=str(commit_executado).lower(),
+    )
+    current_app.logger.info(
+        "NOTIFICACOES PERF total_ms=%.1f criadas=%s atualizadas=%s removidas=%s pulou_por_intervalo=false",
+        (time.perf_counter() - inicio_total) * 1000,
+        resumo_atrasos.get("notificacoes_criadas", 0) + notificacoes_criadas_validacao,
+        atualizadas,
+        removidas,
+    )
     return True

@@ -16,6 +16,7 @@ os.environ["SECRET_KEY"] = "test-secret"
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
+import app as app_module  # noqa: E402
 from app import app as flask_app  # noqa: E402
 from database.models import db, Notificacao, OP, OPSetor, Setor, Tarefa, User  # noqa: E402
 
@@ -41,10 +42,12 @@ def app():
     flask_app.config.update(TESTING=True, EMAILS_OPERACIONAIS_ATIVOS=False)
 
     with flask_app.app_context():
+        app_module.slides_routes_module.limpar_cache_slides()
         db.drop_all()
         db.create_all()
         seed_base_data()
         yield flask_app
+        app_module.slides_routes_module.limpar_cache_slides()
         db.session.remove()
         db.drop_all()
         db.engine.dispose()

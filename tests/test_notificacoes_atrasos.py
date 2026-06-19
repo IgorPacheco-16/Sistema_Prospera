@@ -245,3 +245,14 @@ def test_dashboard_cria_notificacao_op_urgente_sem_email_sincrono(client, login_
     assert chamadas == []
     assert usuarios == ["ATENDENTE", "PCP", "SETOR"]
     assert all(n.email_enviado is False for n in notificacoes)
+
+
+def test_gerar_notificacoes_pendentes_nao_comita_sem_alteracoes(app, monkeypatch):
+    import app as app_module
+
+    services = app_module.notificacoes_module
+    commits = []
+    monkeypatch.setattr(services.db.session, "commit", lambda: commits.append(True))
+
+    assert services.gerar_notificacoes_pendentes(forcar=True, enviar_emails=False) is True
+    assert commits == []
