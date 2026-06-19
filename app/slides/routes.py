@@ -1,20 +1,71 @@
 import time
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, render_template, session, url_for
-from sqlalchemy.orm import selectinload
+from sqlalchemy import event
+from sqlalchemy.orm import Session, selectinload
 
 from database.models import OP, OPSetor, Tarefa
 from tempo import hoje_brasilia
 
 
 SLIDE_ITEM_LIMIT = 5
+SLIDES_CACHE_TTL_ENV = "SLIDES_CACHE_TTL_SECONDS"
 BASE_DIR = Path(__file__).resolve().parents[2]
 SLIDES_ASSET_PATHS = (
     BASE_DIR / "static" / "css" / "slides.css",
     BASE_DIR / "static" / "js" / "slides.js",
 )
+_slides_cache = {}
+
+
+def limpar_cache_slides(*args, **kwargs):
+    _slides_cache.clear()
+
+
+event.listen(Session, "after_commit", limpar_cache_slides)
+event.listen(Session, "after_rollback", limpar_cache_slides)
+
+
+def slides_cache_ttl_seconds():
+    valor = os.environ.get(SLIDES_CACHE_TTL_ENV, "60")
+    try:
+        return max(int(valor), 0)
+    except (TypeError, ValueError):
+        current_app.logger.warning(
+            "slides_cache_ttl_invalido valor=%r usando_padrao=60",
+            valor,
+        )
+        return 60
+
+
+def chave_cache_slides(setor_id):
+    return (
+        session.get("tipo"),
+        setor_id,
+        hoje_brasilia().isoformat(),
+    )
+
+
+def obter_payload_slides_cache(setor_id):
+    ttl = slides_cache_ttl_seconds()
+    if ttl <= 0:
+        return montar_payload_slides(setor_id=setor_id), False
+
+    chave = chave_cache_slides(setor_id)
+    agora = time.monotonic()
+    entrada = _slides_cache.get(chave)
+    if entrada and entrada["expira_em"] > agora:
+        return entrada["payload"], True
+
+    payload = montar_payload_slides(setor_id=setor_id)
+    _slides_cache[chave] = {
+        "payload": payload,
+        "expira_em": agora + ttl,
+    }
+    return payload, False
 
 
 def slides_asset_version():
@@ -318,11 +369,12 @@ def create_slides_blueprint(tipos_permitidos):
             setor_id = setor_id_sessao()
             if setor_id is None:
                 setor_id = -1
-        payload = montar_payload_slides(setor_id=setor_id)
+        payload, cache_hit = obter_payload_slides_cache(setor_id=setor_id)
         resposta = jsonify(payload)
         current_app.logger.info(
-            "api_slides_timing slides=%s total_ms=%.1f",
+            "api_slides_timing slides=%s cache_hit=%s total_ms=%.1f",
             len(payload.get("slides", [])),
+            cache_hit,
             (time.perf_counter() - inicio_slides) * 1000,
         )
         return resposta

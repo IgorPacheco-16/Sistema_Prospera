@@ -41,6 +41,31 @@ def contar_ops(query):
     return int(query.with_entities(func.count(OP.id)).order_by(None).scalar() or 0)
 
 
+def contar_ops_dashboard(query, hoje):
+    atrasada = condicao_op_atrasada(hoje)
+    total_visivel = or_(
+        OP.status.in_(["EM ANDAMENTO", "FINALIZADA"]),
+        atrasada,
+    )
+
+    def contar_quando(condicao):
+        return func.count(case((condicao, 1), else_=None))
+
+    linha = query.with_entities(
+        contar_quando(total_visivel).label("total"),
+        contar_quando(atrasada).label("atrasadas"),
+        contar_quando(OP.status == "EM ANDAMENTO").label("em_andamento"),
+        contar_quando(OP.status == "FINALIZADA").label("finalizadas"),
+    ).order_by(None).one()
+
+    return {
+        "total": int(linha.total or 0),
+        "atrasadas": int(linha.atrasadas or 0),
+        "em_andamento": int(linha.em_andamento or 0),
+        "finalizadas": int(linha.finalizadas or 0),
+    }
+
+
 def condicao_op_atrasada(hoje):
     return and_(
         OP.prazo_final < hoje,
@@ -191,13 +216,11 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
             ))
 
         atrasada = condicao_op_atrasada(hoje)
-        total = contar_ops(query.filter(or_(
-            OP.status.in_(["EM ANDAMENTO", "FINALIZADA"]),
-            atrasada,
-        )))
-        atrasadas = contar_ops(query.filter(atrasada))
-        em_andamento = contar_ops(query.filter(OP.status == "EM ANDAMENTO"))
-        finalizadas = contar_ops(query.filter(OP.status == "FINALIZADA"))
+        contadores = contar_ops_dashboard(query, hoje)
+        total = contadores["total"]
+        atrasadas = contadores["atrasadas"]
+        em_andamento = contadores["em_andamento"]
+        finalizadas = contadores["finalizadas"]
         marcar_tempo("contadores_ms")
 
         if filtro_dashboard == "total":
@@ -214,7 +237,15 @@ def create_dashboard_blueprint(login_required, gerar_notificacoes_pendentes):
         else:
             query_ops = query.filter(OP.status == "EM ANDAMENTO")
 
-        total_filtrado = contar_ops(query_ops)
+        totais_por_filtro = {
+            "total": total,
+            "atrasadas": atrasadas,
+            "finalizadas": finalizadas,
+            "em_andamento": em_andamento,
+        }
+        total_filtrado = totais_por_filtro.get(filtro_dashboard)
+        if total_filtrado is None:
+            total_filtrado = contar_ops(query_ops)
         marcar_tempo("ops_total_filtrado_ms")
         total_paginas = max(
             (total_filtrado + OPS_POR_PAGINA_DASHBOARD - 1) // OPS_POR_PAGINA_DASHBOARD,

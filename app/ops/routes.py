@@ -197,6 +197,10 @@ def create_ops_blueprint(
 
         tipo_usuario = session.get("tipo")
         setor_usuario_id = session.get("setor_id")
+        try:
+            setor_usuario_id_int = int(setor_usuario_id)
+        except (TypeError, ValueError):
+            setor_usuario_id_int = None
         usuario_logado = User.query.filter_by(
             email=session.get("usuario"),
             ativo=True
@@ -207,6 +211,57 @@ def create_ops_blueprint(
                 abort(403)
 
         estrutura = []
+        op_setor_ids = {op_setor.setor_id for op_setor in op.op_setores}
+        setores = Setor.query.order_by(Setor.nome).all()
+        setores_por_id = {setor.id: setor for setor in setores}
+
+        def tarefa_tem_setor_padrao(tarefa, tipo):
+            setores_padrao = {
+                "PCP": "pcp",
+                "ATENDENTE": "atendimento",
+            }
+            setor_padrao = setores_padrao.get(tipo)
+            if not setor_padrao:
+                return False
+            setor = setores_por_id.get(tarefa.setor_id)
+            nome_setor = (getattr(setor, "nome", "") or "").strip().lower()
+            return nome_setor == setor_padrao
+
+        def usuario_setor_pode_atuar_tarefa(tarefa):
+            return (
+                setor_usuario_id_int is not None
+                and setor_usuario_id_int == tarefa.setor_id
+                and setor_usuario_id_int in op_setor_ids
+            )
+
+        def usuario_pode_acionar_tarefa_cache(tarefa):
+            if tipo_usuario == "ADMIN":
+                return True
+            if tipo_usuario == "ESPECTADOR":
+                return False
+            if tipo_usuario == "SETOR":
+                return usuario_setor_pode_atuar_tarefa(tarefa)
+
+            responsaveis = list(getattr(tarefa, "responsaveis", []) or [])
+            if responsaveis:
+                if usuario_logado and any(
+                    responsavel.id == usuario_logado.id
+                    for responsavel in responsaveis
+                ):
+                    return True
+                if tipo_usuario in {"PCP", "ATENDENTE"}:
+                    return tarefa_tem_setor_padrao(tarefa, tipo_usuario)
+                return False
+
+            return tarefa_tem_setor_padrao(tarefa, tipo_usuario)
+
+        def usuario_pode_observar_tarefa_cache(tarefa):
+            if tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}:
+                return True
+            if tipo_usuario != "SETOR":
+                return False
+            return usuario_setor_pode_atuar_tarefa(tarefa)
+
         usuarios_por_setor = {
             setor_id: usuarios
             for setor_id, usuarios in agrupar_usuarios_ativos_por_setor().items()
@@ -217,10 +272,7 @@ def create_ops_blueprint(
             and usuario_logado is not None
             and usuario_logado.setor_id == setor_usuario_id
             and op_ativa_para_solicitacao
-            and OPSetor.query.filter_by(
-                op_id=op.id,
-                setor_id=setor_usuario_id,
-            ).first() is not None
+            and setor_usuario_id_int in op_setor_ids
         )
         setores_para_solicitar_tarefa = []
         if pode_solicitar_tarefa_op:
@@ -265,14 +317,16 @@ def create_ops_blueprint(
                 key=lambda tarefa: tarefa.id
             )
             for tarefa in tarefas:
-                tarefa.pode_acionar = op_mutavel and usuario_pode_acionar_tarefa(tarefa)
+                tarefa.pode_acionar = (
+                    op_mutavel and usuario_pode_acionar_tarefa_cache(tarefa)
+                )
                 tarefa.pode_validar = op_mutavel and usuario_pode_validar_tarefa(tarefa)
                 tarefa.pode_repassar = (
                     op_mutavel and (
                         tipo_usuario in {"ADMIN", "PCP"}
                         or (
                             tipo_usuario == "SETOR"
-                            and usuario_pode_acionar_tarefa(tarefa)
+                            and usuario_pode_acionar_tarefa_cache(tarefa)
                         )
                     )
                 )
@@ -295,12 +349,15 @@ def create_ops_blueprint(
                     op_mutavel
                     and (
                         tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
-                        or (tipo_usuario == "SETOR" and usuario_pode_acionar_tarefa(tarefa))
+                        or (
+                            tipo_usuario == "SETOR"
+                            and usuario_pode_acionar_tarefa_cache(tarefa)
+                        )
                     )
                 )
                 tarefa.pode_responder_espera = op_mutavel and tipo_usuario in {"ADMIN", "PCP", "ATENDENTE"}
                 tarefa.pode_adicionar_observacao = (
-                    usuario_pode_observar_tarefa(tarefa)
+                    usuario_pode_observar_tarefa_cache(tarefa)
                     and op_ativa_para_solicitacao
                 )
                 tarefa.observacoes_ativas = [
@@ -368,7 +425,7 @@ def create_ops_blueprint(
                 "total": len(tarefas),
                 "validadas": sum(1 for t in tarefas if t.validado),
                 "pode_acionar": all(
-                    usuario_pode_acionar_tarefa(tarefa)
+                    usuario_pode_acionar_tarefa_cache(tarefa)
                     for tarefa in tarefas
                 ) if tarefas else (
                     session.get("tipo") != "SETOR"
@@ -385,7 +442,7 @@ def create_ops_blueprint(
             op=op,
             estrutura=estrutura,
             historico=historico,
-            setores=Setor.query.order_by(Setor.nome).all(),
+            setores=setores,
             op_mutavel=op_mutavel,
             pode_finalizar_op=(
                 op_mutavel
