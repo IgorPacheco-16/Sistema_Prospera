@@ -1,5 +1,5 @@
 import click
-from flask import Flask, g, request, session
+from flask import Flask, g, has_request_context, jsonify, request, session
 from flask_migrate import Migrate
 from database.models import db, Notificacao, Setor, User
 from tempo import formatar_data_hora_brasilia
@@ -9,6 +9,8 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash
 
 from email_service import enviar_email
@@ -191,6 +193,49 @@ def asset_version(filename):
     return str(int(caminho.stat().st_mtime))
 
 
+def slow_request_threshold_ms():
+    valor = os.environ.get("SLOW_REQUEST_MS", "1000")
+    try:
+        limite = float(valor)
+    except (TypeError, ValueError):
+        return 1000.0
+
+    return max(limite, 0.0)
+
+
+def inicializar_metricas_request():
+    g.request_started_at = time.perf_counter()
+    g.sql_query_count = 0
+    g.sql_elapsed_s = 0.0
+    g.sql_query_stack = []
+
+
+def garantir_metricas_request():
+    if not hasattr(g, "request_started_at"):
+        inicializar_metricas_request()
+
+
+@event.listens_for(Engine, "before_cursor_execute")
+def contar_query_sql(conn, cursor, statement, parameters, context, executemany):
+    if not has_request_context():
+        return
+
+    garantir_metricas_request()
+    g.sql_query_count += 1
+    g.sql_query_stack.append(time.perf_counter())
+
+
+@event.listens_for(Engine, "after_cursor_execute")
+def somar_tempo_query_sql(conn, cursor, statement, parameters, context, executemany):
+    if not has_request_context():
+        return
+
+    garantir_metricas_request()
+    inicio = g.sql_query_stack.pop() if g.sql_query_stack else None
+    if inicio is not None:
+        g.sql_elapsed_s += time.perf_counter() - inicio
+
+
 app = Flask(__name__)
 configure_app(app)
 db.init_app(app)
@@ -280,24 +325,77 @@ app.register_blueprint(slides_bp)
 registrar_aliases_build_only(app)
 
 
-if config_module.app_env() in {"development", "test"}:
-    @app.before_request
-    def iniciar_medicao_requisicao():
-        g.request_started_at = time.perf_counter()
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
 
-    @app.after_request
-    def registrar_tempo_requisicao(response):
-        inicio = getattr(g, "request_started_at", None)
-        if inicio is not None:
-            duracao_ms = (time.perf_counter() - inicio) * 1000
-            app.logger.debug(
-                "request_timing path=%s endpoint=%s status=%s duration_ms=%.1f",
-                request.path,
-                request.endpoint,
-                response.status_code,
-                duracao_ms
-            )
+
+@app.route("/db-health")
+def db_health():
+    inicio = time.perf_counter()
+    try:
+        db.session.execute(text("SELECT 1")).scalar()
+        elapsed_ms = round((time.perf_counter() - inicio) * 1000)
+        return jsonify({
+            "status": "ok",
+            "db": "ok",
+            "elapsed_ms": elapsed_ms,
+        })
+    except Exception as erro:
+        db.session.rollback()
+        elapsed_ms = round((time.perf_counter() - inicio) * 1000)
+        app.logger.warning(
+            "db_health_failed elapsed_ms=%s error_type=%s",
+            elapsed_ms,
+            type(erro).__name__,
+        )
+        return jsonify({
+            "status": "error",
+            "db": "error",
+            "elapsed_ms": elapsed_ms,
+            "message": "database health check failed",
+        }), 503
+
+
+@app.before_request
+def iniciar_medicao_requisicao():
+    inicializar_metricas_request()
+
+
+@app.after_request
+def registrar_tempo_requisicao(response):
+    inicio = getattr(g, "request_started_at", None)
+    if inicio is None:
         return response
+
+    duracao_ms = (time.perf_counter() - inicio) * 1000
+    queries = getattr(g, "sql_query_count", 0)
+    sql_ms = getattr(g, "sql_elapsed_s", 0.0) * 1000
+
+    if config_module.app_env() in {"development", "test"}:
+        app.logger.debug(
+            "request_timing method=%s path=%s endpoint=%s status=%s elapsed_ms=%.1f queries=%s sql_ms=%.1f",
+            request.method,
+            request.path,
+            request.endpoint,
+            response.status_code,
+            duracao_ms,
+            queries,
+            sql_ms,
+        )
+
+    if duracao_ms >= slow_request_threshold_ms():
+        app.logger.warning(
+            "SLOW REQUEST method=%s path=%s status=%s elapsed_ms=%.1f queries=%s sql_ms=%.1f",
+            request.method,
+            request.path,
+            response.status_code,
+            duracao_ms,
+            queries,
+            sql_ms,
+        )
+
+    return response
 
 
 @app.context_processor
