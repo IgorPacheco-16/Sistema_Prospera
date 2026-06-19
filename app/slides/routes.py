@@ -1,5 +1,6 @@
 import time
 import os
+import threading
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -18,10 +19,15 @@ SLIDES_ASSET_PATHS = (
     BASE_DIR / "static" / "js" / "slides.js",
 )
 _slides_cache = {}
+_slides_cache_em_montagem = set()
+_slides_cache_condicao = threading.Condition()
 
 
 def limpar_cache_slides(*args, **kwargs):
-    _slides_cache.clear()
+    with _slides_cache_condicao:
+        _slides_cache.clear()
+        _slides_cache_em_montagem.clear()
+        _slides_cache_condicao.notify_all()
 
 
 def slides_cache_ttl_seconds():
@@ -50,25 +56,49 @@ def obter_payload_slides_cache(setor_id):
         return montar_payload_slides(setor_id=setor_id), False, ttl
 
     chave = chave_cache_slides(setor_id)
-    agora = time.monotonic()
-    entrada = _slides_cache.get(chave)
-    if entrada and entrada["expira_em"] > agora:
-        return entrada["payload"], True, ttl
+    with _slides_cache_condicao:
+        agora = time.monotonic()
+        entrada = _slides_cache.get(chave)
+        if entrada and entrada["expira_em"] > agora:
+            return entrada["payload"], True, ttl
 
-    payload = montar_payload_slides(setor_id=setor_id)
-    _slides_cache[chave] = {
-        "payload": payload,
-        "expira_em": agora + ttl,
-    }
+        while chave in _slides_cache_em_montagem:
+            _slides_cache_condicao.wait()
+            agora = time.monotonic()
+            entrada = _slides_cache.get(chave)
+            if entrada and entrada["expira_em"] > agora:
+                return entrada["payload"], True, ttl
+
+        _slides_cache_em_montagem.add(chave)
+
+    try:
+        payload = montar_payload_slides(setor_id=setor_id)
+    except Exception:
+        with _slides_cache_condicao:
+            _slides_cache_em_montagem.discard(chave)
+            _slides_cache_condicao.notify_all()
+        raise
+
+    with _slides_cache_condicao:
+        _slides_cache[chave] = {
+            "payload": payload,
+            "expira_em": time.monotonic() + ttl,
+        }
+        _slides_cache_em_montagem.discard(chave)
+        _slides_cache_condicao.notify_all()
+
     return payload, False, ttl
 
 
 def log_cache_slides(cache_hit, ttl, setor_id):
-    current_app.logger.info(
+    with _slides_cache_condicao:
+        cache_size = len(_slides_cache)
+
+    current_app.logger.warning(
         "API SLIDES cache_hit=%s ttl=%s cache_size=%s key_tipo=%s key_setor=%s",
         str(bool(cache_hit)).lower(),
         ttl,
-        len(_slides_cache),
+        cache_size,
         session.get("tipo") or "anonimo",
         setor_id if setor_id is not None else "all",
     )

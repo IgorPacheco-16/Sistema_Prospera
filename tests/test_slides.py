@@ -1,7 +1,10 @@
+import logging
+import threading
 from datetime import date, timedelta
 from pathlib import Path
 
 import app as app_module
+from flask import session
 from database.models import db, OP, OPSetor, Tarefa
 from tempo import hoje_brasilia
 
@@ -116,6 +119,12 @@ def test_slides_setor_acessa(client, login_as, setores):
     assert "Painel de entregas" in resposta.get_data(as_text=True)
 
 
+def test_slides_cache_ttl_usa_env_60(monkeypatch):
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+
+    assert app_module.slides_routes_module.slides_cache_ttl_seconds() == 60
+
+
 def test_api_slides_reaproveita_cache_dentro_do_ttl(client, login_as, monkeypatch):
     chamadas = []
 
@@ -141,6 +150,126 @@ def test_api_slides_reaproveita_cache_dentro_do_ttl(client, login_as, monkeypatc
 
     assert chamadas == [None]
     assert primeira == segunda
+
+
+def test_api_slides_cache_key_estavel_para_mesma_sessao(client, login_as, monkeypatch):
+    chaves = []
+    chave_original = app_module.slides_routes_module.chave_cache_slides
+
+    def chave_monitorada(setor_id):
+        chave = chave_original(setor_id)
+        chaves.append(chave)
+        return chave
+
+    def montar_payload_fake(setor_id=None):
+        return {
+            "slides": [{"id": "slide-cache"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "chave_cache_slides",
+        chave_monitorada,
+    )
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("SETOR", setor_id=7)
+
+    client.get("/api/slides")
+    client.get("/api/slides")
+
+    assert chaves == [chaves[0], chaves[0]]
+
+
+def test_api_slides_log_cache_warning(client, login_as, monkeypatch, caplog):
+    def montar_payload_fake(setor_id=None):
+        return {
+            "slides": [{"id": "slide-cache"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+    login_as("ADMIN")
+
+    with caplog.at_level(logging.WARNING):
+        client.get("/api/slides")
+
+    assert "API SLIDES cache_hit=false ttl=60 cache_size=1 key_tipo=ADMIN key_setor=all" in caplog.text
+
+
+def test_api_slides_requisicoes_concorrentes_mesma_chave_aguardam_cache(
+    app,
+    monkeypatch,
+):
+    chamadas = []
+    primeira_montagem_iniciada = threading.Event()
+    liberar_primeira_montagem = threading.Event()
+    resultados = []
+    erros = []
+
+    def montar_payload_fake(setor_id=None):
+        chamadas.append(setor_id)
+        primeira_montagem_iniciada.set()
+        if not liberar_primeira_montagem.wait(timeout=2):
+            raise AssertionError("timeout aguardando liberacao do teste")
+        return {
+            "slides": [{"id": "slide-cache"}],
+            "resumo": {},
+            "categorias": {},
+            "intervalos": {},
+        }
+
+    def chamar_cache():
+        try:
+            with app.test_request_context("/api/slides"):
+                session["tipo"] = "ADMIN"
+                session["setor_id"] = None
+                resultados.append(
+                    app_module.slides_routes_module.obter_payload_slides_cache(
+                        setor_id=None
+                    )
+                )
+        except Exception as erro:
+            erros.append(erro)
+
+    monkeypatch.setenv("SLIDES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setattr(
+        app_module.slides_routes_module,
+        "montar_payload_slides",
+        montar_payload_fake,
+    )
+
+    primeira = threading.Thread(target=chamar_cache)
+    segunda = threading.Thread(target=chamar_cache)
+    primeira.start()
+    assert primeira_montagem_iniciada.wait(timeout=2)
+
+    segunda.start()
+    liberar_primeira_montagem.set()
+    primeira.join(timeout=2)
+    segunda.join(timeout=2)
+
+    assert not primeira.is_alive()
+    assert not segunda.is_alive()
+    assert erros == []
+    assert chamadas == [None]
+    assert [resultado[1] for resultado in resultados].count(False) == 1
+    assert [resultado[1] for resultado in resultados].count(True) == 1
+    assert resultados[0][0] == resultados[1][0]
 
 
 def test_api_slides_commit_externo_nao_invalida_cache(client, login_as, monkeypatch):
@@ -200,7 +329,7 @@ def test_api_slides_ttl_zero_desativa_cache(client, login_as, monkeypatch):
 
 def test_api_slides_ttl_expirado_remonta_payload(client, login_as, monkeypatch):
     chamadas = []
-    tempos = iter([100.0, 161.0])
+    tempos = iter([100.0, 100.0, 161.0, 161.0])
 
     def montar_payload_fake(setor_id=None):
         chamadas.append(setor_id)
