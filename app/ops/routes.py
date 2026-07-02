@@ -217,7 +217,6 @@ def create_ops_blueprint(
 
         def tarefa_tem_setor_padrao(tarefa, tipo):
             setores_padrao = {
-                "PCP": "pcp",
                 "ATENDENTE": "atendimento",
             }
             setor_padrao = setores_padrao.get(tipo)
@@ -239,6 +238,8 @@ def create_ops_blueprint(
                 return True
             if tipo_usuario == "ESPECTADOR":
                 return False
+            if tipo_usuario == "PCP":
+                return usuario_pode_acionar_tarefa(tarefa)
             if tipo_usuario == "SETOR":
                 return usuario_setor_pode_atuar_tarefa(tarefa)
 
@@ -249,7 +250,7 @@ def create_ops_blueprint(
                     for responsavel in responsaveis
                 ):
                     return True
-                if tipo_usuario in {"PCP", "ATENDENTE"}:
+                if tipo_usuario == "ATENDENTE":
                     return tarefa_tem_setor_padrao(tarefa, tipo_usuario)
                 return False
 
@@ -433,15 +434,19 @@ def create_ops_blueprint(
                 )
             })
 
-        historico = HistoricoOP.query.filter_by(
-            op_id=op.id
-        ).order_by(HistoricoOP.data.desc()).limit(30).all()
+        pode_ver_historico = tipo_usuario in {"ADMIN", "ATENDENTE", "PCP"}
+        historico = []
+        if pode_ver_historico:
+            historico = HistoricoOP.query.filter_by(
+                op_id=op.id
+            ).order_by(HistoricoOP.data.desc()).limit(30).all()
 
         return render_template(
             "op/detalhe.html",
             op=op,
             estrutura=estrutura,
             historico=historico,
+            pode_ver_historico=pode_ver_historico,
             setores=setores,
             op_mutavel=op_mutavel,
             pode_finalizar_op=(

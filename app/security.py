@@ -7,6 +7,11 @@ from database.models import OPSetor, User
 from email_service import enviar_codigo_cadastro, enviar_codigo_recuperacao
 
 STATUS_OP_ENCERRADA = {"FINALIZADA", "ARQUIVADA"}
+SETORES_OPERAVEIS_PELO_PCP = {"Terceirização", "Marcenaria"}
+_SETORES_OPERAVEIS_PELO_PCP_NORMALIZADOS = {
+    nome.strip().casefold()
+    for nome in SETORES_OPERAVEIS_PELO_PCP
+}
 
 
 def is_admin():
@@ -68,6 +73,13 @@ def usuario_pode_acionar_tarefa(tarefa):
     if tipo == "ESPECTADOR":
         return False
 
+    if tipo == "PCP":
+        nome_setor = nome_setor_tarefa(tarefa)
+        return (
+            nome_setor == "pcp"
+            or nome_setor in _SETORES_OPERAVEIS_PELO_PCP_NORMALIZADOS
+        )
+
     if tipo == "SETOR":
         return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
 
@@ -77,7 +89,7 @@ def usuario_pode_acionar_tarefa(tarefa):
         if usuario and any(responsavel.id == usuario.id for responsavel in responsaveis):
             return True
 
-        if tipo in {"PCP", "ATENDENTE"}:
+        if tipo == "ATENDENTE":
             return usuario_pode_acionar_tarefa_por_setor(tarefa, tipo)
 
         return False

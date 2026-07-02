@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from database.models import db, OP, OPSetor, Setor, Tarefa, TarefaResponsavel, User
+from database.models import db, HistoricoOP, OP, OPSetor, Setor, Tarefa, TarefaResponsavel, User
 from tempo import hoje_brasilia
 
 
@@ -28,6 +28,17 @@ def criar_tarefa_para_setor(setor, status="PENDENTE", entregue=False, validado=F
     db.session.commit()
 
     return op, tarefa
+
+
+def obter_ou_criar_setor(nome):
+    setor = Setor.query.filter_by(nome=nome).first()
+    if setor:
+        return setor
+
+    setor = Setor(nome=nome)
+    db.session.add(setor)
+    db.session.commit()
+    return setor
 
 
 def executar_fluxo_operacional(client, tarefa, login_as, tipo):
@@ -134,6 +145,30 @@ def test_setor_nao_pode_iniciar_tarefa_de_outro_setor(client, login_as, tarefa, 
 
     assert resposta.status_code == 403
     assert b"Setor incorreto" in resposta.data
+
+
+def test_setor_inicia_e_entrega_apenas_tarefa_do_proprio_setor(
+    client,
+    login_as,
+    setores,
+):
+    _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
+    login_as("SETOR", setor_id=setores["Acabamento"].id)
+
+    inicio = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"},
+    )
+    entrega = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{tarefa.op_id}"},
+    )
+    db.session.refresh(tarefa)
+
+    assert inicio.status_code == 302
+    assert entrega.status_code == 302
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
 
 
 def test_setor_acessa_detalhe_op_ativa_sem_vinculo(client, login_as, setores):
@@ -372,6 +407,59 @@ def test_pcp_ve_e_movimenta_tarefa_do_setor_pcp(client, login_as, setores):
     assert f'action="/iniciar_tarefa/{tarefa.id}"' in html
 
     executar_fluxo_operacional(client, tarefa, login_as, "PCP")
+
+
+@pytest.mark.parametrize("nome_setor", ["Terceirização", "Marcenaria"])
+def test_pcp_inicia_e_envia_para_validacao_setores_autorizados(
+    client,
+    login_as,
+    nome_setor,
+):
+    setor = obter_ou_criar_setor(nome_setor)
+    op, tarefa = criar_tarefa_para_setor(setor)
+    login_as("PCP")
+
+    detalhe = client.get(f"/op/{op.id}").get_data(as_text=True)
+    inicio = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{op.id}"},
+    )
+    db.session.refresh(tarefa)
+
+    assert f'action="/iniciar_tarefa/{tarefa.id}"' in detalhe
+    assert inicio.status_code == 302
+    assert tarefa.status == "EM ANDAMENTO"
+
+    entrega = client.post(
+        f"/entregar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{op.id}"},
+    )
+    db.session.refresh(tarefa)
+
+    assert entrega.status_code == 302
+    assert tarefa.entregue is True
+    assert tarefa.validado is False
+
+
+@pytest.mark.parametrize(
+    "nome_setor",
+    ["Criação", "Projetos", "Impressão", "Acabamento", "Instalação"],
+)
+def test_pcp_nao_opera_demais_setores(client, login_as, nome_setor):
+    setor = obter_ou_criar_setor(nome_setor)
+    op, tarefa = criar_tarefa_para_setor(setor)
+    login_as("PCP")
+
+    detalhe = client.get(f"/op/{op.id}").get_data(as_text=True)
+    inicio = client.post(
+        f"/iniciar_tarefa/{tarefa.id}",
+        headers={"Referer": f"/op/{op.id}"},
+    )
+    db.session.refresh(tarefa)
+
+    assert f'action="/iniciar_tarefa/{tarefa.id}"' not in detalhe
+    assert inicio.status_code == 403
+    assert tarefa.status == "PENDENTE"
 
 
 def test_atendente_ve_e_movimenta_tarefa_do_setor_atendimento(client, login_as, setores):
@@ -663,10 +751,93 @@ def test_espectador_nao_movimenta_tarefa(client, login_as, setores):
     assert tarefa.status == "PENDENTE"
 
 
+@pytest.mark.parametrize(
+    "tipo,setor_nome,pode_ver",
+    [
+        ("ADMIN", None, True),
+        ("ATENDENTE", None, True),
+        ("PCP", None, True),
+        ("SETOR", "Acabamento", False),
+        ("ESPECTADOR", None, False),
+    ],
+)
+def test_historico_completo_da_op_segue_perfis_autorizados(
+    client,
+    login_as,
+    setores,
+    tipo,
+    setor_nome,
+    pode_ver,
+):
+    op, _tarefa = criar_tarefa_para_setor(setores["Acabamento"])
+    db.session.add(HistoricoOP(
+        op_id=op.id,
+        acao="Evento confidencial de auditoria",
+        usuario="autor.auditoria@teste.com",
+        descricao="Prazo e setores alterados para teste de permissao.",
+    ))
+    db.session.commit()
+    setor_id = setores[setor_nome].id if setor_nome else None
+    login_as(tipo, setor_id=setor_id)
+
+    resposta = client.get(f"/op/{op.id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert ("historicoOPModal" in html) is pode_ver
+    assert ("Evento confidencial de auditoria" in html) is pode_ver
+    assert ("autor.auditoria@teste.com" in html) is pode_ver
+
+
 def test_admin_movimenta_tarefa_de_qualquer_setor(client, login_as, setores):
     _op, tarefa = criar_tarefa_para_setor(setores["Acabamento"])
 
     executar_fluxo_operacional(client, tarefa, login_as, "ADMIN")
+
+
+@pytest.mark.parametrize("status_op", ["FINALIZADA", "ARQUIVADA"])
+def test_pcp_nao_opera_setores_autorizados_em_op_encerrada(
+    client,
+    login_as,
+    status_op,
+):
+    setor = obter_ou_criar_setor("Marcenaria")
+    op = OP(
+        nome=f"OP PCP bloqueada {status_op}",
+        status=status_op,
+        atendente="atendente@teste.com",
+    )
+    db.session.add(op)
+    db.session.flush()
+    db.session.add(OPSetor(op_id=op.id, setor_id=setor.id))
+    tarefa_pendente = Tarefa(
+        op_id=op.id,
+        setor_id=setor.id,
+        nome="Marcenaria pendente bloqueada",
+        status="PENDENTE",
+        liberada=True,
+    )
+    tarefa_em_andamento = Tarefa(
+        op_id=op.id,
+        setor_id=setor.id,
+        nome="Marcenaria em andamento bloqueada",
+        status="EM ANDAMENTO",
+        liberada=True,
+    )
+    db.session.add_all([tarefa_pendente, tarefa_em_andamento])
+    db.session.commit()
+    login_as("PCP")
+
+    inicio = client.post(f"/iniciar_tarefa/{tarefa_pendente.id}")
+    entrega = client.post(f"/entregar_tarefa/{tarefa_em_andamento.id}")
+    db.session.refresh(tarefa_pendente)
+    db.session.refresh(tarefa_em_andamento)
+
+    assert inicio.status_code == 400
+    assert entrega.status_code == 400
+    assert tarefa_pendente.status == "PENDENTE"
+    assert tarefa_em_andamento.status == "EM ANDAMENTO"
+    assert tarefa_em_andamento.entregue is False
 
 
 @pytest.mark.parametrize("status_op", ["FINALIZADA", "ARQUIVADA"])

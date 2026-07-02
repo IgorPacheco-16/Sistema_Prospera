@@ -60,7 +60,7 @@
             </a>
             {% endif %}
 
-            {% if tipo in ["ATENDENTE", "ADMIN"] %}
+            {% if pode_ver_historico %}
             <button class="btn btn-outline-secondary"
                     type="button"
                     data-bs-toggle="modal"
@@ -922,7 +922,7 @@
     </div>
     {% endfor %}
 
-    {% if tipo in ["ATENDENTE", "ADMIN"] %}
+    {% if pode_ver_historico %}
     <div class="modal fade task-modal" id="historicoOPModal" tabindex="-1" aria-labelledby="historicoOPModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
